@@ -36,7 +36,7 @@ function LoginPage({ onLogin }: LoginPageProps) {
       <Box
         sx={{
           flex: 1,
-          background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
+          background: 'linear-gradient(135deg, #1565C0 0%, #1976D2 50%, #2196F3 100%)',
           position: 'relative',
           display: { xs: 'none', md: 'flex' },
           alignItems: 'center',

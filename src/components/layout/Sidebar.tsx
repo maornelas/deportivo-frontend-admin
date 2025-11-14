@@ -15,7 +15,7 @@ import ReceiptIcon from '@mui/icons-material/Receipt'
 import PeopleIcon from '@mui/icons-material/People'
 import PersonIcon from '@mui/icons-material/Person'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import NotificationsIcon from '@mui/icons-material/Notifications'
 import SettingsIcon from '@mui/icons-material/Settings'
 
 const menuItems = [
@@ -25,7 +25,7 @@ const menuItems = [
   { path: '/clientes', label: 'Clientes', icon: PeopleIcon },
   { path: '/usuarios', label: 'Usuarios', icon: PersonIcon },
   { path: '/envios', label: 'Envios', icon: LocalShippingIcon },
-  { path: '/ayuda', label: 'Ayuda', icon: HelpOutlineIcon },
+  { path: '/notificaciones', label: 'Notificaciones', icon: NotificationsIcon },
   { path: '/configuracion', label: 'Configuración', icon: SettingsIcon },
 ]
 
