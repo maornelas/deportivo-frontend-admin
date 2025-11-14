@@ -237,7 +237,7 @@ function ProductsPage() {
           mb: 3,
         }}
       >
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#333333' }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary' }}>
           Productos
         </Typography>
         <Button
@@ -268,7 +268,7 @@ function ProductsPage() {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: '#AAAAAA' }} />
+                    <SearchIcon sx={{ color: 'text.disabled' }} />
                   </InputAdornment>
                 ),
               }}
@@ -306,7 +306,7 @@ function ProductsPage() {
               startIcon={<FilterListIcon />}
               onClick={() => setFiltersOpen(!filtersOpen)}
               sx={{
-                color: '#555555',
+                color: 'text.secondary',
                 border: '1px solid #E0E0E0',
                 '&:hover': {
                   borderColor: '#E74C3C',
@@ -330,7 +330,7 @@ function ProductsPage() {
               variant="subtitle2"
               sx={{
                 fontWeight: 600,
-                color: '#333333',
+                color: 'text.primary',
                 mb: 2,
                 fontSize: '0.875rem',
               }}
@@ -358,7 +358,7 @@ function ProductsPage() {
                     displayEmpty
                     renderValue={(value) => {
                       if (!value) {
-                        return <span style={{ color: '#AAAAAA' }}>Todas las marcas</span>
+                        return <span style={{ color: 'text.disabled' }}>Todas las marcas</span>
                       }
                       return value
                     }}
@@ -406,7 +406,7 @@ function ProductsPage() {
                     displayEmpty
                     renderValue={(value) => {
                       if (!value) {
-                        return <span style={{ color: '#AAAAAA' }}>Todos los modelos</span>
+                        return <span style={{ color: 'text.disabled' }}>Todos los modelos</span>
                       }
                       return value
                     }}
@@ -454,7 +454,7 @@ function ProductsPage() {
                     displayEmpty
                     renderValue={(value) => {
                       if (!value) {
-                        return <span style={{ color: '#AAAAAA' }}>Todas las versiones</span>
+                        return <span style={{ color: 'text.disabled' }}>Todas las versiones</span>
                       }
                       return value
                     }}
@@ -502,7 +502,7 @@ function ProductsPage() {
                     displayEmpty
                     renderValue={(value) => {
                       if (!value) {
-                        return <span style={{ color: '#AAAAAA' }}>Todos los años</span>
+                        return <span style={{ color: 'text.disabled' }}>Todos los años</span>
                       }
                       return value
                     }}
@@ -536,7 +536,7 @@ function ProductsPage() {
               variant="subtitle2"
               sx={{
                 fontWeight: 600,
-                color: '#333333',
+                color: 'text.primary',
                 mb: 2,
                 fontSize: '0.875rem',
               }}
@@ -555,7 +555,7 @@ function ProductsPage() {
                   onChange={(e) => setMinPrice(e.target.value)}
                   InputProps={{
                     startAdornment: (
-                      <InputAdornment position="start" sx={{ color: '#555555' }}>
+                      <InputAdornment position="start" sx={{ color: 'text.secondary' }}>
                         $
                       </InputAdornment>
                     ),
@@ -589,7 +589,7 @@ function ProductsPage() {
                   onChange={(e) => setMaxPrice(e.target.value)}
                   InputProps={{
                     startAdornment: (
-                      <InputAdornment position="start" sx={{ color: '#555555' }}>
+                      <InputAdornment position="start" sx={{ color: 'text.secondary' }}>
                         $
                       </InputAdornment>
                     ),
@@ -673,7 +673,7 @@ function ProductsPage() {
                       />
                     }
                     label={
-                      <Typography variant="body2" sx={{ color: '#555555', fontSize: '0.875rem' }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
                         Solo con descuento
                       </Typography>
                     }
@@ -796,7 +796,7 @@ function ProductsPage() {
                 <Typography
                   variant="body2"
                   sx={{
-                    color: '#AAAAAA',
+                    color: 'text.disabled',
                     fontSize: '0.6rem',
                     mb: 0.5,
                   }}
@@ -814,7 +814,7 @@ function ProductsPage() {
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
-                    color: '#333333',
+                    color: 'text.primary',
                     lineHeight: 1.2,
                   }}
                 >
@@ -832,7 +832,7 @@ function ProductsPage() {
                   <Rating value={product.rating} readOnly size="small" sx={{ fontSize: '0.75rem' }} />
                   <Typography
                     variant="body2"
-                    sx={{ color: '#AAAAAA', fontSize: '0.6rem' }}
+                    sx={{ color: 'text.disabled', fontSize: '0.6rem' }}
                   >
                     ({product.reviewCount})
                   </Typography>
@@ -850,7 +850,7 @@ function ProductsPage() {
                     variant="body2"
                     sx={{
                       fontWeight: 700,
-                      color: '#333333',
+                      color: 'text.primary',
                       fontSize: '0.8rem',
                     }}
                   >
@@ -860,7 +860,7 @@ function ProductsPage() {
                     <Typography
                       variant="body2"
                       sx={{
-                        color: '#AAAAAA',
+                        color: 'text.disabled',
                         textDecoration: 'line-through',
                         fontSize: '0.65rem',
                       }}
@@ -880,7 +880,7 @@ function ProductsPage() {
                 >
                   <Typography
                     variant="body2"
-                    sx={{ color: '#AAAAAA', fontSize: '0.6rem' }}
+                    sx={{ color: 'text.disabled', fontSize: '0.6rem' }}
                   >
                     {product.brand}
                   </Typography>
@@ -906,7 +906,7 @@ function ProductsPage() {
 
       {filteredAndSortedProducts.length === 0 && (
         <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="h6" sx={{ color: '#AAAAAA' }}>
+          <Typography variant="h6" sx={{ color: 'text.disabled' }}>
             No se encontraron productos
           </Typography>
         </Box>
@@ -928,13 +928,13 @@ function ProductsPage() {
             pr: 1,
           }}
         >
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#333333' }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary' }}>
             {selectedProduct ? 'Detalle del Producto' : 'Nuevo Producto'}
           </Typography>
           <IconButton
             onClick={handleClose}
             sx={{
-              color: '#555555',
+              color: 'text.secondary',
               '&:hover': {
                 backgroundColor: '#f5f5f5',
               },
@@ -1029,7 +1029,7 @@ function ProductsPage() {
                     value={formData.price}
                     onChange={(e) => handleChange('price', e.target.value)}
                     InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1, color: '#555555' }}>$</Typography>,
+                      startAdornment: <Typography sx={{ mr: 1, color: 'text.secondary' }}>$</Typography>,
                     }}
                   />
                   <TextField
@@ -1039,7 +1039,7 @@ function ProductsPage() {
                     value={formData.originalPrice}
                     onChange={(e) => handleChange('originalPrice', e.target.value)}
                     InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1, color: '#555555' }}>$</Typography>,
+                      startAdornment: <Typography sx={{ mr: 1, color: 'text.secondary' }}>$</Typography>,
                     }}
                   />
                 </Box>
@@ -1118,7 +1118,7 @@ function ProductsPage() {
                     />
                   }
                   label={
-                    <Typography variant="body1" sx={{ color: '#333333' }}>
+                    <Typography variant="body1" sx={{ color: 'text.primary' }}>
                       En Stock
                     </Typography>
                   }
@@ -1135,27 +1135,27 @@ function ProductsPage() {
                     mb: 2,
                   }}
                 >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#333333' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'text.primary' }}>
                     Información del Producto
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
-                      <Typography variant="body2" sx={{ color: '#555555' }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         SKU: <strong>{formData.sku}</strong>
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="body2" sx={{ color: '#555555' }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         Marca: <strong style={{ color: '#E74C3C' }}>{formData.brand || 'N/A'}</strong>
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="body2" sx={{ color: '#555555' }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         Categoría: <strong>{formData.category || 'N/A'}</strong>
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="body2" sx={{ color: '#555555' }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         Estado: <strong>{formData.inStock ? 'En Stock' : 'Sin Stock'}</strong>
                       </Typography>
                     </Grid>

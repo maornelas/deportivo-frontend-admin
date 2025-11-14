@@ -2,6 +2,7 @@ import { ReactNode, useState } from 'react'
 import { Box } from '@mui/material'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import { useTheme } from '../../contexts/ThemeContext'
 
 interface MainLayoutProps {
   children: ReactNode
@@ -10,6 +11,7 @@ interface MainLayoutProps {
 
 function MainLayout({ children, onLogout }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { mode } = useTheme()
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
@@ -23,7 +25,7 @@ function MainLayout({ children, onLogout }: MainLayoutProps) {
           flexGrow: 1,
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: '#ffffff',
+          backgroundColor: mode === 'light' ? '#ffffff' : '#121212',
           transition: 'margin-left 0.3s ease',
         }}
       >

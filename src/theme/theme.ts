@@ -1,49 +1,50 @@
-import { createTheme } from '@mui/material/styles'
+import { createTheme, Theme } from '@mui/material/styles'
 
-export const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#E74C3C', // Primary red from frontend
-      dark: '#D92323', // Primary red dark
-      light: '#EC7063',
+export const getTheme = (mode: 'light' | 'dark'): Theme => {
+  return createTheme({
+    palette: {
+      mode,
+      primary: {
+        main: '#E74C3C', // Primary red from frontend
+        dark: '#D92323', // Primary red dark
+        light: '#EC7063',
+      },
+      secondary: {
+        main: '#FFD700', // Primary yellow
+        dark: '#FFA500', // Primary yellow dark
+        light: '#FFE44D',
+      },
+      success: {
+        main: '#8BC34A',
+        dark: '#689F38',
+        light: '#AED581',
+      },
+      info: {
+        main: '#2196F3',
+        dark: '#1976D2',
+        light: '#64B5F6',
+      },
+      background: {
+        default: mode === 'light' ? '#ffffff' : '#121212',
+        paper: mode === 'light' ? '#ffffff' : '#1e1e1e',
+      },
+      text: {
+        primary: mode === 'light' ? '#333333' : '#ffffff',
+        secondary: mode === 'light' ? '#555555' : '#b0b0b0',
+      },
+      grey: {
+        50: '#fafafa',
+        100: '#f5f5f5',
+        200: '#E0E0E0', // Gray border
+        300: '#e0e0e0',
+        400: '#AAAAAA', // Gray lighter
+        500: '#555555', // Gray light
+        600: '#444444', // Gray medium
+        700: '#333333', // Gray dark
+        800: '#212121',
+        900: '#1a1a1a',
+      },
     },
-    secondary: {
-      main: '#FFD700', // Primary yellow
-      dark: '#FFA500', // Primary yellow dark
-      light: '#FFE44D',
-    },
-    success: {
-      main: '#8BC34A',
-      dark: '#689F38',
-      light: '#AED581',
-    },
-    info: {
-      main: '#2196F3',
-      dark: '#1976D2',
-      light: '#64B5F6',
-    },
-    background: {
-      default: '#ffffff',
-      paper: '#ffffff',
-    },
-    text: {
-      primary: '#333333', // Gray dark
-      secondary: '#555555', // Gray light
-    },
-    grey: {
-      50: '#fafafa',
-      100: '#f5f5f5',
-      200: '#E0E0E0', // Gray border
-      300: '#e0e0e0',
-      400: '#AAAAAA', // Gray lighter
-      500: '#555555', // Gray light
-      600: '#444444', // Gray medium
-      700: '#333333', // Gray dark
-      800: '#212121',
-      900: '#1a1a1a',
-    },
-  },
   typography: {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
     h1: {
@@ -85,25 +86,28 @@ export const theme = createTheme({
       lineHeight: 1.5,
     },
   },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          borderRadius: 8,
-          padding: '10px 24px',
-          fontWeight: 500,
+    components: {
+      MuiButton: {
+        styleOverrides: {
+          root: {
+            textTransform: 'none',
+            borderRadius: 8,
+            padding: '10px 24px',
+            fontWeight: 500,
+          },
+        },
+      },
+      MuiCard: {
+        styleOverrides: {
+          root: {
+            borderRadius: 12,
+            boxShadow: mode === 'light' 
+              ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'
+              : '0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2)',
+          },
         },
       },
     },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          borderRadius: 12,
-          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-        },
-      },
-    },
-  },
-})
+  })
+}
 

@@ -127,8 +127,8 @@ function DashboardPage() {
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <DragIndicatorIcon sx={{ color: '#AAAAAA', fontSize: 20, cursor: 'grab' }} />
-                <Typography variant="h6" sx={{ fontWeight: 600, color: '#333333' }}>
+                <DragIndicatorIcon sx={{ color: 'text.disabled', fontSize: 20, cursor: 'grab' }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
                   Total de ventas
                 </Typography>
               </Box>
@@ -139,12 +139,12 @@ function DashboardPage() {
                   gap: 1,
                   px: 2,
                   py: 0.5,
-                  border: '1px solid #E0E0E0',
+                  border: (theme) => `1px solid ${theme.palette.divider}`,
                   borderRadius: 1,
                   cursor: 'pointer',
                 }}
               >
-                <Typography variant="body2" sx={{ color: '#555555' }}>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                   6 Meses
                 </Typography>
               </Box>
@@ -215,8 +215,8 @@ function DashboardPage() {
                 mb: 3,
               }}
             >
-              <DragIndicatorIcon sx={{ color: '#AAAAAA', fontSize: 20, cursor: 'grab' }} />
-              <Typography variant="h6" sx={{ fontWeight: 600, color: '#333333' }}>
+              <DragIndicatorIcon sx={{ color: 'text.disabled', fontSize: 20, cursor: 'grab' }} />
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
                 Marcas más vendidas
               </Typography>
             </Box>
@@ -274,8 +274,8 @@ function DashboardPage() {
                 mb: 3,
               }}
             >
-              <DragIndicatorIcon sx={{ color: '#AAAAAA', fontSize: 20, cursor: 'grab' }} />
-              <Typography variant="h6" sx={{ fontWeight: 600, color: '#333333' }}>
+              <DragIndicatorIcon sx={{ color: 'text.disabled', fontSize: 20, cursor: 'grab' }} />
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
                 Ventas por Categoría
               </Typography>
             </Box>
@@ -337,8 +337,8 @@ function DashboardPage() {
                 mb: 3,
               }}
             >
-              <DragIndicatorIcon sx={{ color: '#AAAAAA', fontSize: 20, cursor: 'grab' }} />
-              <Typography variant="h6" sx={{ fontWeight: 600, color: '#333333' }}>
+              <DragIndicatorIcon sx={{ color: 'text.disabled', fontSize: 20, cursor: 'grab' }} />
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
                 Productos Más Vendidos
               </Typography>
             </Box>
@@ -443,13 +443,13 @@ function DashboardPage() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
               <Typography
                 variant="body1"
-                sx={{ color: '#555555', fontSize: '0.875rem', fontWeight: 500, lineHeight: 1.2 }}
+                sx={{ color: 'text.secondary', fontSize: '0.875rem', fontWeight: 500, lineHeight: 1.2 }}
               >
                 {kpi.title}
               </Typography>
-              <DragIndicatorIcon sx={{ color: '#AAAAAA', fontSize: 14, cursor: 'grab' }} />
+              <DragIndicatorIcon sx={{ color: 'text.disabled', fontSize: 14, cursor: 'grab' }} />
             </Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5, color: '#333333', fontSize: '1.25rem' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5, color: 'text.primary', fontSize: '1.25rem' }}>
               {kpi.value}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.75 }}>
@@ -496,7 +496,7 @@ function DashboardPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, color: '#333333' }}>
+      <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, color: 'text.primary' }}>
         Dashboard
       </Typography>
 

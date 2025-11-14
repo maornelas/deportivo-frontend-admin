@@ -14,12 +14,20 @@ import {
   Grid,
   Paper,
   Divider,
-  Avatar,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tooltip,
 } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import NotificationsIcon from '@mui/icons-material/Notifications'
@@ -28,6 +36,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CancelIcon from '@mui/icons-material/Cancel'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import CloseIcon from '@mui/icons-material/Close'
+import ViewModuleIcon from '@mui/icons-material/ViewModule'
+import TableChartIcon from '@mui/icons-material/TableChart'
 
 interface Notification {
   id: string
@@ -141,6 +151,7 @@ function NotificationsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
 
   const filteredNotifications = useMemo(() => {
     let filtered = [...mockNotifications]
@@ -273,15 +284,15 @@ function NotificationsPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, color: '#333333' }}>
+      <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, color: 'text.primary' }}>
         Notificaciones
       </Typography>
 
       {/* Panel de Filtros */}
       <Paper sx={{ p: 2, mb: 3, border: '1px solid #E0E0E0' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <FilterListIcon sx={{ color: '#555555' }} />
-          <Typography variant="h6" sx={{ fontWeight: 600, color: '#333333' }}>
+          <FilterListIcon sx={{ color: 'text.secondary' }} />
+          <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
             Filtros
           </Typography>
         </Box>
@@ -411,55 +422,76 @@ function NotificationsPage() {
 
       {/* Lista de Notificaciones */}
       <Box>
-        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#333333' }}>
-          {filteredNotifications.length} notificación{filteredNotifications.length !== 1 ? 'es' : ''}
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
+            {filteredNotifications.length} notificación{filteredNotifications.length !== 1 ? 'es' : ''}
+          </Typography>
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={(_, newMode) => {
+              if (newMode !== null) {
+                setViewMode(newMode)
+              }
+            }}
+            size="small"
+            aria-label="Vista de notificaciones"
+          >
+            <ToggleButton value="cards" aria-label="Vista de cards">
+              <Tooltip title="Vista de cards">
+                <ViewModuleIcon />
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value="table" aria-label="Vista de tabla">
+              <Tooltip title="Vista de tabla">
+                <TableChartIcon />
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
 
         {filteredNotifications.length === 0 ? (
           <Card>
             <CardContent sx={{ textAlign: 'center', py: 4 }}>
-              <NotificationsIcon sx={{ fontSize: 48, color: '#AAAAAA', mb: 2 }} />
-              <Typography variant="body1" sx={{ color: '#AAAAAA' }}>
+              <NotificationsIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
+              <Typography variant="body1" sx={{ color: 'text.disabled' }}>
                 No hay notificaciones que coincidan con los filtros seleccionados
               </Typography>
             </CardContent>
           </Card>
-        ) : (
-          <Grid container spacing={1.5}>
+        ) : viewMode === 'cards' ? (
+          <Grid container spacing={2}>
             {filteredNotifications.map((notification) => (
               <Grid item xs={12} sm={6} md={4} key={notification.id}>
                 <Card
                   onClick={() => handleNotificationClick(notification)}
                   sx={{
-                    border: notification.status === 'new' ? '2px solid #E74C3C' : '1px solid #E0E0E0',
-                    backgroundColor: notification.status === 'new' ? '#FFF5F5' : '#ffffff',
+                    border: notification.status === 'new' ? '2px solid #E74C3C' : '1px solid',
+                    borderColor: (theme) => theme.palette.divider,
+                    backgroundColor: notification.status === 'new' 
+                      ? (theme) => theme.palette.mode === 'light' ? '#FFF5F5' : 'rgba(231, 76, 60, 0.1)'
+                      : 'background.paper',
                     height: '100%',
+                    minHeight: 200,
+                    display: 'flex',
+                    flexDirection: 'column',
                     cursor: 'pointer',
                     '&:hover': {
-                      boxShadow: 2,
+                      boxShadow: 4,
                       transform: 'translateY(-2px)',
                       transition: 'all 0.2s ease',
                     },
                   }}
                 >
-                  <CardContent sx={{ p: 1.5 }}>
-                    <Box sx={{ display: 'flex', gap: 1.5, mb: 1 }}>
-                      <Avatar
-                        sx={{
-                          bgcolor: getTypeColor(notification.type),
-                          width: 36,
-                          height: 36,
-                        }}
-                      >
-                        {getTypeIcon(notification.type)}
-                      </Avatar>
+                  <CardContent sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ mb: 1.5 }}>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 0.5 }}>
                           <Typography 
                             variant="subtitle2" 
                             sx={{ 
                               fontWeight: 600, 
-                              color: '#333333',
+                              color: 'text.primary',
                               fontSize: '0.875rem',
                               lineHeight: 1.2,
                             }}
@@ -475,6 +507,7 @@ function NotificationsPage() {
                               fontWeight: 600,
                               fontSize: '0.65rem',
                               height: 20,
+                              flexShrink: 0,
                               '& .MuiChip-label': {
                                 padding: '0 6px',
                               },
@@ -484,31 +517,35 @@ function NotificationsPage() {
                         <Typography 
                           variant="body2" 
                           sx={{ 
-                            color: '#555555',
+                            color: 'text.secondary',
                             fontSize: '0.75rem',
                             mb: 1,
                             lineHeight: 1.3,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
                           }}
                         >
                           {notification.message}
                         </Typography>
                       </Box>
                     </Box>
-                    <Divider sx={{ my: 1 }} />
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                    <Divider sx={{ my: 1.5 }} />
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 'auto' }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="caption" sx={{ color: '#555555', fontSize: '0.7rem' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
                           <strong>Cliente:</strong> {notification.customer}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: '#AAAAAA', fontSize: '0.7rem' }}>
+                        <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>
                           {formatDate(notification.date)}
                         </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="caption" sx={{ color: '#555555', fontSize: '0.7rem' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
                           <strong>Orden:</strong> {notification.orderId}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: '#555555', fontSize: '0.7rem', fontWeight: 600 }}>
+                        <Typography variant="caption" sx={{ color: 'text.primary', fontSize: '0.7rem', fontWeight: 600 }}>
                           ${notification.amount.toFixed(2)}
                         </Typography>
                       </Box>
@@ -534,6 +571,106 @@ function NotificationsPage() {
               </Grid>
             ))}
           </Grid>
+        ) : (
+          <TableContainer component={Paper} variant="outlined">
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: (theme) => theme.palette.mode === 'light' ? '#f5f5f5' : '#2a2a2a' }}>
+                  <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Tipo</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Título</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Mensaje</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Cliente</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Orden</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Monto</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Fecha</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Estado</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredNotifications.map((notification) => (
+                  <TableRow
+                    key={notification.id}
+                    onClick={() => handleNotificationClick(notification)}
+                    sx={{
+                      cursor: 'pointer',
+                      borderLeft: notification.status === 'new' ? '3px solid #E74C3C' : 'none',
+                      backgroundColor: notification.status === 'new' 
+                        ? (theme) => theme.palette.mode === 'light' ? '#FFF5F5' : 'rgba(231, 76, 60, 0.1)'
+                        : 'transparent',
+                      '&:hover': {
+                        backgroundColor: (theme) => theme.palette.mode === 'light' ? '#f5f5f5' : 'rgba(255, 255, 255, 0.05)',
+                      },
+                    }}
+                  >
+                    <TableCell>
+                      <Chip
+                        label={getTypeLabel(notification.type)}
+                        size="small"
+                        sx={{
+                          backgroundColor: getTypeColor(notification.type),
+                          color: '#ffffff',
+                          fontWeight: 500,
+                          fontSize: '0.7rem',
+                          height: 22,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                        {notification.title}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          color: 'text.secondary',
+                          maxWidth: 300,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {notification.message}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                        {notification.customer}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                        {notification.orderId}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                        ${notification.amount.toFixed(2)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        {formatDate(notification.date)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={notification.status === 'new' ? 'Nueva' : 'Leída'}
+                        size="small"
+                        sx={{
+                          backgroundColor: notification.status === 'new' ? '#E74C3C' : '#8BC34A',
+                          color: '#ffffff',
+                          fontWeight: 600,
+                          fontSize: '0.7rem',
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </Box>
 
@@ -553,26 +690,13 @@ function NotificationsPage() {
             pr: 1,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {selectedNotification && (
-              <Avatar
-                sx={{
-                  bgcolor: getTypeColor(selectedNotification.type),
-                  width: 40,
-                  height: 40,
-                }}
-              >
-                {getTypeIcon(selectedNotification.type)}
-              </Avatar>
-            )}
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#333333' }}>
-              Detalle de Notificación
-            </Typography>
-          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary' }}>
+            Detalle de Notificación
+          </Typography>
           <IconButton
             onClick={handleCloseDetail}
             sx={{
-              color: '#555555',
+              color: 'text.secondary',
               '&:hover': {
                 backgroundColor: '#f5f5f5',
               },
@@ -586,7 +710,7 @@ function NotificationsPage() {
             <Box>
               <Box sx={{ mb: 3 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: '#333333' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
                     {selectedNotification.title}
                   </Typography>
                   <Chip
@@ -599,7 +723,7 @@ function NotificationsPage() {
                     }}
                   />
                 </Box>
-                <Typography variant="body1" sx={{ color: '#555555', mb: 2 }}>
+                <Typography variant="body1" sx={{ color: 'text.secondary', mb: 2 }}>
                   {selectedNotification.message}
                 </Typography>
               </Box>
@@ -614,20 +738,20 @@ function NotificationsPage() {
                     borderRadius: 1,
                   }}
                 >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: '#333333' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'text.primary' }}>
                     Información de la Orden
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
-                      <Typography variant="body2" sx={{ color: '#555555', mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5 }}>
                         <strong>Número de Orden:</strong>
                       </Typography>
-                      <Typography variant="body1" sx={{ color: '#333333', fontWeight: 600 }}>
+                      <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 600 }}>
                         {selectedNotification.orderId}
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="body2" sx={{ color: '#555555', mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5 }}>
                         <strong>Tipo:</strong>
                       </Typography>
                       <Chip
@@ -641,15 +765,15 @@ function NotificationsPage() {
                       />
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="body2" sx={{ color: '#555555', mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5 }}>
                         <strong>Cliente:</strong>
                       </Typography>
-                      <Typography variant="body1" sx={{ color: '#333333', fontWeight: 500 }}>
+                      <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 500 }}>
                         {selectedNotification.customer}
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="body2" sx={{ color: '#555555', mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5 }}>
                         <strong>Monto Total:</strong>
                       </Typography>
                       <Typography variant="body1" sx={{ color: '#E74C3C', fontWeight: 700, fontSize: '1.25rem' }}>
@@ -657,10 +781,10 @@ function NotificationsPage() {
                       </Typography>
                     </Grid>
                     <Grid item xs={12}>
-                      <Typography variant="body2" sx={{ color: '#555555', mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5 }}>
                         <strong>Fecha y Hora:</strong>
                       </Typography>
-                      <Typography variant="body1" sx={{ color: '#333333' }}>
+                      <Typography variant="body1" sx={{ color: 'text.primary' }}>
                         {selectedNotification.date.toLocaleString('es-MX', {
                           day: 'numeric',
                           month: 'long',

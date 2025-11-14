@@ -16,7 +16,6 @@ import PeopleIcon from '@mui/icons-material/People'
 import PersonIcon from '@mui/icons-material/Person'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import NotificationsIcon from '@mui/icons-material/Notifications'
-import SettingsIcon from '@mui/icons-material/Settings'
 
 const menuItems = [
   { path: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
@@ -26,7 +25,6 @@ const menuItems = [
   { path: '/usuarios', label: 'Usuarios', icon: PersonIcon },
   { path: '/envios', label: 'Envios', icon: LocalShippingIcon },
   { path: '/notificaciones', label: 'Notificaciones', icon: NotificationsIcon },
-  { path: '/configuracion', label: 'Configuración', icon: SettingsIcon },
 ]
 
 interface SidebarProps {
