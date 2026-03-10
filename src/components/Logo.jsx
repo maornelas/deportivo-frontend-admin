@@ -1,25 +1,22 @@
 import { Box } from '@mui/material'
 
-const Logo = ({ variant = 'light', imageSrc = null }) => {
+const Logo = ({ variant = 'light', imageSrc = null, size = 'normal' }) => {
   const isLight = variant === 'light'
   const carColor = isLight ? '#ffc107' : '#d4af37'
   const textColor = isLight ? 'white' : 'white'
   const subtitleColor = isLight ? '#ffc107' : '#d4af37'
+  const imageSx =
+    size === 'small'
+      ? { maxWidth: '100px', width: 100, height: 'auto', marginBottom: '12px' }
+      : size === 'large'
+        ? { maxWidth: '280px', width: '100%', height: 'auto', marginBottom: '20px' }
+        : { maxWidth: '100%', height: 'auto', marginBottom: '20px' }
 
   // Si se proporciona una imagen, usar esa en lugar del SVG
   if (imageSrc) {
     return (
       <Box sx={{ textAlign: 'center' }}>
-        <Box
-          component="img"
-          src={imageSrc}
-          alt="EL DEPORTIVO AUTOPARTES"
-          sx={{
-            maxWidth: '100%',
-            height: 'auto',
-            marginBottom: '20px',
-          }}
-        />
+        <Box component="img" src={imageSrc} alt="EL DEPORTIVO AUTOPARTES" sx={imageSx} />
       </Box>
     )
   }

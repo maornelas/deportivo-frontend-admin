@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { Box, Typography, Grid } from '@mui/material'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Box, Typography, Grid, Paper, TextField, CircularProgress } from '@mui/material'
 import GridLayout from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
@@ -14,11 +14,70 @@ import {
   SalesDistributionChart,
   MonthlyTrendChart,
 } from '../components/DashboardWidgets'
+import { getOrderStats, getOrderDailySales } from '../api/orders'
+
+function getDefaultDateRange() {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: now.toISOString().slice(0, 10),
+  }
+}
 
 const Dashboard = () => {
+  const defaultRange = getDefaultDateRange()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [layoutWidth, setLayoutWidth] = useState(1200)
+  const [startDate, setStartDate] = useState(defaultRange.startDate)
+  const [endDate, setEndDate] = useState(defaultRange.endDate)
+  const [metrics, setMetrics] = useState({
+    soldOrders: null,
+    totalOrders: null,
+    cancelledOrders: null,
+    refundedOrders: null,
+  })
+  const [metricsLoading, setMetricsLoading] = useState(true)
+  const [dailySales, setDailySales] = useState([])
+  const [dailySalesLoading, setDailySalesLoading] = useState(true)
   const containerRef = useRef(null)
+
+  const fetchMetrics = useCallback(async () => {
+    if (!startDate || !endDate) return
+    setMetricsLoading(true)
+    const result = await getOrderStats({ startDate, endDate })
+    setMetricsLoading(false)
+    if (result.success && result.data) {
+      setMetrics({
+        soldOrders: result.data.soldOrders ?? 0,
+        totalOrders: result.data.totalOrders ?? 0,
+        cancelledOrders: result.data.cancelledOrders ?? 0,
+        refundedOrders: result.data.refundedOrders ?? 0,
+      })
+    } else {
+      setMetrics({ soldOrders: 0, totalOrders: 0, cancelledOrders: 0, refundedOrders: 0 })
+    }
+  }, [startDate, endDate])
+
+  const fetchDailySales = useCallback(async () => {
+    if (!startDate || !endDate) return
+    setDailySalesLoading(true)
+    const result = await getOrderDailySales({ startDate, endDate })
+    setDailySalesLoading(false)
+    if (result.success && Array.isArray(result.data)) {
+      setDailySales(result.data)
+    } else {
+      setDailySales([])
+    }
+  }, [startDate, endDate])
+
+  useEffect(() => {
+    fetchMetrics()
+  }, [fetchMetrics])
+
+  useEffect(() => {
+    fetchDailySales()
+  }, [fetchDailySales])
   
   // Layout inicial para las gráficas
   const [layout, setLayout] = useState([
@@ -51,6 +110,13 @@ const Dashboard = () => {
     setSidebarOpen(false)
   }
 
+  const totalSoldAmount =
+    dailySalesLoading || !Array.isArray(dailySales)
+      ? null
+      : dailySales.reduce((sum, d) => sum + Number(d.totalAmount ?? d.totalamount ?? 0), 0)
+  const totalSoldFormatted =
+    totalSoldAmount === null ? '...' : `$${Number(totalSoldAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
   return (
     <Box sx={{ display: 'flex' }}>
       <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
@@ -65,45 +131,80 @@ const Dashboard = () => {
         }}
       >
         <Header onMenuClick={handleMenuClick} />
-        <Typography
-          variant="h4"
+        <Box
           sx={{
-            color: '#424242',
-            fontWeight: 'bold',
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'stretch', sm: 'center' },
+            justifyContent: 'space-between',
+            gap: 2,
             marginBottom: { xs: '24px', sm: '28px', md: '32px' },
-            fontSize: { xs: '24px', sm: '28px', md: '32px' },
           }}
         >
-          Dashboard
-        </Typography>
+          <Typography
+            variant="h5"
+            sx={{
+              color: 'text.primary',
+              fontWeight: 'bold',
+              fontSize: { xs: '24px', sm: '28px', md: '32px' },
+            }}
+          >
+            Dashboard
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <TextField
+              label="Fecha inicio"
+              type="date"
+              size="small"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ width: 160 }}
+            />
+            <TextField
+              label="Fecha fin"
+              type="date"
+              size="small"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ width: 160 }}
+            />
+          </Box>
+        </Box>
 
-        {/* Summary Cards */}
+        {/* Summary Cards - filtradas por el rango de fechas */}
         <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ marginBottom: { xs: '24px', sm: '28px', md: '32px' } }}>
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
             <SummaryCard
-              title="Autoparte vendidas"
-              value="1.1K"
-              change="↓ 13.8%"
-              trend="down"
+              title="Total vendido"
+              value={totalSoldFormatted}
+              color="#ff9800"
+              gradientStart="#ffb74d"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+            <SummaryCard
+              title="Autopartes vendidas"
+              value={metricsLoading ? '...' : String(metrics.soldOrders ?? 0)}
               color="#2196f3"
+              gradientStart="#64b5f6"
             />
           </Grid>
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
             <SummaryCard
-              title="Ventas por internet"
-              value="2453"
-              change="↑ 13.8%"
-              trend="up"
+              title="Pedidos cancelados"
+              value={metricsLoading ? '...' : String(metrics.cancelledOrders ?? 0)}
               color="#7b1fa2"
+              gradientStart="#ab47bc"
             />
           </Grid>
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
             <SummaryCard
-              title="Ventas por promotores"
-              value="$39K"
-              change="↓ 13.8%"
-              trend="down"
+              title="Pedidos devueltos"
+              value={metricsLoading ? '...' : String(metrics.refundedOrders ?? 0)}
               color="#4caf50"
+              gradientStart="#66bb6a"
             />
           </Grid>
         </Grid>
@@ -172,7 +273,12 @@ const Dashboard = () => {
             >
             <div key="sales">
               <Box className="drag-handle" sx={{ height: '100%' }}>
-                <SalesChart />
+                <SalesChart
+                  data={dailySales}
+                  loading={dailySalesLoading}
+                  startDate={startDate}
+                  endDate={endDate}
+                />
               </Box>
             </div>
             <div key="finance">

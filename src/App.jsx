@@ -3,12 +3,14 @@ import { useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Productos from './pages/Productos'
+import Pedidos from './pages/Pedidos'
 import Facturas from './pages/Facturas'
 import Clientes from './pages/Clientes'
 import Chat from './pages/Chat'
 import Envios from './pages/Envios'
 import Ayuda from './pages/Ayuda'
 import Configuracion from './pages/Configuracion'
+import Perfil from './pages/Perfil'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
@@ -34,6 +36,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Productos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pedidos"
+        element={
+          <ProtectedRoute>
+            <Pedidos />
           </ProtectedRoute>
         }
       />
@@ -82,6 +92,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Configuracion />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/perfil"
+        element={
+          <ProtectedRoute>
+            <Perfil />
           </ProtectedRoute>
         }
       />

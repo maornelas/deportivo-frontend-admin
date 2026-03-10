@@ -17,13 +17,18 @@ import {
   ArrowDropDown as ArrowDropDownIcon,
   Menu as MenuIcon,
   Logout as LogoutIcon,
+  Person as PersonIcon,
+  DarkMode as DarkModeIcon,
+  LightMode as LightModeIcon,
 } from '@mui/icons-material'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 
 const Header = ({ onMenuClick }) => {
   const { user, logout } = useAuth()
+  const { mode, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const [anchorEl, setAnchorEl] = useState(null)
 
@@ -41,6 +46,10 @@ const Header = ({ onMenuClick }) => {
 
   const handleProfileClick = (e) => setAnchorEl(e.currentTarget)
   const handleClose = () => setAnchorEl(null)
+  const handlePerfil = () => {
+    handleClose()
+    navigate('/perfil')
+  }
   const handleLogout = () => {
     handleClose()
     logout()
@@ -51,7 +60,7 @@ const Header = ({ onMenuClick }) => {
       <Box
       sx={{
         height: '70px',
-        backgroundColor: '#f5f5f5',
+        bgcolor: 'background.paper',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -61,17 +70,15 @@ const Header = ({ onMenuClick }) => {
         left: { xs: 0, md: '260px' },
         right: 0,
         zIndex: 1000,
-        borderBottom: '1px solid #e0e0e0',
+        borderBottom: '1px solid',
+        borderColor: 'divider',
         transition: 'left 0.3s ease',
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         <IconButton
           onClick={onMenuClick}
-          sx={{
-            display: { xs: 'block', md: 'none' },
-            color: '#757575',
-          }}
+          sx={{ display: { xs: 'block', md: 'none' }, color: 'text.secondary' }}
         >
           <MenuIcon />
         </IconButton>
@@ -81,35 +88,30 @@ const Header = ({ onMenuClick }) => {
         InputProps={{
           startAdornment: (
             <InputAdornment position="start">
-              <SearchIcon sx={{ color: '#757575' }} />
+              <SearchIcon color="action" />
             </InputAdornment>
           ),
         }}
         sx={{
           width: { xs: '200px', sm: '250px', md: '300px' },
-          backgroundColor: 'white',
-          '& .MuiOutlinedInput-root': {
-            '& fieldset': {
-              borderColor: '#e0e0e0',
-            },
-            '&:hover fieldset': {
-              borderColor: '#bdbdbd',
-            },
-          },
+          bgcolor: 'background.default',
         }}
       />
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <IconButton>
-          <LanguageIcon sx={{ color: '#757575' }} />
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <IconButton onClick={toggleTheme} aria-label={mode === 'dark' ? 'Modo claro' : 'Modo oscuro'} color="inherit" size="small">
+          {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
         </IconButton>
-        <IconButton>
-          <ChatIcon sx={{ color: '#757575' }} />
+        <IconButton size="small">
+          <LanguageIcon color="action" />
         </IconButton>
-        <IconButton>
+        <IconButton size="small">
+          <ChatIcon color="action" />
+        </IconButton>
+        <IconButton size="small">
           <Badge badgeContent={3} color="error">
-            <NotificationsIcon sx={{ color: '#757575' }} />
+            <NotificationsIcon color="action" />
           </Badge>
         </IconButton>
         <Box
@@ -127,18 +129,19 @@ const Header = ({ onMenuClick }) => {
           onClick={handleProfileClick}
         >
           <Avatar
+            src={user?.avatarUrl}
             sx={{
               width: '36px',
               height: '36px',
-              backgroundColor: '#7b1fa2',
+              bgcolor: 'secondary.main',
             }}
           >
             {initials}
           </Avatar>
-          <Typography sx={{ color: '#424242', fontSize: '14px' }}>
+          <Typography sx={{ color: 'text.primary', fontSize: '14px' }}>
             {displayName}
           </Typography>
-          <ArrowDropDownIcon sx={{ color: '#757575' }} />
+          <ArrowDropDownIcon color="action" />
         </Box>
         <Menu
           anchorEl={anchorEl}
@@ -147,6 +150,10 @@ const Header = ({ onMenuClick }) => {
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         >
+          <MenuItem onClick={handlePerfil}>
+            <PersonIcon sx={{ mr: 1, fontSize: 20 }} />
+            Perfil
+          </MenuItem>
           <MenuItem onClick={handleLogout}>
             <LogoutIcon sx={{ mr: 1, fontSize: 20 }} />
             Cerrar sesión

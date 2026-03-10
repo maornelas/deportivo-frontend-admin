@@ -1,9 +1,5 @@
-import { Box, Typography, Paper, Select, MenuItem, FormControl } from '@mui/material'
-import {
-  TrendingDown,
-  TrendingUp,
-  BarChart as BarChartIcon,
-} from '@mui/icons-material'
+import { Box, Typography, Paper, CircularProgress } from '@mui/material'
+import { BarChart as BarChartIcon } from '@mui/icons-material'
 import {
   LineChart,
   Line,
@@ -24,105 +20,111 @@ import {
   RadialBar,
 } from 'recharts'
 
-const SummaryCard = ({ title, value, change, trend, color }) => {
-  const isPositive = trend === 'up'
+const SummaryCard = ({ title, value, color, gradientStart }) => {
+  const gradientEnd = color
+  const background = gradientStart
+    ? `linear-gradient(135deg, ${gradientStart} 0%, ${gradientEnd} 100%)`
+    : null
+
   return (
     <Paper
       elevation={0}
       sx={{
-        padding: { xs: '16px', sm: '20px', md: '24px' },
+        width: '100%',
+        padding: { xs: '14px', sm: '16px', md: '18px' },
         borderRadius: '12px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         height: '100%',
-        minHeight: { xs: '140px', sm: 'auto' },
-        backgroundColor: 'transparent',
-        border: '1px solid rgba(0, 0, 0, 0.08)',
+        minHeight: '110px',
+        ...(background ? { background } : { backgroundColor: gradientEnd }),
+        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+        border: 'none',
       }}
     >
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography
-          variant="body2"
-          sx={{ 
-            color: '#757575', 
-            marginBottom: '8px', 
-            fontSize: { xs: '12px', sm: '13px', md: '14px' },
-          }}
-        >
-          {title}
-        </Typography>
-        <Typography
-          variant="h4"
-          sx={{ 
-            color: '#424242', 
-            fontWeight: 'bold', 
-            marginBottom: '8px',
-            fontSize: { xs: '20px', sm: '24px', md: '28px' },
+          variant="h3"
+          sx={{
+            color: 'white',
+            fontWeight: 700,
+            fontSize: { xs: '32px', sm: '36px', md: '42px' },
+            lineHeight: 1.2,
+            letterSpacing: '-0.02em',
+            marginBottom: '4px',
           }}
         >
           {value}
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          {isPositive ? (
-            <TrendingUp sx={{ 
-              color: '#4caf50', 
-              fontSize: { xs: '16px', sm: '18px' },
-            }} />
-          ) : (
-            <TrendingDown sx={{ 
-              color: '#f44336', 
-              fontSize: { xs: '16px', sm: '18px' },
-            }} />
-          )}
-          <Typography
-            variant="body2"
-            sx={{
-              color: isPositive ? '#4caf50' : '#f44336',
-              fontSize: { xs: '12px', sm: '13px', md: '14px' },
-            }}
-          >
-            {change}
-          </Typography>
-        </Box>
+        <Typography
+          variant="subtitle2"
+          sx={{
+            color: 'rgba(255, 255, 255, 0.95)',
+            fontSize: { xs: '12px', sm: '13px', md: '14px' },
+            fontWeight: 500,
+          }}
+        >
+          {title}
+        </Typography>
       </Box>
       <Box
         sx={{
-          width: { xs: '50px', sm: '55px', md: '60px' },
-          height: { xs: '50px', sm: '55px', md: '60px' },
-          borderRadius: '8px',
-          backgroundColor: `${color}20`,
+          width: { xs: '40px', sm: '44px', md: '48px' },
+          height: { xs: '40px', sm: '44px', md: '48px' },
+          borderRadius: '50%',
+          backgroundColor: 'rgba(255, 255, 255, 1)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          marginLeft: { xs: '12px', sm: '16px' },
+          marginLeft: { xs: '10px', sm: '12px' },
+          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)',
         }}
       >
-        <BarChartIcon sx={{ 
-          color: color, 
-          fontSize: { xs: '24px', sm: '28px', md: '32px' },
-        }} />
+        <BarChartIcon sx={{ color: color, fontSize: { xs: '22px', sm: '24px', md: '28px' } }} />
       </Box>
     </Paper>
   )
 }
 
-const SalesChart = () => {
-  const data = [
-    { month: 'Jan', '2023': 15, '2024': 20 },
-    { month: 'Feb', '2023': 10, '2024': 7 },
-    { month: 'Mar', '2023': 15, '2024': 16 },
-    { month: 'Apr', '2023': 14, '2024': 12 },
-    { month: 'May', '2023': 17, '2024': 16 },
-    { month: 'Jun', '2023': 21, '2024': 8 },
-  ]
+function formatShortDate(isoDate) {
+  if (!isoDate) return ''
+  const d = new Date(isoDate + 'T12:00:00')
+  const day = d.getDate()
+  const month = d.getMonth() + 1
+  return `${day}/${month}`
+}
+
+function buildChartDataFromDailySales(dailySales = [], startDate, endDate) {
+  const normalized = dailySales.map((s) => ({
+    date: s.date ?? s.saleDate ?? '',
+    totalAmount: Number(s.totalAmount ?? s.totalamount ?? 0),
+  }))
+  const byDate = new Map(normalized.filter((s) => s.date).map((s) => [s.date.slice(0, 10), s.totalAmount]))
+  const result = []
+  if (!startDate || !endDate) return result
+  const start = new Date(startDate + 'T00:00:00.000Z')
+  const end = new Date(endDate + 'T00:00:00.000Z')
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().slice(0, 10)
+    result.push({
+      date: dateStr,
+      dateLabel: formatShortDate(dateStr),
+      totalAmount: Number(byDate.get(dateStr) ?? 0),
+    })
+  }
+  return result
+}
+
+const SalesChart = ({ data = [], loading = false, startDate, endDate }) => {
+  const chartData = buildChartDataFromDailySales(data, startDate, endDate)
 
   return (
-    <Paper 
-      elevation={0} 
-      sx={{ 
-        padding: { xs: '16px', sm: '20px', md: '24px' }, 
+    <Paper
+      elevation={0}
+      sx={{
+        padding: { xs: '16px', sm: '20px', md: '24px' },
         borderRadius: '12px',
         width: '100%',
         overflow: 'hidden',
@@ -141,129 +143,92 @@ const SalesChart = () => {
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography 
-            variant="subtitle1" 
-            sx={{ 
-              color: '#424242', 
+          <Typography
+            variant="subtitle1"
+            sx={{
+              color: 'text.primary',
               fontWeight: 600,
               fontSize: { xs: '14px', sm: '15px', md: '16px' },
             }}
           >
             Total de ventas
           </Typography>
-          <Box
-            sx={{
-              width: '4px',
-              height: '4px',
-              borderRadius: '50%',
-              backgroundColor: '#757575',
-              display: { xs: 'none', sm: 'block' },
-            }}
-          />
           <Typography
             variant="caption"
-            sx={{
-              color: '#757575',
-              fontSize: '11px',
-              display: { xs: 'none', sm: 'block' },
-            }}
+            sx={{ color: 'text.secondary', fontSize: '11px', display: { xs: 'none', sm: 'block' } }}
           >
-            Arrastra para mover
+            Por día en el rango de fechas · Arrastra para mover
           </Typography>
         </Box>
-        <FormControl 
-          size="small" 
-          sx={{ 
-            minWidth: { xs: '100%', sm: 120 },
-            width: { xs: '100%', sm: 'auto' },
-          }}
-        >
-          <Select defaultValue="6meses" sx={{ fontSize: '14px' }}>
-            <MenuItem value="6meses">6 Meses</MenuItem>
-            <MenuItem value="12meses">12 Meses</MenuItem>
-          </Select>
-        </FormControl>
       </Box>
       <Box
         sx={{
           width: '100%',
           height: { xs: '250px', sm: '280px', md: '320px', lg: '350px' },
           minHeight: '250px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="color2023" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#7b1fa2" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#7b1fa2" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="color2024" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#2196f3" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#2196f3" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-            <XAxis
-              dataKey="month"
-              stroke="#757575"
-              tick={{ 
-                fill: '#757575', 
-                fontSize: 12,
-              }}
-              interval={0}
-            />
-            <YAxis
-              stroke="#757575"
-              tick={{ 
-                fill: '#757575', 
-                fontSize: 12,
-              }}
-              tickFormatter={(value) => `$${value}k`}
-              width={50}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '12px',
-                padding: '12px',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              }}
-              cursor={{ stroke: '#e0e0e0', strokeWidth: 1 }}
-            />
-            <Legend 
-              wrapperStyle={{ 
-                fontSize: '14px',
-                paddingTop: '20px',
-              }}
-              iconType="circle"
-            />
-            <Area
-              type="monotone"
-              dataKey="2023"
-              stroke="#7b1fa2"
-              fillOpacity={1}
-              fill="url(#color2023)"
-              strokeWidth={2.5}
-              dot={{ fill: '#7b1fa2', r: 5, strokeWidth: 2, stroke: '#fff' }}
-              activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }}
-              animationDuration={1000}
-            />
-            <Area
-              type="monotone"
-              dataKey="2024"
-              stroke="#2196f3"
-              fillOpacity={1}
-              fill="url(#color2024)"
-              strokeWidth={2.5}
-              dot={{ fill: '#2196f3', r: 5, strokeWidth: 2, stroke: '#fff' }}
-              activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }}
-              animationDuration={1000}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <CircularProgress size={40} />
+        ) : chartData.length === 0 ? (
+          <Typography color="text.secondary">No hay ventas en el rango seleccionado</Typography>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#2196f3" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#2196f3" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+              <XAxis
+                dataKey="date"
+                stroke="#757575"
+                tick={{ fill: '#757575', fontSize: 12 }}
+                tickFormatter={formatShortDate}
+                interval={Math.max(0, Math.floor(chartData.length / 15))}
+              />
+              <YAxis
+                stroke="#757575"
+                tick={{ fill: '#757575', fontSize: 12 }}
+                tickFormatter={(value) => `$${Number(value).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
+                width={60}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  padding: '12px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                }}
+                formatter={(value) => {
+                  const num = Array.isArray(value) ? value[0] : value
+                  return [`$${Number(num).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Total vendido']
+                }}
+                labelFormatter={(label) => label}
+                cursor={{ stroke: '#e0e0e0', strokeWidth: 1 }}
+              />
+              <Area
+                type="monotone"
+                dataKey="totalAmount"
+                stroke="#2196f3"
+                fillOpacity={1}
+                fill="url(#colorVentas)"
+                strokeWidth={2.5}
+                dot={{ fill: '#2196f3', r: 4, strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+                animationDuration={1000}
+                name="Total vendido"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
       </Box>
     </Paper>
   )
