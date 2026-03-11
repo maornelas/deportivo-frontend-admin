@@ -8,13 +8,11 @@ import Header from '../components/Header'
 import {
   SummaryCard,
   SalesChart,
-  ProductsTable,
+  CancelledChart,
   FinanceSummary,
   CategoryBarChart,
-  SalesDistributionChart,
-  MonthlyTrendChart,
 } from '../components/DashboardWidgets'
-import { getOrderStats, getOrderDailySales } from '../api/orders'
+import { getOrderStats, getOrderDailySales, getOrderDailyCancelled, getOrderStatsByStatus, getOrderStatsAmountByStatus } from '../api/orders'
 
 function getDefaultDateRange() {
   const now = new Date()
@@ -36,10 +34,17 @@ const Dashboard = () => {
     totalOrders: null,
     cancelledOrders: null,
     refundedOrders: null,
+    cancelledAmount: null,
   })
   const [metricsLoading, setMetricsLoading] = useState(true)
   const [dailySales, setDailySales] = useState([])
   const [dailySalesLoading, setDailySalesLoading] = useState(true)
+  const [dailyCancelled, setDailyCancelled] = useState([])
+  const [dailyCancelledLoading, setDailyCancelledLoading] = useState(true)
+  const [orderStatsByStatus, setOrderStatsByStatus] = useState(null)
+  const [orderStatsByStatusLoading, setOrderStatsByStatusLoading] = useState(true)
+  const [amountByStatus, setAmountByStatus] = useState(null)
+  const [amountByStatusLoading, setAmountByStatusLoading] = useState(true)
   const containerRef = useRef(null)
 
   const fetchMetrics = useCallback(async () => {
@@ -53,9 +58,10 @@ const Dashboard = () => {
         totalOrders: result.data.totalOrders ?? 0,
         cancelledOrders: result.data.cancelledOrders ?? 0,
         refundedOrders: result.data.refundedOrders ?? 0,
+        cancelledAmount: result.data.cancelledAmount ?? 0,
       })
     } else {
-      setMetrics({ soldOrders: 0, totalOrders: 0, cancelledOrders: 0, refundedOrders: 0 })
+      setMetrics({ soldOrders: 0, totalOrders: 0, cancelledOrders: 0, refundedOrders: 0, cancelledAmount: 0 })
     }
   }, [startDate, endDate])
 
@@ -78,15 +84,61 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDailySales()
   }, [fetchDailySales])
-  
-  // Layout inicial para las gráficas
+
+  const fetchDailyCancelled = useCallback(async () => {
+    if (!startDate || !endDate) return
+    setDailyCancelledLoading(true)
+    const result = await getOrderDailyCancelled({ startDate, endDate })
+    setDailyCancelledLoading(false)
+    if (result.success && Array.isArray(result.data)) {
+      setDailyCancelled(result.data)
+    } else {
+      setDailyCancelled([])
+    }
+  }, [startDate, endDate])
+
+  useEffect(() => {
+    fetchDailyCancelled()
+  }, [fetchDailyCancelled])
+
+  const fetchOrderStatsByStatus = useCallback(async () => {
+    if (!startDate || !endDate) return
+    setOrderStatsByStatusLoading(true)
+    const result = await getOrderStatsByStatus({ startDate, endDate })
+    setOrderStatsByStatusLoading(false)
+    if (result.success && result.data) {
+      setOrderStatsByStatus(result.data)
+    } else {
+      setOrderStatsByStatus(null)
+    }
+  }, [startDate, endDate])
+
+  useEffect(() => {
+    fetchOrderStatsByStatus()
+  }, [fetchOrderStatsByStatus])
+
+  const fetchAmountByStatus = useCallback(async () => {
+    if (!startDate || !endDate) return
+    setAmountByStatusLoading(true)
+    const result = await getOrderStatsAmountByStatus({ startDate, endDate })
+    setAmountByStatusLoading(false)
+    if (result.success && result.data) {
+      setAmountByStatus(result.data)
+    } else {
+      setAmountByStatus(null)
+    }
+  }, [startDate, endDate])
+
+  useEffect(() => {
+    fetchAmountByStatus()
+  }, [fetchAmountByStatus])
+
+  // Layout: Total ventas (izq) y Total $ pedidos cancelados (der), luego Estatus pedidos, Ventas por estatus
   const [layout, setLayout] = useState([
-    { i: 'sales', x: 0, y: 0, w: 12, h: 4 },
+    { i: 'sales', x: 0, y: 0, w: 6, h: 4 },
+    { i: 'cancelled', x: 6, y: 0, w: 6, h: 4 },
     { i: 'finance', x: 0, y: 5, w: 6, h: 4 },
     { i: 'category', x: 6, y: 5, w: 6, h: 4 },
-    { i: 'distribution', x: 0, y: 10, w: 6, h: 4 },
-    { i: 'trend', x: 6, y: 10, w: 6, h: 4 },
-    { i: 'products', x: 0, y: 15, w: 12, h: 4 },
   ])
 
   useEffect(() => {
@@ -116,6 +168,11 @@ const Dashboard = () => {
       : dailySales.reduce((sum, d) => sum + Number(d.totalAmount ?? d.totalamount ?? 0), 0)
   const totalSoldFormatted =
     totalSoldAmount === null ? '...' : `$${Number(totalSoldAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const cancelledAmountFormatted =
+    metricsLoading
+      ? '...'
+      : `-$${Math.abs(Number(metrics.cancelledAmount ?? 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
     <Box sx={{ display: 'flex' }}>
@@ -181,6 +238,14 @@ const Dashboard = () => {
               value={totalSoldFormatted}
               color="#ff9800"
               gradientStart="#ffb74d"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+            <SummaryCard
+              title="Total $ pedidos cancelados"
+              value={cancelledAmountFormatted}
+              color="#f44336"
+              gradientStart="#ef5350"
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
@@ -272,7 +337,7 @@ const Dashboard = () => {
               margin={[16, 16]}
             >
             <div key="sales">
-              <Box className="drag-handle" sx={{ height: '100%' }}>
+              <Box className="drag-handle" sx={{ width: '100%', height: '100%', minHeight: 320 }}>
                 <SalesChart
                   data={dailySales}
                   loading={dailySalesLoading}
@@ -281,29 +346,30 @@ const Dashboard = () => {
                 />
               </Box>
             </div>
+            <div key="cancelled">
+              <Box className="drag-handle" sx={{ width: '100%', height: '100%', minHeight: 320 }}>
+                <CancelledChart
+                  data={dailyCancelled}
+                  loading={dailyCancelledLoading}
+                  startDate={startDate}
+                  endDate={endDate}
+                />
+              </Box>
+            </div>
             <div key="finance">
-              <Box className="drag-handle" sx={{ height: '100%' }}>
-                <FinanceSummary />
+              <Box className="drag-handle" sx={{ width: '100%', height: '100%' }}>
+                <FinanceSummary
+                  data={orderStatsByStatus}
+                  loading={orderStatsByStatusLoading}
+                />
               </Box>
             </div>
             <div key="category">
-              <Box className="drag-handle" sx={{ height: '100%' }}>
-                <CategoryBarChart />
-              </Box>
-            </div>
-            <div key="distribution">
-              <Box className="drag-handle" sx={{ height: '100%' }}>
-                <SalesDistributionChart />
-              </Box>
-            </div>
-            <div key="trend">
-              <Box className="drag-handle" sx={{ height: '100%' }}>
-                <MonthlyTrendChart />
-              </Box>
-            </div>
-            <div key="products">
-              <Box className="drag-handle" sx={{ height: '100%' }}>
-                <ProductsTable />
+              <Box className="drag-handle" sx={{ width: '100%', height: '100%' }}>
+                <CategoryBarChart
+                  data={amountByStatus}
+                  loading={amountByStatusLoading}
+                />
               </Box>
             </div>
           </GridLayout>

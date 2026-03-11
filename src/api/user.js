@@ -5,6 +5,52 @@ const getBaseUrl = () => {
 }
 
 /**
+ * Obtiene la lista de usuarios.
+ * @param {{ activeOnly?: boolean, role?: string, excludeRole?: string }} params - activeOnly: solo usuarios activos; role: filtrar por rol; excludeRole: excluir usuarios con este rol
+ * @returns {Promise<{ success: boolean, data?: object[], error?: string }>}
+ */
+export async function getUsers(params = {}) {
+  const baseUrl = getBaseUrl()
+  const searchParams = new URLSearchParams()
+  if (params.activeOnly !== false) searchParams.set('activeOnly', 'true')
+  else searchParams.set('activeOnly', 'false')
+  if (params.role) searchParams.set('role', params.role)
+  if (params.excludeRole) searchParams.set('excludeRole', params.excludeRole)
+  const url = `${baseUrl}/user/get?${searchParams.toString()}`
+  const res = await fetch(url)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success || !Array.isArray(body.data)) {
+    return { success: false, error: body.message || 'Error al cargar usuarios' }
+  }
+  return { success: true, data: body.data }
+}
+
+/**
+ * Crea un nuevo usuario.
+ * @param {object} payload - { email, passwordHash, firstName?, lastName?, companyName?, rfc?, phone?, role? }
+ * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
+ */
+export async function createUser(payload) {
+  const baseUrl = getBaseUrl()
+  const res = await fetch(`${baseUrl}/user/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success) {
+    return { success: false, error: body.message || 'Error al crear usuario' }
+  }
+  return { success: true, data: body.data }
+}
+
+/**
  * Obtiene un usuario por ID.
  * @param {string} id
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
@@ -34,7 +80,7 @@ export async function getUserById(id) {
 /**
  * Actualiza un usuario. Solo enviar campos a modificar (todos opcionales).
  * @param {string} id
- * @param {object} payload - { firstName?, lastName?, companyName?, rfc?, phone?, birthDate?, gender? }
+ * @param {object} payload - { firstName?, lastName?, companyName?, rfc?, phone?, birthDate?, gender?, role?, isActive? }
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function updateUser(id, payload) {

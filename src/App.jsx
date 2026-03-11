@@ -6,7 +6,7 @@ import Productos from './pages/Productos'
 import Pedidos from './pages/Pedidos'
 import Facturas from './pages/Facturas'
 import Clientes from './pages/Clientes'
-import Chat from './pages/Chat'
+import Usuarios from './pages/Usuarios'
 import Envios from './pages/Envios'
 import Ayuda from './pages/Ayuda'
 import Configuracion from './pages/Configuracion'
@@ -64,10 +64,10 @@ function App() {
         }
       />
       <Route
-        path="/chat"
+        path="/usuarios"
         element={
           <ProtectedRoute>
-            <Chat />
+            <Usuarios />
           </ProtectedRoute>
         }
       />

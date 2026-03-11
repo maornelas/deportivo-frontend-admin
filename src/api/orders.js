@@ -6,12 +6,13 @@ const getBaseUrl = () => {
 
 /**
  * Buscar órdenes con filtros y paginación.
- * @param {object} params - { page, limit, startDate, endDate, search, orderNumber, status, paymentStatus, sortBy, sortOrder }
+ * @param {object} params - { userId, page, limit, startDate, endDate, search, orderNumber, status, paymentStatus, sortBy, sortOrder }
  * @returns {Promise<{ success: boolean, data?: { orders, total, page, limit, totalPages }, error?: string }>}
  */
 export async function searchOrders(params = {}) {
   const baseUrl = getBaseUrl()
   const searchParams = new URLSearchParams()
+  if (params.userId) searchParams.set('userId', params.userId)
   if (params.page != null) searchParams.set('page', String(params.page))
   if (params.limit != null) searchParams.set('limit', String(params.limit))
   if (params.startDate) searchParams.set('startDate', params.startDate)
@@ -75,6 +76,72 @@ export async function getOrderDailySales(params) {
   }
   if (!body.success || !Array.isArray(body.data)) {
     return { success: false, error: body.message || 'Error al cargar ventas por día' }
+  }
+  return { success: true, data: body.data }
+}
+
+/**
+ * Total $ pedidos cancelados por día en un rango de fechas.
+ * @param {{ startDate: string, endDate: string }} params - Fechas YYYY-MM-DD
+ * @returns {Promise<{ success: boolean, data?: Array<{ date, totalAmount, orderCount }>, error?: string }>}
+ */
+export async function getOrderDailyCancelled(params) {
+  const baseUrl = getBaseUrl()
+  const searchParams = new URLSearchParams()
+  if (params.startDate) searchParams.set('startDate', params.startDate)
+  if (params.endDate) searchParams.set('endDate', params.endDate)
+  const url = `${baseUrl}/order/stats-daily-cancelled?${searchParams.toString()}`
+  const res = await fetch(url)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success || !Array.isArray(body.data)) {
+    return { success: false, error: body.message || 'Error al cargar pedidos cancelados por día' }
+  }
+  return { success: true, data: body.data }
+}
+
+/**
+ * Conteo de órdenes por estatus en un rango de fechas.
+ * @param {{ startDate: string, endDate: string }} params - Fechas YYYY-MM-DD
+ * @returns {Promise<{ success: boolean, data?: OrderCountByStatus, error?: string }>}
+ */
+export async function getOrderStatsByStatus(params) {
+  const baseUrl = getBaseUrl()
+  const searchParams = new URLSearchParams()
+  if (params.startDate) searchParams.set('startDate', params.startDate)
+  if (params.endDate) searchParams.set('endDate', params.endDate)
+  const url = `${baseUrl}/order/stats-by-status?${searchParams.toString()}`
+  const res = await fetch(url)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success || body.data == null) {
+    return { success: false, error: body.message || 'Error al cargar estatus' }
+  }
+  return { success: true, data: body.data }
+}
+
+/**
+ * Total en dinero por estatus en un rango de fechas.
+ * @param {{ startDate: string, endDate: string }} params - Fechas YYYY-MM-DD
+ * @returns {Promise<{ success: boolean, data?: OrderAmountByStatus, error?: string }>}
+ */
+export async function getOrderStatsAmountByStatus(params) {
+  const baseUrl = getBaseUrl()
+  const searchParams = new URLSearchParams()
+  if (params.startDate) searchParams.set('startDate', params.startDate)
+  if (params.endDate) searchParams.set('endDate', params.endDate)
+  const url = `${baseUrl}/order/stats-amount-by-status?${searchParams.toString()}`
+  const res = await fetch(url)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success || body.data == null) {
+    return { success: false, error: body.message || 'Error al cargar montos por estatus' }
   }
   return { success: true, data: body.data }
 }

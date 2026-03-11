@@ -234,6 +234,123 @@ const SalesChart = ({ data = [], loading = false, startDate, endDate }) => {
   )
 }
 
+const CancelledChart = ({ data = [], loading = false, startDate, endDate }) => {
+  const chartData = buildChartDataFromDailySales(data, startDate, endDate)
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        padding: { xs: '16px', sm: '20px', md: '24px' },
+        borderRadius: '12px',
+        width: '100%',
+        overflow: 'hidden',
+        backgroundColor: 'transparent',
+        border: '1px solid rgba(0, 0, 0, 0.08)',
+      }}
+    >
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          marginBottom: { xs: '16px', sm: '20px', md: '24px' },
+          gap: { xs: 2, sm: 0 },
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography
+            variant="subtitle1"
+            sx={{
+              color: 'text.primary',
+              fontWeight: 600,
+              fontSize: { xs: '14px', sm: '15px', md: '16px' },
+            }}
+          >
+            Total $ pedidos cancelados
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{ color: 'text.secondary', fontSize: '11px', display: { xs: 'none', sm: 'block' } }}
+          >
+            Por día en el rango · Arrastra para mover
+          </Typography>
+        </Box>
+      </Box>
+      <Box
+        sx={{
+          width: '100%',
+          height: { xs: '250px', sm: '280px', md: '320px', lg: '350px' },
+          minHeight: '250px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {loading ? (
+          <CircularProgress size={40} />
+        ) : chartData.length === 0 ? (
+          <Typography color="text.secondary">No hay pedidos cancelados en el rango</Typography>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorCancelados" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#f44336" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#f44336" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+              <XAxis
+                dataKey="date"
+                stroke="#757575"
+                tick={{ fill: '#757575', fontSize: 12 }}
+                tickFormatter={formatShortDate}
+                interval={Math.max(0, Math.floor(chartData.length / 15))}
+              />
+              <YAxis
+                stroke="#757575"
+                tick={{ fill: '#757575', fontSize: 12 }}
+                tickFormatter={(value) => `-$${Number(value).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
+                width={60}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  padding: '12px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                }}
+                formatter={(value) => {
+                  const num = Array.isArray(value) ? value[0] : value
+                  return [`-$${Number(num).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Total cancelado']
+                }}
+                labelFormatter={(label) => label}
+                cursor={{ stroke: '#e0e0e0', strokeWidth: 1 }}
+              />
+              <Area
+                type="monotone"
+                dataKey="totalAmount"
+                stroke="#f44336"
+                fillOpacity={1}
+                fill="url(#colorCancelados)"
+                strokeWidth={2.5}
+                dot={{ fill: '#f44336', r: 4, strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+                animationDuration={1000}
+                name="Total cancelado"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </Box>
+    </Paper>
+  )
+}
+
 const ProductsTable = () => {
   const products = [
     {
@@ -361,17 +478,49 @@ const ProductsTable = () => {
   )
 }
 
-const FinanceSummary = () => {
-  const data = [
-    { name: 'Usado', value: 65, fill: '#7b1fa2' },
-    { name: 'Disponible', value: 35, fill: '#e0e0e0' },
-  ]
+const STATUS_LABELS = {
+  pending: 'Pendiente',
+  confirmed: 'Confirmado',
+  processing: 'Procesando',
+  shipped: 'Enviado',
+  delivered: 'Entregado',
+  cancelled: 'Cancelado',
+  refunded: 'Reembolsado',
+}
+
+const STATUS_COLORS = [
+  '#2196f3',
+  '#7b1fa2',
+  '#4caf50',
+  '#ff9800',
+  '#009688',
+  '#f44336',
+  '#9e9e9e',
+]
+
+const FinanceSummary = ({ data = null, loading = false }) => {
+  const statusOrder = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']
+  const getCount = (obj, key) => {
+    if (!obj || typeof obj !== 'object') return 0
+    const v = obj[key] ?? obj[key.charAt(0).toUpperCase() + key.slice(1)]
+    return Number(v ?? 0)
+  }
+  const chartData =
+    data && typeof data === 'object'
+      ? statusOrder
+          .filter((key) => getCount(data, key) > 0)
+          .map((key) => ({
+            name: STATUS_LABELS[key] || key,
+            value: getCount(data, key),
+            fill: STATUS_COLORS[statusOrder.indexOf(key) % STATUS_COLORS.length],
+          }))
+      : []
 
   return (
-    <Paper 
-      elevation={0} 
-      sx={{ 
-        padding: { xs: '16px', sm: '20px', md: '24px' }, 
+    <Paper
+      elevation={0}
+      sx={{
+        padding: { xs: '16px', sm: '20px', md: '24px' },
         borderRadius: '12px',
         height: '100%',
         backgroundColor: 'transparent',
@@ -380,61 +529,44 @@ const FinanceSummary = () => {
     >
       <Typography
         variant="subtitle1"
-        sx={{ 
-          color: '#424242', 
-          fontWeight: 600, 
-          marginBottom: { xs: '16px', sm: '20px' },
+        sx={{
+          color: 'text.primary',
+          fontWeight: 600,
+          marginBottom: { xs: '16px', sm: '20px', md: '24px' },
           fontSize: { xs: '14px', sm: '15px', md: '16px' },
         }}
       >
-        Resumen finanzas
+        Estatus de pedidos
       </Typography>
-      <Box>
-        <Typography
-          variant="body2"
-          sx={{ 
-            color: '#757575', 
-            marginBottom: '8px', 
-            fontSize: { xs: '12px', sm: '13px', md: '14px' },
-          }}
-        >
-          Presupuesto total
-        </Typography>
-        <Typography
-          variant="h4"
-          sx={{ 
-            color: '#4caf50', 
-            fontWeight: 'bold', 
-            marginBottom: { xs: '16px', sm: '20px', md: '24px' },
-            fontSize: { xs: '20px', sm: '24px', md: '28px' },
-          }}
-        >
-          $50,000
-        </Typography>
-        <Box
-          sx={{
-            width: '100%',
-            height: { xs: '180px', sm: '200px', md: '220px' },
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+      <Box
+        sx={{
+          width: '100%',
+          height: { xs: '250px', sm: '280px', md: '300px' },
+          minHeight: '250px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {loading ? (
+          <CircularProgress size={40} />
+        ) : chartData.length === 0 ? (
+          <Typography color="text.secondary">No hay pedidos en el rango seleccionado</Typography>
+        ) : (
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={data}
+                data={chartData}
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                paddingAngle={5}
+                labelLine={false}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                outerRadius={100}
+                fill="#8884d8"
                 dataKey="value"
-                startAngle={90}
-                endAngle={-270}
                 animationDuration={1000}
               >
-                {data.map((entry, index) => (
+                {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
                 ))}
               </Pie>
@@ -448,112 +580,108 @@ const FinanceSummary = () => {
               />
             </PieChart>
           </ResponsiveContainer>
-        </Box>
-        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, marginTop: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box
-              sx={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: '#7b1fa2',
-              }}
-            />
-            <Typography variant="body2" sx={{ color: '#757575', fontSize: '12px' }}>
-              Usado: 65%
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box
-              sx={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: '#e0e0e0',
-              }}
-            />
-            <Typography variant="body2" sx={{ color: '#757575', fontSize: '12px' }}>
-              Disponible: 35%
-            </Typography>
-          </Box>
-        </Box>
+        )}
       </Box>
     </Paper>
   )
 }
 
-// Nueva gráfica de barras para categorías
-const CategoryBarChart = () => {
-  const data = [
-    { name: 'Motor', ventas: 4500, color: '#2196f3' },
-    { name: 'Frenos', ventas: 3200, color: '#7b1fa2' },
-    { name: 'Suspensión', ventas: 2800, color: '#4caf50' },
-    { name: 'Transmisión', ventas: 2100, color: '#ff9800' },
-    { name: 'Eléctrico', ventas: 1800, color: '#f44336' },
-  ]
+// Gráfica de barras: total $ por estatus (usa datos de amountByStatus)
+const STATUS_ORDER = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']
+const STATUS_COLORS_BAR = ['#2196f3', '#7b1fa2', '#4caf50', '#ff9800', '#009688', '#f44336', '#9e9e9e']
+
+function formatCurrency(value) {
+  return `$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+const CategoryBarChart = ({ data = null, loading = false }) => {
+  const getAmount = (obj, key) => {
+    if (!obj || typeof obj !== 'object') return 0
+    const v = obj[key] ?? obj[key.charAt(0).toUpperCase() + key.slice(1)]
+    return Number(v ?? 0)
+  }
+  const chartData =
+    data && typeof data === 'object'
+      ? STATUS_ORDER.map((key) => ({
+          name: STATUS_LABELS[key] || key,
+          amount: getAmount(data, key),
+          color: STATUS_COLORS_BAR[STATUS_ORDER.indexOf(key) % STATUS_COLORS_BAR.length],
+        }))
+      : []
 
   return (
-    <Paper 
-      elevation={0} 
-      sx={{ 
-        padding: { xs: '16px', sm: '20px', md: '24px' }, 
+    <Paper
+      elevation={0}
+      sx={{
+        padding: { xs: '16px', sm: '20px', md: '24px' },
         borderRadius: '12px',
         width: '100%',
         backgroundColor: 'transparent',
         border: '1px solid rgba(0, 0, 0, 0.08)',
       }}
     >
-      <Typography 
-        variant="subtitle1" 
-        sx={{ 
-          color: '#424242', 
+      <Typography
+        variant="subtitle1"
+        sx={{
+          color: 'text.primary',
           fontWeight: 600,
           marginBottom: { xs: '16px', sm: '20px', md: '24px' },
           fontSize: { xs: '14px', sm: '15px', md: '16px' },
         }}
       >
-        Ventas por Categoría
+        Ventas por estatus
       </Typography>
       <Box
         sx={{
           width: '100%',
           height: { xs: '250px', sm: '280px', md: '320px' },
           minHeight: '250px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
-            <XAxis
-              dataKey="name"
-              stroke="#757575"
-              tick={{ fill: '#757575', fontSize: 12 }}
-            />
-            <YAxis
-              stroke="#757575"
-              tick={{ fill: '#757575', fontSize: 12 }}
-              tickFormatter={(value) => `$${value}`}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: 'none',
-                borderRadius: '8px',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              }}
-              cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
-            />
-            <Bar
-              dataKey="ventas"
-              radius={[8, 8, 0, 0]}
-              animationDuration={1000}
-            >
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <CircularProgress size={40} />
+        ) : chartData.length === 0 ? (
+          <Typography color="text.secondary">No hay datos en el rango seleccionado</Typography>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
+              <XAxis
+                dataKey="name"
+                stroke="#757575"
+                tick={{ fill: '#757575', fontSize: 11 }}
+                interval={0}
+              />
+              <YAxis
+                stroke="#757575"
+                tick={{ fill: '#757575', fontSize: 12 }}
+                tickFormatter={(value) => formatCurrency(value)}
+                width={70}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                }}
+                formatter={(value) => {
+                  const num = Array.isArray(value) ? value[0] : value
+                  return [formatCurrency(num), 'Total']
+                }}
+                cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
+              />
+              <Bar dataKey="amount" radius={[8, 8, 0, 0]} animationDuration={1000}>
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </Box>
     </Paper>
   )
@@ -726,6 +854,7 @@ const MonthlyTrendChart = () => {
 export { 
   SummaryCard, 
   SalesChart, 
+  CancelledChart,
   ProductsTable, 
   FinanceSummary,
   CategoryBarChart,
