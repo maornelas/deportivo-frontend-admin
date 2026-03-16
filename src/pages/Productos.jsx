@@ -14,17 +14,16 @@ import {
   TableHead,
   TableRow,
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
 } from '@mui/material'
 import {
   Add as AddIcon,
   Upload as UploadIcon,
-  Close as CloseIcon,
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import ModalHeader from '../components/ModalHeader'
 
 const Productos = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -216,28 +215,9 @@ const Productos = () => {
           onClose={handleCloseDialog}
           maxWidth="md"
           fullWidth
-          PaperProps={{
-            sx: {
-              borderRadius: '12px',
-            },
-          }}
+          PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}
         >
-          <DialogTitle
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '24px',
-              borderBottom: '1px solid #e0e0e0',
-            }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#424242' }}>
-              Nuevo Producto de Autopartes
-            </Typography>
-            <IconButton onClick={handleCloseDialog} size="small">
-              <CloseIcon />
-            </IconButton>
-          </DialogTitle>
+          <ModalHeader title="Nuevo Producto de Autopartes" onClose={handleCloseDialog} />
           <DialogContent sx={{ padding: '24px' }}>
             <Grid container spacing={3}>
               <Grid item xs={12} sm={6}>

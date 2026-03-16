@@ -15,7 +15,6 @@ import {
   InputAdornment,
   Avatar,
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   Button,
@@ -30,6 +29,7 @@ import {
 import { Search as SearchIcon, Add as AddIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import ModalHeader from '../components/ModalHeader'
 import { getUsers, getUserById, updateUser, createUser } from '../api/user'
 
 function formatDate(value) {
@@ -356,8 +356,8 @@ const Usuarios = () => {
           )}
         </Paper>
 
-        <Dialog open={detailOpen} onClose={handleCloseDetail} maxWidth="sm" fullWidth>
-          <DialogTitle>Detalle del usuario</DialogTitle>
+        <Dialog open={detailOpen} onClose={handleCloseDetail} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
+          <ModalHeader title="Detalle del usuario" onClose={handleCloseDetail} />
           <DialogContent>
             {detailLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -468,8 +468,8 @@ const Usuarios = () => {
           </DialogActions>
         </Dialog>
 
-        <Dialog open={createOpen} onClose={handleCloseCreate} maxWidth="sm" fullWidth>
-          <DialogTitle>Crear usuario</DialogTitle>
+        <Dialog open={createOpen} onClose={handleCloseCreate} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
+          <ModalHeader title="Crear usuario" onClose={handleCloseCreate} />
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
               <TextField

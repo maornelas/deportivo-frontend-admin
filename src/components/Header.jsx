@@ -5,15 +5,11 @@ import {
   IconButton,
   Avatar,
   Typography,
-  Badge,
   Menu,
   MenuItem,
 } from '@mui/material'
 import {
   Search as SearchIcon,
-  Language as LanguageIcon,
-  Chat as ChatIcon,
-  Notifications as NotificationsIcon,
   ArrowDropDown as ArrowDropDownIcon,
   Menu as MenuIcon,
   Logout as LogoutIcon,
@@ -102,17 +98,6 @@ const Header = ({ onMenuClick }) => {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <IconButton onClick={toggleTheme} aria-label={mode === 'dark' ? 'Modo claro' : 'Modo oscuro'} color="inherit" size="small">
           {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-        </IconButton>
-        <IconButton size="small">
-          <LanguageIcon color="action" />
-        </IconButton>
-        <IconButton size="small">
-          <ChatIcon color="action" />
-        </IconButton>
-        <IconButton size="small">
-          <Badge badgeContent={3} color="error">
-            <NotificationsIcon color="action" />
-          </Badge>
         </IconButton>
         <Box
           sx={{

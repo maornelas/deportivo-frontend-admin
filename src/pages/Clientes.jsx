@@ -15,7 +15,6 @@ import {
   InputAdornment,
   Avatar,
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   Button,
@@ -39,6 +38,7 @@ import {
 import { Search as SearchIcon, Person, LocationOn, ShoppingCart, CreditCard, AssignmentReturn, Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import ModalHeader from '../components/ModalHeader'
 import { getUsers, getUserById, updateUser, createUser } from '../api/user'
 import { getAddressesByUser, createAddress } from '../api/userAddress'
 import { getPaymentsByUser, createPayment } from '../api/userPayment'
@@ -522,24 +522,11 @@ const Clientes = () => {
           )}
         </Paper>
 
-        <Dialog open={detailOpen} onClose={handleCloseDetail} maxWidth="lg" fullWidth>
-          <DialogTitle>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {detailUser && (
-                <Avatar sx={{ width: 48, height: 48, bgcolor: 'primary.main' }}>
-                  {getInitials(detailUser)}
-                </Avatar>
-              )}
-              <Box>
-                <Typography variant="h6">
-                  {detailUser ? [detailUser.firstName, detailUser.lastName].filter(Boolean).join(' ') || detailUser.email || 'Cliente' : 'Detalle del cliente'}
-                </Typography>
-                {detailUser?.email && (
-                  <Typography variant="body2" color="text.secondary">{detailUser.email}</Typography>
-                )}
-              </Box>
-            </Box>
-          </DialogTitle>
+        <Dialog open={detailOpen} onClose={handleCloseDetail} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
+          <ModalHeader
+            title={detailUser ? [detailUser.firstName, detailUser.lastName].filter(Boolean).join(' ') || detailUser.email || 'Cliente' : 'Detalle del cliente'}
+            onClose={handleCloseDetail}
+          />
           <DialogContent dividers sx={{ minHeight: 480, height: 520, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {detailLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -716,8 +703,8 @@ const Clientes = () => {
           </DialogActions>
         </Dialog>
 
-        <Dialog open={createOpen} onClose={handleCloseCreate} maxWidth="sm" fullWidth>
-          <DialogTitle>Crear cliente</DialogTitle>
+        <Dialog open={createOpen} onClose={handleCloseCreate} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
+          <ModalHeader title="Crear cliente" onClose={handleCloseCreate} />
           <DialogContent>
             <Stepper activeStep={createStep} sx={{ pt: 2, pb: 3 }}>
               <Step><StepLabel>Datos personales</StepLabel></Step>

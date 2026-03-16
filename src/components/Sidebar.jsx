@@ -8,29 +8,33 @@ import {
   ListItemIcon,
   ListItemText,
   Typography,
+  Divider,
 } from '@mui/material'
 import {
-  Home as HomeIcon,
   Dashboard as DashboardIcon,
   Inventory as InventoryIcon,
-  ShoppingCart as PedidosIcon,
+  PointOfSale as VentasIcon,
+  ShoppingCart as ComprasIcon,
+  MoneyOff as GastosIcon,
+  RequestQuote as CotizacionIcon,
   Receipt as ReceiptIcon,
   People as PeopleIcon,
   Group as GroupIcon,
-  CalendarToday as CalendarIcon,
   Help as HelpIcon,
   Settings as SettingsIcon,
 } from '@mui/icons-material'
 
 const menuItems = [
-  { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard' },
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-  { text: 'Productos', icon: <InventoryIcon />, path: '/productos' },
-  { text: 'Pedidos', icon: <PedidosIcon />, path: '/pedidos' },
+  { text: 'Inventario', icon: <InventoryIcon />, path: '/inventario' },
+  { text: 'Cotización', icon: <CotizacionIcon />, path: '/cotizacion' },
+  { text: 'Ventas', icon: <VentasIcon />, path: '/ventas' },
+  { text: 'Compras', icon: <ComprasIcon />, path: '/compras' },
+  { text: 'Gastos', icon: <GastosIcon />, path: '/gastos' },
   { text: 'Facturas', icon: <ReceiptIcon />, path: '/facturas' },
+  { type: 'divider' },
   { text: 'Clientes', icon: <PeopleIcon />, path: '/clientes' },
   { text: 'Usuarios', icon: <GroupIcon />, path: '/usuarios' },
-  { text: 'Envios', icon: <CalendarIcon />, path: '/envios' },
   { text: 'Centro de Ayuda', icon: <HelpIcon />, path: '/ayuda' },
   { text: 'Configuración', icon: <SettingsIcon />, path: '/configuracion' },
 ]
@@ -90,17 +94,17 @@ const Sidebar = ({ isOpen = true, onClose }) => {
       </Box>
 
       <List sx={{ flex: 1, paddingTop: '8px' }}>
-        {menuItems.map((item) => {
+        {menuItems.map((item, index) => {
+          if (item.type === 'divider') {
+            return <Divider key="sidebar-divider" sx={{ borderColor: 'rgba(255, 255, 255, 0.2)', margin: '12px 16px' }} />
+          }
           const isActive = location.pathname === item.path
           return (
             <ListItem key={item.text} disablePadding>
               <ListItemButton
                 onClick={() => {
                   navigate(item.path)
-                  // Cerrar sidebar en móvil al hacer click
-                  if (onClose) {
-                    onClose()
-                  }
+                  if (onClose) onClose()
                 }}
                 sx={{
                   padding: '12px 20px',
@@ -112,12 +116,7 @@ const Sidebar = ({ isOpen = true, onClose }) => {
                   },
                 }}
               >
-                <ListItemIcon
-                  sx={{
-                    color: isActive ? 'white' : 'rgba(255, 255, 255, 0.7)',
-                    minWidth: '40px',
-                  }}
-                >
+                <ListItemIcon sx={{ color: isActive ? 'white' : 'rgba(255, 255, 255, 0.7)', minWidth: '40px' }}>
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText

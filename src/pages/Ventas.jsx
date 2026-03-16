@@ -59,7 +59,6 @@ function formatCurrency(value, currency = 'MXN') {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(Number(value))
 }
 
-/** Nombre del cliente: soporta respuesta con billingAddress (dominio) o campos planos */
 function getClientDisplay(order) {
   const addr = order.billingAddress
   if (addr) {
@@ -70,19 +69,17 @@ function getClientDisplay(order) {
   return name || order.billingEmail || '-'
 }
 
-/** Etiqueta en español del estado de la orden */
 function getStatusLabel(status) {
   const opt = ORDER_STATUS_OPTIONS.find((o) => o.value === status)
   return opt ? opt.label : status || '-'
 }
 
-/** Color de la columna Estado: rojo si cancelado/reembolsado, azul el resto */
 function getStatusColor(status) {
   if (status === 'cancelled' || status === 'refunded') return 'error.main'
   return 'primary.main'
 }
 
-const Pedidos = () => {
+const Ventas = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -102,20 +99,14 @@ const Pedidos = () => {
   const fetchOrders = useCallback(async () => {
     setLoading(true)
     setError('')
-    const params = {
-      page: page + 1,
-      limit,
-      sortBy: 'createdAt',
-      sortOrder: 'DESC',
-    }
+    const params = { page: page + 1, limit, sortBy: 'createdAt', sortOrder: 'DESC' }
     if (startDate) params.startDate = startDate
     if (endDate) params.endDate = endDate
     if (searchApplied) params.search = searchApplied
-
     const result = await searchOrders(params)
     setLoading(false)
     if (!result.success) {
-      setError(result.error || 'Error al cargar pedidos')
+      setError(result.error || 'Error al cargar ventas')
       return
     }
     const data = result.data
@@ -123,23 +114,11 @@ const Pedidos = () => {
     setTotal(data.total ?? 0)
   }, [page, limit, startDate, endDate, searchApplied])
 
-  useEffect(() => {
-    fetchOrders()
-  }, [fetchOrders])
+  useEffect(() => { fetchOrders() }, [fetchOrders])
 
-  const handlePageChange = (_, newPage) => {
-    setPage(newPage)
-  }
-
-  const handleApplyFilters = () => {
-    setSearchApplied(search)
-    setPage(0)
-  }
-
-  const handleKeyDownSearch = (e) => {
-    if (e.key === 'Enter') handleApplyFilters()
-  }
-
+  const handlePageChange = (_, newPage) => setPage(newPage)
+  const handleApplyFilters = () => { setSearchApplied(search); setPage(0) }
+  const handleKeyDownSearch = (e) => { if (e.key === 'Enter') handleApplyFilters() }
   const handleMenuClick = () => setSidebarOpen(!sidebarOpen)
   const handleSidebarClose = () => setSidebarOpen(false)
 
@@ -180,95 +159,23 @@ const Pedidos = () => {
   return (
     <Box sx={{ display: 'flex' }}>
       <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
-      <Box
-        sx={{
-          marginLeft: { xs: 0, md: '260px' },
-          marginTop: { xs: 0, md: '70px' },
-          width: { xs: '100%', md: 'calc(100% - 260px)' },
-          padding: { xs: '16px', sm: '24px', md: '32px' },
-          minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
-        }}
-      >
+      <Box sx={{ marginLeft: { xs: 0, md: '260px' }, marginTop: { xs: 0, md: '70px' }, width: { xs: '100%', md: 'calc(100% - 260px)' }, padding: { xs: '16px', sm: '24px', md: '32px' }, minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' } }}>
         <Header onMenuClick={handleMenuClick} />
-        <Typography
-          variant="h4"
-          sx={{
-            color: '#424242',
-            fontWeight: 'bold',
-            marginBottom: 2,
-            fontSize: { xs: '24px', sm: '28px', md: '32px' },
-          }}
-        >
-          Pedidos
+        <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', marginBottom: 2, fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
+          Ventas
         </Typography>
-
         <Paper sx={{ p: 2, mb: 2 }}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>
-            <TextField
-              label="Fecha inicio"
-              type="date"
-              size="small"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{ width: 160 }}
-            />
-            <TextField
-              label="Fecha fin"
-              type="date"
-              size="small"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{ width: 160 }}
-            />
-            <TextField
-              placeholder="Nº orden o nombre de usuario"
-              size="small"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleKeyDownSearch}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ minWidth: 260, flex: 1 }}
-            />
-            <Typography
-              component="button"
-              type="button"
-              onClick={handleApplyFilters}
-              sx={{
-                px: 2,
-                py: 1,
-                borderRadius: 1,
-                border: '1px solid #424242',
-                backgroundColor: '#424242',
-                color: 'white',
-                cursor: 'pointer',
-                fontSize: 14,
-                '&:hover': { backgroundColor: '#616161' },
-              }}
-            >
-              Buscar
-            </Typography>
+            <TextField label="Fecha inicio" type="date" size="small" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
+            <TextField label="Fecha fin" type="date" size="small" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
+            <TextField placeholder="Nº orden o nombre de usuario" size="small" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={handleKeyDownSearch} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }} sx={{ minWidth: 260, flex: 1 }} />
+            <Typography component="button" type="button" onClick={handleApplyFilters} sx={{ px: 2, py: 1, borderRadius: 1, border: '1px solid #424242', backgroundColor: '#424242', color: 'white', cursor: 'pointer', fontSize: 14, '&:hover': { backgroundColor: '#616161' } }}>Buscar</Typography>
           </Box>
         </Paper>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-            {error}
-          </Alert>
-        )}
-
+        {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
         <TableContainer component={Paper}>
           {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress />
-            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
           ) : (
             <>
               <Table size="small" stickyHeader>
@@ -284,138 +191,58 @@ const Pedidos = () => {
                 </TableHead>
                 <TableBody>
                   {orders.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                        No hay pedidos con los filtros seleccionados.
-                      </TableCell>
-                    </TableRow>
+                    <TableRow><TableCell colSpan={6} align="center" sx={{ py: 4 }}>No hay ventas con los filtros seleccionados.</TableCell></TableRow>
                   ) : (
                     orders.map((order) => (
-                      <TableRow
-                        key={order.id}
-                        hover
-                        onDoubleClick={() => handleRowDoubleClick(order)}
-                        sx={{ cursor: 'pointer' }}
-                      >
+                      <TableRow key={order.id} hover onDoubleClick={() => handleRowDoubleClick(order)} sx={{ cursor: 'pointer' }}>
                         <TableCell>{order.orderNumber || '-'}</TableCell>
                         <TableCell>{formatDate(order.createdAt)}</TableCell>
                         <TableCell>{formatTime(order.createdAt)}</TableCell>
                         <TableCell>{getClientDisplay(order)}</TableCell>
-                        <TableCell sx={{ color: getStatusColor(order.status), fontWeight: 500 }}>
-                          {getStatusLabel(order.status)}
-                        </TableCell>
-                        <TableCell align="right">
-                          {formatCurrency(
-                            order.status === 'cancelled' ? -Number(order.totalAmount) : order.totalAmount,
-                            order.currency
-                          )}
-                        </TableCell>
+                        <TableCell sx={{ color: getStatusColor(order.status), fontWeight: 500 }}>{getStatusLabel(order.status)}</TableCell>
+                        <TableCell align="right">{formatCurrency(order.status === 'cancelled' ? -Number(order.totalAmount) : order.totalAmount, order.currency)}</TableCell>
                       </TableRow>
                     ))
                   )}
                 </TableBody>
               </Table>
-              <TablePagination
-                component="div"
-                count={total}
-                page={page}
-                onPageChange={handlePageChange}
-                rowsPerPage={limit}
-                rowsPerPageOptions={[limit]}
-                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-                labelRowsPerPage="Filas:"
-              />
+              <TablePagination component="div" count={total} page={page} onPageChange={handlePageChange} rowsPerPage={limit} rowsPerPageOptions={[limit]} labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`} labelRowsPerPage="Filas:" />
             </>
           )}
         </TableContainer>
-
-        {/* Modal detalle de la orden */}
         <Dialog open={!!detailOrder || detailLoading} onClose={handleCloseDetail} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
           <ModalHeader title={`Orden ${detailOrder?.orderNumber || '...'}`} onClose={handleCloseDetail} />
           <DialogContent>
-            {detailLoading && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress />
-              </Box>
-            )}
-            {detailError && (
-              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDetailError('')}>
-                {detailError}
-              </Alert>
-            )}
+            {detailLoading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>}
+            {detailError && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDetailError('')}>{detailError}</Alert>}
             {detailOrder && !detailLoading && (
               <Box sx={{ pt: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
                   <FormControl size="small" sx={{ minWidth: 180 }}>
                     <InputLabel>Estado de la orden</InputLabel>
-                    <Select
-                      label="Estado de la orden"
-                      value={detailOrder.status || 'pending'}
-                      onChange={(e) => handleStatusChange(e.target.value)}
-                      disabled={statusSaving}
-                    >
-                      {ORDER_STATUS_OPTIONS.map((opt) => (
-                        <MenuItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </MenuItem>
-                      ))}
+                    <Select label="Estado de la orden" value={detailOrder.status || 'pending'} onChange={(e) => handleStatusChange(e.target.value)} disabled={statusSaving}>
+                      {ORDER_STATUS_OPTIONS.map((opt) => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
                     </Select>
                   </FormControl>
                   {statusSaving && <CircularProgress size={24} />}
                 </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Fecha: {formatDate(detailOrder.createdAt)}
-                  {detailOrder.currency && ` · ${detailOrder.currency}`}
-                  {' · '}Pago: {detailOrder.paymentStatus || '-'}
-                </Typography>
+                <Typography variant="body2" color="text.secondary">Fecha: {formatDate(detailOrder.createdAt)}{detailOrder.currency && ` · ${detailOrder.currency}`}{' · '}Pago: {detailOrder.paymentStatus || '-'}</Typography>
                 <Divider sx={{ my: 2 }} />
-
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Facturación</Typography>
                 {detailOrder.billingAddress ? (
                   <Box sx={{ mb: 2, display: 'grid', gap: 0.5 }}>
                     <Typography variant="body2"><strong>Nombre:</strong> {[detailOrder.billingAddress.firstName, detailOrder.billingAddress.lastName].filter(Boolean).join(' ')} {detailOrder.billingAddress.company ? ` · ${detailOrder.billingAddress.company}` : ''}</Typography>
                     <Typography variant="body2"><strong>Email:</strong> {detailOrder.billingAddress.email || '—'}</Typography>
                     <Typography variant="body2"><strong>Teléfono:</strong> {detailOrder.billingAddress.phone || '—'}</Typography>
-                    <Typography variant="body2"><strong>Dirección de entrega:</strong> {detailOrder.shippingAddress
-                      ? [
-                          detailOrder.shippingAddress.addressLine1,
-                          detailOrder.shippingAddress.addressLine2,
-                          detailOrder.shippingAddress.city,
-                          detailOrder.shippingAddress.state,
-                          detailOrder.shippingAddress.postalCode,
-                          detailOrder.shippingAddress.country,
-                        ].filter(Boolean).join(', ')
-                      : [
-                          detailOrder.billingAddress.addressLine1,
-                          detailOrder.billingAddress.addressLine2,
-                          detailOrder.billingAddress.city,
-                          detailOrder.billingAddress.state,
-                          detailOrder.billingAddress.postalCode,
-                          detailOrder.billingAddress.country,
-                        ].filter(Boolean).join(', ') || '—'}
-                    </Typography>
+                    <Typography variant="body2"><strong>Dirección de entrega:</strong> {detailOrder.shippingAddress ? [detailOrder.shippingAddress.addressLine1, detailOrder.shippingAddress.addressLine2, detailOrder.shippingAddress.city, detailOrder.shippingAddress.state, detailOrder.shippingAddress.postalCode, detailOrder.shippingAddress.country].filter(Boolean).join(', ') : [detailOrder.billingAddress.addressLine1, detailOrder.billingAddress.addressLine2, detailOrder.billingAddress.city, detailOrder.billingAddress.state, detailOrder.billingAddress.postalCode, detailOrder.billingAddress.country].filter(Boolean).join(', ') || '—'}</Typography>
                   </Box>
-                ) : (
-                  <Typography variant="body2">—</Typography>
-                )}
-
+                ) : <Typography variant="body2">—</Typography>}
                 {detailOrder.shippingAddress && (detailOrder.shippingMethod || detailOrder.trackingNumber) && (
-                  <Box sx={{ mb: 2 }}>
-                    {detailOrder.shippingMethod && <Typography variant="body2">Método de envío: {detailOrder.shippingMethod}</Typography>}
-                    {detailOrder.trackingNumber && <Typography variant="body2">Seguimiento: {detailOrder.trackingNumber}</Typography>}
-                  </Box>
+                  <Box sx={{ mb: 2 }}>{detailOrder.shippingMethod && <Typography variant="body2">Método de envío: {detailOrder.shippingMethod}</Typography>}{detailOrder.trackingNumber && <Typography variant="body2">Seguimiento: {detailOrder.trackingNumber}</Typography>}</Box>
                 )}
-
                 <Typography variant="subtitle2" color="text.secondary">Productos</Typography>
                 <Table size="small" sx={{ mb: 2 }}>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Producto / SKU</TableCell>
-                      <TableCell align="right">Cant.</TableCell>
-                      <TableCell align="right">P. unit.</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                    </TableRow>
-                  </TableHead>
+                  <TableHead><TableRow><TableCell>Producto / SKU</TableCell><TableCell align="right">Cant.</TableCell><TableCell align="right">P. unit.</TableCell><TableCell align="right">Total</TableCell></TableRow></TableHead>
                   <TableBody>
                     {(detailOrder.items || []).map((item) => (
                       <TableRow key={item.id || item.productId}>
@@ -427,7 +254,6 @@ const Pedidos = () => {
                     ))}
                   </TableBody>
                 </Table>
-
                 <Divider sx={{ my: 2 }} />
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
                   {detailOrder.subtotal != null && <Typography variant="body2">Subtotal: {formatCurrency(detailOrder.subtotal, detailOrder.currency)}</Typography>}
@@ -436,23 +262,15 @@ const Pedidos = () => {
                   {detailOrder.discountAmount != null && Number(detailOrder.discountAmount) !== 0 && <Typography variant="body2">Descuento: {formatCurrency(detailOrder.discountAmount, detailOrder.currency)}</Typography>}
                   <Typography variant="subtitle1" fontWeight="bold">Total: {formatCurrency(detailOrder.totalAmount, detailOrder.currency)}</Typography>
                 </Box>
-                {detailOrder.notes && (
-                  <>
-                    <Divider sx={{ my: 2 }} />
-                    <Typography variant="subtitle2" color="text.secondary">Notas</Typography>
-                    <Typography variant="body2">{detailOrder.notes}</Typography>
-                  </>
-                )}
+                {detailOrder.notes && <><Divider sx={{ my: 2 }} /><Typography variant="subtitle2" color="text.secondary">Notas</Typography><Typography variant="body2">{detailOrder.notes}</Typography></>}
               </Box>
             )}
           </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDetail} color="inherit">Cerrar</Button>
-          </DialogActions>
+          <DialogActions><Button onClick={handleCloseDetail} color="inherit">Cerrar</Button></DialogActions>
         </Dialog>
       </Box>
     </Box>
   )
 }
 
-export default Pedidos
+export default Ventas

@@ -3,20 +3,12 @@ import { Box, Typography, Paper } from '@mui/material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 
-const Envios = () => {
+const Compras = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-
-  const handleMenuClick = () => {
-    setSidebarOpen(!sidebarOpen)
-  }
-
-  const handleSidebarClose = () => {
-    setSidebarOpen(false)
-  }
 
   return (
     <Box sx={{ display: 'flex' }}>
-      <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
           marginLeft: { xs: 0, md: '260px' },
@@ -27,22 +19,11 @@ const Envios = () => {
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}
       >
-        <Header onMenuClick={handleMenuClick} />
-        <Typography
-          variant="h4"
-          sx={{
-            color: '#424242',
-            fontWeight: 'bold',
-            marginBottom: { xs: '24px', sm: '28px', md: '32px' },
-            fontSize: { xs: '24px', sm: '28px', md: '32px' },
-          }}
-        >
-          Envíos
+        <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
+        <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', marginBottom: { xs: '24px', sm: '28px', md: '32px' }, fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
+          Compras
         </Typography>
-        <Paper
-          elevation={2}
-          sx={{ padding: { xs: '16px', sm: '24px' }, borderRadius: '12px' }}
-        >
+        <Paper elevation={2} sx={{ padding: { xs: '16px', sm: '24px' }, borderRadius: '12px' }}>
           <Typography variant="body1" sx={{ color: '#757575' }}>
             Esta sección estará disponible próximamente.
           </Typography>
@@ -52,6 +33,4 @@ const Envios = () => {
   )
 }
 
-export default Envios
-
-
+export default Compras

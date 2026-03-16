@@ -2,12 +2,14 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-import Productos from './pages/Productos'
-import Pedidos from './pages/Pedidos'
+import Inventario from './pages/Inventario'
+import Ventas from './pages/Ventas'
+import Compras from './pages/Compras'
+import Gastos from './pages/Gastos'
+import Cotizacion from './pages/Cotizacion'
 import Facturas from './pages/Facturas'
 import Clientes from './pages/Clientes'
 import Usuarios from './pages/Usuarios'
-import Envios from './pages/Envios'
 import Ayuda from './pages/Ayuda'
 import Configuracion from './pages/Configuracion'
 import Perfil from './pages/Perfil'
@@ -32,18 +34,42 @@ function App() {
         }
       />
       <Route
-        path="/productos"
+        path="/inventario"
         element={
           <ProtectedRoute>
-            <Productos />
+            <Inventario />
           </ProtectedRoute>
         }
       />
       <Route
-        path="/pedidos"
+        path="/ventas"
         element={
           <ProtectedRoute>
-            <Pedidos />
+            <Ventas />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/compras"
+        element={
+          <ProtectedRoute>
+            <Compras />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gastos"
+        element={
+          <ProtectedRoute>
+            <Gastos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cotizacion"
+        element={
+          <ProtectedRoute>
+            <Cotizacion />
           </ProtectedRoute>
         }
       />
@@ -68,14 +94,6 @@ function App() {
         element={
           <ProtectedRoute>
             <Usuarios />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/envios"
-        element={
-          <ProtectedRoute>
-            <Envios />
           </ProtectedRoute>
         }
       />
