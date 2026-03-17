@@ -24,6 +24,8 @@ import {
   Select,
   Snackbar,
   Avatar,
+  CircularProgress,
+  Backdrop,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -98,6 +100,7 @@ const Inventario = () => {
   const [detailEditing, setDetailEditing] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
+  const [detailPreviewImageIndex, setDetailPreviewImageIndex] = useState(null)
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
@@ -178,10 +181,23 @@ const Inventario = () => {
     }
   }, [producto.imageFiles?.length, producto.imageFiles?.[0]?.name])
 
+  // URLs de vista previa para todas las imágenes (miniaturas en la parte inferior)
+  const [imagePreviewUrls, setImagePreviewUrls] = useState([])
+  useEffect(() => {
+    const files = producto.imageFiles || []
+    const urls = files.map((f) => URL.createObjectURL(f))
+    setImagePreviewUrls(urls)
+    return () => urls.forEach((u) => URL.revokeObjectURL(u))
+  }, [producto.imageFiles])
+
+  // Índice de la imagen abierta en vista ampliada (null = cerrada)
+  const [previewImageIndex, setPreviewImageIndex] = useState(null)
+
   const handleCloseDialog = () => {
     setOpenDialog(false)
     setProducto(getInitialProducto())
     setSubmitError('')
+    setPreviewImageIndex(null)
   }
 
   const handleInputChange = (e) => {
@@ -331,6 +347,7 @@ const Inventario = () => {
       estatus: d.isActive === true ? 'DISPONIBLE' : 'VENDIDO',
       imageFiles: [],
     })
+    // Mismo orden que al crear: imágenes ordenadas por sortOrder (backend ya devuelve ASC)
     setDetailImages(Array.isArray(d.images) ? d.images.map((img) => img.imageUrl) : [])
     if (d.brandId) {
       getCarModelsByBrand(d.brandId).then((r) => setDetailCarModels(r.success ? (r.data || []) : []))
@@ -347,6 +364,7 @@ const Inventario = () => {
     setDetailImages([])
     setDetailEditing(false)
     setDetailError('')
+    setDetailPreviewImageIndex(null)
   }
 
   const handleDetailInputChange = (e) => {
@@ -621,7 +639,31 @@ const Inventario = () => {
 
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
           <ModalHeader title="Nuevo Producto de Autopartes" onClose={handleCloseDialog} />
-          <DialogContent sx={{ padding: '24px 24px 8px' }}>
+          <DialogContent sx={{ padding: '24px 24px 8px', position: 'relative' }}>
+            {/* Overlay de loading centrado al guardar */}
+            <Backdrop
+              open={loading}
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 10,
+                borderRadius: '12px',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                flexDirection: 'column',
+                gap: 2,
+              }}
+            >
+              <CircularProgress size={56} thickness={4} sx={{ color: 'primary.main' }} />
+              <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                Guardando producto…
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Subiendo imágenes al bucket
+              </Typography>
+            </Backdrop>
             {submitError && (
               <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSubmitError('')}>
                 {submitError}
@@ -766,23 +808,110 @@ const Inventario = () => {
 
             {/* Fotos: subir imágenes (se guardan en S3 en images-products/{productId}/) */}
             <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Fotos de la pieza (hasta {MAX_FOTOS})</Typography>
-            {imageFiles.length > 0 && (
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                {imageFiles.map((file, i) => (
-                  <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: '#f5f5f5', px: 1.5, py: 1, borderRadius: 1 }}>
-                    <ImageIcon fontSize="small" color="action" />
-                    <Typography variant="caption" sx={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</Typography>
-                    <IconButton size="small" onClick={() => removeImageFile(i)} color="error" aria-label="Quitar"><DeleteIcon fontSize="small" /></IconButton>
-                  </Box>
-                ))}
-              </Box>
-            )}
             {canAddMoreImages && (
               <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />} sx={{ textTransform: 'none', mb: 2 }}>
                 Cargar imágenes
                 <input type="file" hidden accept="image/*" multiple onChange={handleImageFiles} />
               </Button>
             )}
+            {/* Vistas previas de las partes cargadas (parte inferior); clic abre vista ampliada */}
+            {imageFiles.length > 0 && (
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>Vistas previas de las imágenes cargadas (clic para ampliar)</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  {imageFiles.map((file, i) => (
+                    <Box
+                      key={i}
+                      sx={{
+                        position: 'relative',
+                        border: '1px solid',
+                        borderColor: 'grey.300',
+                        borderRadius: 1,
+                        overflow: 'hidden',
+                        bgcolor: 'grey.100',
+                        cursor: 'pointer',
+                        '&:hover': { borderColor: 'grey.500', boxShadow: 1 },
+                      }}
+                    >
+                      <Box
+                        component="img"
+                        src={imagePreviewUrls[i]}
+                        alt={file.name}
+                        onClick={() => setPreviewImageIndex(i)}
+                        sx={{
+                          width: 100,
+                          height: 100,
+                          objectFit: 'cover',
+                          display: 'block',
+                        }}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removeImageFile(i)
+                        }}
+                        color="error"
+                        aria-label="Quitar imagen"
+                        sx={{
+                          position: 'absolute',
+                          top: 4,
+                          right: 4,
+                          bgcolor: 'rgba(255,255,255,0.9)',
+                          '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
+                        }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                      <Typography variant="caption" sx={{ display: 'block', px: 1, py: 0.5, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={file.name}>
+                        {file.name}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )}
+
+            {/* Dialog vista ampliada de la imagen (al hacer clic en una miniatura) */}
+            <Dialog
+              open={previewImageIndex !== null}
+              onClose={() => setPreviewImageIndex(null)}
+              maxWidth={false}
+              PaperProps={{
+                sx: {
+                  maxWidth: '95vw',
+                  maxHeight: '95vh',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  bgcolor: 'grey.900',
+                },
+              }}
+            >
+              <DialogContent sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 280, minHeight: 200 }}>
+                {previewImageIndex !== null && imagePreviewUrls[previewImageIndex] && (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                    <Box
+                      component="img"
+                      src={imagePreviewUrls[previewImageIndex]}
+                      alt={imageFiles[previewImageIndex]?.name || 'Vista previa'}
+                      sx={{
+                        maxWidth: '90vw',
+                        maxHeight: '75vh',
+                        objectFit: 'contain',
+                      }}
+                    />
+                    <Typography variant="caption" sx={{ color: 'grey.400', textAlign: 'center', maxWidth: '90vw' }}>
+                      {imageFiles[previewImageIndex]?.name}
+                    </Typography>
+                  </Box>
+                )}
+              </DialogContent>
+              <DialogActions sx={{ justifyContent: 'center', py: 1, bgcolor: 'grey.900' }}>
+                <Button onClick={() => setPreviewImageIndex(null)} sx={{ textTransform: 'none', color: 'grey.300' }}>
+                  Cerrar
+                </Button>
+              </DialogActions>
+            </Dialog>
           </DialogContent>
           <DialogActions sx={{ padding: '16px 24px', borderTop: '1px solid #e0e0e0', backgroundColor: '#fafafa' }}>
             <Button onClick={handleCloseDialog} sx={{ textTransform: 'none', color: '#757575' }} disabled={loading}>Cancelar</Button>
@@ -806,33 +935,126 @@ const Inventario = () => {
                   </Alert>
                 )}
 
-                {/* Nombre de la pieza (izq) + Vista previa Avatar (derecha) */}
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 3, mb: 3 }}>
+                {/* Misma disposición que en Nuevo Producto: nombre (izq) + Vista previa (derecha, 220px, Avatar 160x160) */}
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, mb: 3 }}>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Nombre de la pieza</Typography>
                     <TextField fullWidth label="Nombre pieza" name="nombrePieza" value={detailProduct.nombrePieza} onChange={handleDetailInputChange} variant="outlined" size="small" required disabled={!detailEditing} />
                   </Box>
-                  <Box sx={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600 }}>Vista previa</Typography>
-                    <Avatar src={detailImages[0]} variant="rounded" sx={{ width: 120, height: 120, bgcolor: 'grey.200' }}>
-                      {!detailImages[0] && <ImageIcon sx={{ fontSize: 48, color: 'grey.500' }} />}
+                  <Box
+                    sx={{
+                      flexShrink: 0,
+                      width: { xs: '100%', md: 220 },
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid',
+                      borderColor: 'grey.300',
+                      borderRadius: 2,
+                      bgcolor: 'grey.50',
+                      p: 2,
+                      minHeight: 280,
+                    }}
+                  >
+                    <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Vista previa</Typography>
+                    <Avatar
+                      src={detailImages[0]}
+                      variant="rounded"
+                      sx={{
+                        width: 160,
+                        height: 160,
+                        bgcolor: 'grey.200',
+                      }}
+                    >
+                      {!detailImages[0] && <ImageIcon sx={{ fontSize: 64, color: 'grey.500' }} />}
                     </Avatar>
                     {detailImages.length > 1 && (
-                      <Typography variant="caption" color="text.secondary">{detailImages.length} imágenes</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5 }}>{detailImages.length} imágenes</Typography>
                     )}
                   </Box>
                 </Box>
 
-                {detailImages.length > 1 && (
-                  <>
-                    <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Imágenes del producto</Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 3 }}>
+                {/* Mismas vistas previas que en Nuevo Producto: grid 100x100, clic para ampliar */}
+                {detailImages.length > 0 && (
+                  <Box sx={{ mt: 2, mb: 3 }}>
+                    <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Vistas previas de las imágenes (clic para ampliar)</Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                       {detailImages.map((url, i) => (
-                        <Box key={i} component="img" src={url} alt={`Imagen ${i + 1}`} sx={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 1, border: '1px solid #e0e0e0' }} />
+                        <Box
+                          key={i}
+                          onClick={() => setDetailPreviewImageIndex(i)}
+                          sx={{
+                            position: 'relative',
+                            border: '1px solid',
+                            borderColor: 'grey.300',
+                            borderRadius: 1,
+                            overflow: 'hidden',
+                            bgcolor: 'grey.100',
+                            cursor: 'pointer',
+                            '&:hover': { borderColor: 'grey.500', boxShadow: 1 },
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={url}
+                            alt={`Imagen ${i + 1}`}
+                            sx={{
+                              width: 100,
+                              height: 100,
+                              objectFit: 'cover',
+                              display: 'block',
+                            }}
+                          />
+                          <Typography variant="caption" sx={{ display: 'block', px: 1, py: 0.5, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            Imagen {i + 1}
+                          </Typography>
+                        </Box>
                       ))}
                     </Box>
-                  </>
+                  </Box>
                 )}
+
+                {/* Dialog vista ampliada en detalle (misma UX que en Nuevo Producto) */}
+                <Dialog
+                  open={detailPreviewImageIndex !== null}
+                  onClose={() => setDetailPreviewImageIndex(null)}
+                  maxWidth={false}
+                  PaperProps={{
+                    sx: {
+                      maxWidth: '95vw',
+                      maxHeight: '95vh',
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      bgcolor: 'grey.900',
+                    },
+                  }}
+                >
+                  <DialogContent sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 280, minHeight: 200 }}>
+                    {detailPreviewImageIndex !== null && detailImages[detailPreviewImageIndex] && (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                        <Box
+                          component="img"
+                          src={detailImages[detailPreviewImageIndex]}
+                          alt={`Imagen ${detailPreviewImageIndex + 1}`}
+                          sx={{
+                            maxWidth: '90vw',
+                            maxHeight: '75vh',
+                            objectFit: 'contain',
+                          }}
+                        />
+                        <Typography variant="caption" sx={{ color: 'grey.400', textAlign: 'center', maxWidth: '90vw' }}>
+                          Imagen {detailPreviewImageIndex + 1}
+                        </Typography>
+                      </Box>
+                    )}
+                  </DialogContent>
+                  <DialogActions sx={{ justifyContent: 'center', py: 1, bgcolor: 'grey.900' }}>
+                    <Button onClick={() => setDetailPreviewImageIndex(null)} sx={{ textTransform: 'none', color: 'grey.300' }}>
+                      Cerrar
+                    </Button>
+                  </DialogActions>
+                </Dialog>
 
                 <Grid container spacing={2} sx={{ mb: 2, '& > .MuiGrid-item': { overflow: 'hidden' } }}>
                   <Grid item xs={12} sm={4} sx={{ minWidth: 0, overflow: 'hidden', flex: { xs: '1 1 100%', sm: '0 0 33.333%' }, maxWidth: { xs: '100%', sm: '33.333%' } }}>
