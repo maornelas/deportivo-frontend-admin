@@ -7,11 +7,9 @@ import Ventas from './pages/Ventas'
 import Compras from './pages/Compras'
 import Gastos from './pages/Gastos'
 import Cotizacion from './pages/Cotizacion'
-import Facturas from './pages/Facturas'
 import Clientes from './pages/Clientes'
 import Usuarios from './pages/Usuarios'
-import Ayuda from './pages/Ayuda'
-import Configuracion from './pages/Configuracion'
+import Catalogos from './pages/Catalogos'
 import Perfil from './pages/Perfil'
 
 function ProtectedRoute({ children }) {
@@ -74,14 +72,6 @@ function App() {
         }
       />
       <Route
-        path="/facturas"
-        element={
-          <ProtectedRoute>
-            <Facturas />
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/clientes"
         element={
           <ProtectedRoute>
@@ -98,18 +88,10 @@ function App() {
         }
       />
       <Route
-        path="/ayuda"
+        path="/catalogos"
         element={
           <ProtectedRoute>
-            <Ayuda />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/configuracion"
-        element={
-          <ProtectedRoute>
-            <Configuracion />
+            <Catalogos />
           </ProtectedRoute>
         }
       />

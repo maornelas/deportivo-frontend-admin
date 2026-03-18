@@ -59,21 +59,7 @@ src/
 
 - `/login` - Página de inicio de sesión
 - `/dashboard` - Dashboard principal
-- `/productos` - Productos (pendiente)
-- `/facturas` - Facturas (pendiente)
-- `/clientes` - Clientes (pendiente)
-- `/chat` - Chat Room (pendiente)
-- `/envios` - Envíos (pendiente)
-- `/ayuda` - Centro de Ayuda (pendiente)
-- `/configuracion` - Configuración (pendiente)
-
-## Próximos Pasos
-
-Las siguientes pantallas están listas para ser implementadas según el menú lateral:
-- Productos
-- Facturas
-- Clientes
-- Chat Room
-- Envíos
-- Centro de Ayuda
-- Configuración
+- `/inventario` - Inventario de piezas
+- `/catalogos` - Catálogo de marcas y modelos de auto (brands / car_models)
+- `/clientes` - Clientes
+- (otras rutas según menú lateral)

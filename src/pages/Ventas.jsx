@@ -23,12 +23,15 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  ToggleButton,
+  ToggleButtonGroup,
+  Chip,
 } from '@mui/material'
 import { Search as SearchIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
-import { searchOrders, getOrderById, updateOrder } from '../api/orders'
+import { searchOrders, getOrderById, updateOrder, updateOrderSalesChannel } from '../api/orders'
 
 const ORDER_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
@@ -79,6 +82,16 @@ function getStatusColor(status) {
   return 'primary.main'
 }
 
+function getSalesChannelLabel(salesChannel) {
+  if (salesChannel === 'advisor') return 'Asesor'
+  return 'Online'
+}
+
+function getSalesChannelSubtitle(salesChannel) {
+  if (salesChannel === 'advisor') return 'Vendedores piezas / aseguradoras'
+  return 'Venta directa (landing)'
+}
+
 const Ventas = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -95,6 +108,8 @@ const Ventas = () => {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
   const [statusSaving, setStatusSaving] = useState(false)
+  const [channelFilter, setChannelFilter] = useState('all')
+  const [channelSaving, setChannelSaving] = useState(false)
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -103,6 +118,7 @@ const Ventas = () => {
     if (startDate) params.startDate = startDate
     if (endDate) params.endDate = endDate
     if (searchApplied) params.search = searchApplied
+    if (channelFilter === 'online' || channelFilter === 'advisor') params.salesChannel = channelFilter
     const result = await searchOrders(params)
     setLoading(false)
     if (!result.success) {
@@ -112,7 +128,7 @@ const Ventas = () => {
     const data = result.data
     setOrders(data.orders || [])
     setTotal(data.total ?? 0)
-  }, [page, limit, startDate, endDate, searchApplied])
+  }, [page, limit, startDate, endDate, searchApplied, channelFilter])
 
   useEffect(() => { fetchOrders() }, [fetchOrders])
 
@@ -156,6 +172,27 @@ const Ventas = () => {
     setDetailOrder((prev) => (prev ? { ...prev, status: newStatus } : null))
   }
 
+  const handleChannelFilterChange = (_, value) => {
+    if (value != null) {
+      setChannelFilter(value)
+      setPage(0)
+    }
+  }
+
+  const handleSalesChannelChange = async (newChannel) => {
+    if (!detailOrder?.id || !newChannel) return
+    setChannelSaving(true)
+    setDetailError('')
+    const result = await updateOrderSalesChannel(detailOrder.id, newChannel)
+    setChannelSaving(false)
+    if (!result.success) {
+      setDetailError(result.error || 'Error al actualizar canal')
+      return
+    }
+    if (result.data) setDetailOrder(result.data)
+    else setDetailOrder((prev) => (prev ? { ...prev, salesChannel: newChannel } : null))
+  }
+
   return (
     <Box sx={{ display: 'flex' }}>
       <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
@@ -165,6 +202,33 @@ const Ventas = () => {
           Ventas
         </Typography>
         <Paper sx={{ p: 2, mb: 2 }}>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Canal de venta</Typography>
+          <ToggleButtonGroup
+            value={channelFilter}
+            exclusive
+            onChange={handleChannelFilterChange}
+            size="small"
+            sx={{
+              mb: 2,
+              flexWrap: 'wrap',
+              '& .MuiToggleButton-root.Mui-selected': {
+                backgroundColor: '#7B2CBF',
+                color: '#fff',
+                borderColor: '#7B2CBF',
+                '&:hover': {
+                  backgroundColor: '#6A26A8',
+                  color: '#fff',
+                },
+              },
+            }}
+          >
+            <ToggleButton value="all">Todos</ToggleButton>
+            <ToggleButton value="online">Online</ToggleButton>
+            <ToggleButton value="advisor">Asesor</ToggleButton>
+          </ToggleButtonGroup>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+            Online = venta directa (landing). Asesor = vendedores de piezas para aseguradoras.
+          </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>
             <TextField label="Fecha inicio" type="date" size="small" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
             <TextField label="Fecha fin" type="date" size="small" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
@@ -185,13 +249,14 @@ const Ventas = () => {
                     <TableCell><strong>Fecha</strong></TableCell>
                     <TableCell><strong>Hora</strong></TableCell>
                     <TableCell><strong>Cliente</strong></TableCell>
+                    <TableCell><strong>Canal</strong></TableCell>
                     <TableCell><strong>Estado</strong></TableCell>
                     <TableCell align="right"><strong>Total</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {orders.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} align="center" sx={{ py: 4 }}>No hay ventas con los filtros seleccionados.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4 }}>No hay ventas con los filtros seleccionados.</TableCell></TableRow>
                   ) : (
                     orders.map((order) => (
                       <TableRow key={order.id} hover onDoubleClick={() => handleRowDoubleClick(order)} sx={{ cursor: 'pointer' }}>
@@ -199,6 +264,14 @@ const Ventas = () => {
                         <TableCell>{formatDate(order.createdAt)}</TableCell>
                         <TableCell>{formatTime(order.createdAt)}</TableCell>
                         <TableCell>{getClientDisplay(order)}</TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={getSalesChannelLabel(order.salesChannel)}
+                            color={order.salesChannel === 'advisor' ? 'secondary' : 'primary'}
+                            variant="outlined"
+                          />
+                        </TableCell>
                         <TableCell sx={{ color: getStatusColor(order.status), fontWeight: 500 }}>{getStatusLabel(order.status)}</TableCell>
                         <TableCell align="right">{formatCurrency(order.status === 'cancelled' ? -Number(order.totalAmount) : order.totalAmount, order.currency)}</TableCell>
                       </TableRow>
@@ -218,6 +291,19 @@ const Ventas = () => {
             {detailOrder && !detailLoading && (
               <Box sx={{ pt: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                  <FormControl size="small" sx={{ minWidth: 200 }}>
+                    <InputLabel>Canal de venta</InputLabel>
+                    <Select
+                      label="Canal de venta"
+                      value={detailOrder.salesChannel === 'advisor' ? 'advisor' : 'online'}
+                      onChange={(e) => handleSalesChannelChange(e.target.value)}
+                      disabled={channelSaving}
+                    >
+                      <MenuItem value="online">Online — {getSalesChannelSubtitle('online')}</MenuItem>
+                      <MenuItem value="advisor">Asesor — {getSalesChannelSubtitle('advisor')}</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {channelSaving && <CircularProgress size={24} />}
                   <FormControl size="small" sx={{ minWidth: 180 }}>
                     <InputLabel>Estado de la orden</InputLabel>
                     <Select label="Estado de la orden" value={detailOrder.status || 'pending'} onChange={(e) => handleStatusChange(e.target.value)} disabled={statusSaving}>

@@ -26,17 +26,24 @@ import {
   Avatar,
   CircularProgress,
   Backdrop,
+  Card,
+  CardContent,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
 } from '@mui/material'
 import {
   Add as AddIcon,
   Upload as UploadIcon,
   Delete as DeleteIcon,
   Image as ImageIcon,
+  ViewList as ViewListIcon,
+  ViewModule as ViewModuleIcon,
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
-import { getBrands, getCategories, getCarModelsByBrand, createProduct, searchProducts, uploadProductImages, getProductById, updateProduct, deleteProduct } from '../api/products'
+import { getBrands, getCategories, getCarModelsByBrand, createProduct, createProductWithImages, searchProducts, uploadProductImages, deleteProductImage, getProductById, updateProduct, deleteProduct } from '../api/products'
 
 const ESTADO_OPCIONES = [
   { value: 'NUEVO', label: 'Nuevo' },
@@ -97,6 +104,13 @@ const Inventario = () => {
   const [detailProduct, setDetailProduct] = useState(getInitialProducto())
   const [detailCarModels, setDetailCarModels] = useState([])
   const [detailImages, setDetailImages] = useState([])
+  /** Imágenes persistidas al abrir el detalle { id, imageUrl } */
+  const [detailServerImages, setDetailServerImages] = useState([])
+  /** Copia editable al pulsar Editar */
+  const [detailExistingImages, setDetailExistingImages] = useState([])
+  const [detailNewImageFiles, setDetailNewImageFiles] = useState([])
+  const [detailDeletedImageIds, setDetailDeletedImageIds] = useState([])
+  const detailExistingImagesRef = useRef([])
   const [detailEditing, setDetailEditing] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
@@ -110,10 +124,32 @@ const Inventario = () => {
   const [filterMarca, setFilterMarca] = useState('')
   const [filterModelo, setFilterModelo] = useState('')
   const [filterAño, setFilterAño] = useState('')
+  const [inventoryViewMode, setInventoryViewMode] = useState('table')
   const filtersRef = useRef({ filterPieza: '', filterMarca: '', filterModelo: '', filterAño: '' })
   useEffect(() => {
     filtersRef.current = { filterPieza, filterMarca, filterModelo, filterAño }
   }, [filterPieza, filterMarca, filterModelo, filterAño])
+
+  useEffect(() => {
+    detailExistingImagesRef.current = detailExistingImages
+  }, [detailExistingImages])
+
+  const [detailNewPreviewUrls, setDetailNewPreviewUrls] = useState([])
+  useEffect(() => {
+    const files = detailNewImageFiles || []
+    const urls = files.map((f) => URL.createObjectURL(f))
+    setDetailNewPreviewUrls(urls)
+    return () => urls.forEach((u) => URL.revokeObjectURL(u))
+  }, [detailNewImageFiles])
+
+  const detailEditLightboxUrls =
+    detailEditing
+      ? [...detailExistingImages.map((x) => x.imageUrl), ...detailNewPreviewUrls]
+      : detailImages
+  const detailEditAvatarSrc =
+    detailEditing
+      ? detailExistingImages[0]?.imageUrl || detailNewPreviewUrls[0] || null
+      : detailImages[0] || null
 
   const loadBrands = useCallback(async () => {
     const res = await getBrands({ activeOnly: false })
@@ -293,21 +329,15 @@ const Inventario = () => {
       isActive: producto.estatus === 'DISPONIBLE',
       stockQuantity: 0,
     }
-    const result = await createProduct(payload)
+    const imageFiles = (producto.imageFiles || []).slice(0, MAX_FOTOS)
+    const result =
+      imageFiles.length > 0
+        ? await createProductWithImages(payload, imageFiles)
+        : await createProduct(payload)
     if (!result.success) {
       setLoading(false)
       setSubmitError(result.error || 'Error al guardar el producto.')
       return
-    }
-    const productId = result.data?.id
-    const imageFiles = (producto.imageFiles || []).slice(0, MAX_FOTOS)
-    if (productId && imageFiles.length > 0) {
-      const uploadRes = await uploadProductImages(productId, imageFiles)
-      if (!uploadRes.success) {
-        setSubmitError(uploadRes.error || 'Producto guardado pero falló la subida de imágenes.')
-        setLoading(false)
-        return
-      }
     }
     setLoading(false)
     handleCloseDialog()
@@ -320,6 +350,10 @@ const Inventario = () => {
     setDetailError('')
     setDetailEditing(false)
     setDetailImages([])
+    setDetailServerImages([])
+    setDetailExistingImages([])
+    setDetailNewImageFiles([])
+    setDetailDeletedImageIds([])
     setDetailProduct(getInitialProducto())
     setDetailLoading(true)
     loadBrands()
@@ -347,8 +381,13 @@ const Inventario = () => {
       estatus: d.isActive === true ? 'DISPONIBLE' : 'VENDIDO',
       imageFiles: [],
     })
-    // Mismo orden que al crear: imágenes ordenadas por sortOrder (backend ya devuelve ASC)
-    setDetailImages(Array.isArray(d.images) ? d.images.map((img) => img.imageUrl) : [])
+    const serverImgs = Array.isArray(d.images)
+      ? d.images
+          .filter((img) => img && img.imageUrl)
+          .map((img) => ({ id: img.id, imageUrl: img.imageUrl }))
+      : []
+    setDetailServerImages(serverImgs)
+    setDetailImages(serverImgs.map((x) => x.imageUrl))
     if (d.brandId) {
       getCarModelsByBrand(d.brandId).then((r) => setDetailCarModels(r.success ? (r.data || []) : []))
     } else {
@@ -362,10 +401,61 @@ const Inventario = () => {
     setDetailProduct(getInitialProducto())
     setDetailCarModels([])
     setDetailImages([])
+    setDetailServerImages([])
+    setDetailExistingImages([])
+    setDetailNewImageFiles([])
+    setDetailDeletedImageIds([])
     setDetailEditing(false)
     setDetailError('')
     setDetailPreviewImageIndex(null)
   }
+
+  const handleStartDetailEdit = () => {
+    setDetailExistingImages(detailServerImages.map((x) => ({ id: x.id, imageUrl: x.imageUrl })))
+    setDetailNewImageFiles([])
+    setDetailDeletedImageIds([])
+    setDetailEditing(true)
+  }
+
+  const removeDetailExistingImage = (imageId) => {
+    if (!imageId) return
+    setDetailExistingImages((prev) => prev.filter((x) => x.id !== imageId))
+    setDetailDeletedImageIds((prev) => [...new Set([...prev, imageId])])
+  }
+
+  const removeDetailNewImageFile = (index) => {
+    setDetailNewImageFiles((prev) => {
+      const n = [...prev]
+      n.splice(index, 1)
+      return n
+    })
+  }
+
+  const handleDetailImageFiles = (e) => {
+    const files = Array.from(e.target.files || []).filter((f) => f.type.startsWith('image/'))
+    if (files.length === 0) return
+    setDetailNewImageFiles((prev) => {
+      const ex = detailExistingImagesRef.current.length
+      const cap = MAX_FOTOS - ex
+      return [...prev, ...files].slice(0, cap)
+    })
+    e.target.value = ''
+  }
+
+  const handleDetailImageDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const files = Array.from(e.dataTransfer.files || []).filter((f) => f.type.startsWith('image/'))
+    if (files.length === 0) return
+    setDetailNewImageFiles((prev) => {
+      const ex = detailExistingImagesRef.current.length
+      const cap = MAX_FOTOS - ex
+      return [...prev, ...files].slice(0, cap)
+    })
+  }
+
+  const detailEditImageCount = detailExistingImages.length + detailNewImageFiles.length
+  const detailCanAddMoreImages = detailEditing && detailEditImageCount < MAX_FOTOS
 
   const handleDetailInputChange = (e) => {
     const { name, value } = e.target
@@ -420,11 +510,31 @@ const Inventario = () => {
       stockQuantity: 0,
     }
     const result = await updateProduct(detailProductId, payload)
-    setDetailLoading(false)
     if (!result.success) {
+      setDetailLoading(false)
       setDetailError(result.error || 'Error al guardar.')
       return
     }
+
+    for (const imageId of detailDeletedImageIds) {
+      const dr = await deleteProductImage(detailProductId, imageId)
+      if (!dr.success) {
+        setDetailLoading(false)
+        setDetailError(dr.error || 'Error al eliminar una imagen.')
+        return
+      }
+    }
+
+    if (detailNewImageFiles.length > 0) {
+      const ur = await uploadProductImages(detailProductId, detailNewImageFiles)
+      if (!ur.success) {
+        setDetailLoading(false)
+        setDetailError(ur.error || 'Error al subir las imágenes nuevas.')
+        return
+      }
+    }
+
+    setDetailLoading(false)
     setSnackbar({ open: true, message: 'Producto actualizado correctamente', severity: 'success' })
     closeDetailModal()
     loadProducts()
@@ -485,7 +595,7 @@ const Inventario = () => {
           <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
             Inventario
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <Button
               variant="outlined"
               startIcon={<UploadIcon />}
@@ -516,10 +626,6 @@ const Inventario = () => {
         </Box>
 
         <Paper elevation={2} sx={{ padding: { xs: '16px', sm: '24px' }, borderRadius: '12px' }}>
-          <Typography variant="h6" sx={{ color: '#424242', fontWeight: 'bold', marginBottom: '20px', fontSize: { xs: '18px', sm: '20px', md: '24px' } }}>
-            Lista de Inventario
-          </Typography>
-
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end', mb: 3 }}>
             <TextField
               label="Pieza"
@@ -582,6 +688,25 @@ const Inventario = () => {
             >
               Limpiar
             </Button>
+            <Box sx={{ flexGrow: 1, minWidth: 8 }} />
+            <ToggleButtonGroup
+              value={inventoryViewMode}
+              exclusive
+              onChange={(_, v) => v && setInventoryViewMode(v)}
+              size="small"
+              sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.5 } }}
+            >
+              <Tooltip title="Vista tabla">
+                <ToggleButton value="table" aria-label="tabla">
+                  <ViewListIcon fontSize="small" sx={{ mr: 0.5 }} /> Tabla
+                </ToggleButton>
+              </Tooltip>
+              <Tooltip title="Vista tarjetas">
+                <ToggleButton value="cards" aria-label="tarjetas">
+                  <ViewModuleIcon fontSize="small" sx={{ mr: 0.5 }} /> Tarjetas
+                </ToggleButton>
+              </Tooltip>
+            </ToggleButtonGroup>
           </Box>
 
           {listError && (
@@ -589,52 +714,122 @@ const Inventario = () => {
               {listError}
             </Alert>
           )}
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Pieza</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Marca</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Modelo</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Año</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Estado</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Tipo</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {products.length === 0 ? (
+
+          {inventoryViewMode === 'table' ? (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ padding: '40px' }}>
-                      <Typography variant="body2" sx={{ color: '#757575' }}>
-                        No hay productos registrados. Agrega un nuevo producto o carga un archivo.
-                      </Typography>
-                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#757575', width: 56 }} align="center">Vista</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Pieza</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Marca</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Modelo</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Año</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Estado</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Tipo</TableCell>
                   </TableRow>
-                ) : (
-                  products.map((p) => {
+                </TableHead>
+                <TableBody>
+                  {products.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ padding: '40px' }}>
+                        <Typography variant="body2" sx={{ color: '#757575' }}>
+                          No hay productos registrados. Agrega un nuevo producto o carga un archivo.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    products.map((p) => {
+                      const brandName = brands.find((b) => b.id === p.brandId)?.name ?? brands.find((b) => b.id === p.brandId)?.nombre ?? p.brandName ?? p.brandId ?? '—'
+                      const modelDisplay = p.carModel?.name ?? p.model ?? p.carModelId ?? '—'
+                      const estadoLabel = p.partCondition === 'SEMINUEVO' ? 'Seminuevo' : p.partCondition === 'NUEVO' ? 'Nuevo' : p.partCondition || '—'
+                      const tipoLabel = p.partType === 'GENÉRICO' ? 'Genérico' : p.partType === 'ORIGINAL' ? 'Original' : p.partType || '—'
+                      return (
+                        <TableRow
+                          key={p.id}
+                          onDoubleClick={() => openDetailModal(p.id)}
+                          sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }}
+                        >
+                          <TableCell align="center" sx={{ py: 1 }}>
+                            <Avatar
+                              src={p.primaryImageUrl || undefined}
+                              variant="rounded"
+                              sx={{ width: 40, height: 40, mx: 'auto', bgcolor: 'grey.200' }}
+                            >
+                              {!p.primaryImageUrl && <ImageIcon sx={{ fontSize: 22, color: 'grey.500' }} />}
+                            </Avatar>
+                          </TableCell>
+                          <TableCell>{p.name}</TableCell>
+                          <TableCell>{brandName}</TableCell>
+                          <TableCell>{modelDisplay}</TableCell>
+                          <TableCell>{p.carYearRange || '—'}</TableCell>
+                          <TableCell>{estadoLabel}</TableCell>
+                          <TableCell>{tipoLabel}</TableCell>
+                        </TableRow>
+                      )
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Box>
+              {products.length === 0 ? (
+                <Typography variant="body2" sx={{ color: '#757575', textAlign: 'center', py: 6 }}>
+                  No hay productos registrados. Agrega un nuevo producto o carga un archivo.
+                </Typography>
+              ) : (
+                <Grid container spacing={2}>
+                  {products.map((p) => {
                     const brandName = brands.find((b) => b.id === p.brandId)?.name ?? brands.find((b) => b.id === p.brandId)?.nombre ?? p.brandName ?? p.brandId ?? '—'
-                    const modelDisplay = p.carModel?.name ?? p.model ?? p.carModelId ?? '—'
-                    const estadoLabel = p.partCondition === 'SEMINUEVO' ? 'Seminuevo' : p.partCondition === 'NUEVO' ? 'Nuevo' : p.partCondition || '—'
-                    const tipoLabel = p.partType === 'GENÉRICO' ? 'Genérico' : p.partType === 'ORIGINAL' ? 'Original' : p.partType || '—'
                     return (
-                      <TableRow
-                        key={p.id}
-                        onDoubleClick={() => openDetailModal(p.id)}
-                        sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }}
-                      >
-                        <TableCell>{p.name}</TableCell>
-                        <TableCell>{brandName}</TableCell>
-                        <TableCell>{modelDisplay}</TableCell>
-                        <TableCell>{p.carYearRange || '—'}</TableCell>
-                        <TableCell>{estadoLabel}</TableCell>
-                        <TableCell>{tipoLabel}</TableCell>
-                      </TableRow>
+                      <Grid item xs={6} sm={4} md={3} lg={2} key={p.id}>
+                        <Card
+                          elevation={2}
+                          onDoubleClick={() => openDetailModal(p.id)}
+                          sx={{
+                            cursor: 'pointer',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            transition: 'box-shadow 0.2s',
+                            '&:hover': { boxShadow: 4 },
+                          }}
+                        >
+                          <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                            <Box
+                              sx={{
+                                width: '100%',
+                                height: 88,
+                                borderRadius: 1,
+                                overflow: 'hidden',
+                                bgcolor: 'grey.100',
+                                mb: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {p.primaryImageUrl ? (
+                                <Box component="img" src={p.primaryImageUrl} alt="" sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <ImageIcon sx={{ fontSize: 40, color: 'grey.400' }} />
+                              )}
+                            </Box>
+                            <Typography variant="body2" fontWeight={600} sx={{ lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={p.name}>
+                              {p.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={brandName}>
+                              {brandName}
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
                     )
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                  })}
+                </Grid>
+              )}
+            </Box>
+          )}
         </Paper>
 
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
@@ -921,13 +1116,38 @@ const Inventario = () => {
           </DialogActions>
         </Dialog>
 
-        {/* Modal detalle del producto (doble clic en fila) */}
+        {/* Modal detalle: misma disposición gráfica que Nuevo Producto */}
         <Dialog open={detailOpen} onClose={closeDetailModal} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
-          <ModalHeader title={detailProduct.nombrePieza ? `Detalle: ${detailProduct.nombrePieza}` : 'Detalle del producto'} onClose={closeDetailModal} />
-          <DialogContent sx={{ padding: '24px 24px 8px' }}>
-            {detailLoading && !detailProduct.nombrePieza ? (
-              <Typography sx={{ py: 3, color: '#757575' }}>Cargando…</Typography>
-            ) : (
+          <ModalHeader title={detailProduct.nombrePieza ? `Detalle del producto: ${detailProduct.nombrePieza}` : 'Detalle del producto'} onClose={closeDetailModal} />
+          <DialogContent sx={{ padding: '24px 24px 8px', position: 'relative', minHeight: detailLoading ? 420 : 'auto' }}>
+            <Backdrop
+              open={detailLoading}
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 10,
+                borderRadius: '12px',
+                backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                flexDirection: 'column',
+                gap: 2,
+              }}
+            >
+              <CircularProgress size={56} thickness={4} sx={{ color: 'primary.main' }} />
+              <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                Cargando detalle del producto…
+              </Typography>
+            </Backdrop>
+
+            {!detailLoading && detailError && !detailProduct.nombrePieza && (
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDetailError('')}>
+                {detailError}
+              </Alert>
+            )}
+
+            {!detailLoading && detailProduct.nombrePieza && (
               <>
                 {detailError && (
                   <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDetailError('')}>
@@ -935,11 +1155,52 @@ const Inventario = () => {
                   </Alert>
                 )}
 
-                {/* Misma disposición que en Nuevo Producto: nombre (izq) + Vista previa (derecha, 220px, Avatar 160x160) */}
                 <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, mb: 3 }}>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Nombre de la pieza</Typography>
-                    <TextField fullWidth label="Nombre pieza" name="nombrePieza" value={detailProduct.nombrePieza} onChange={handleDetailInputChange} variant="outlined" size="small" required disabled={!detailEditing} />
+                  <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600 }}>Nombre de la pieza</Typography>
+                    <TextField fullWidth label="Nombre pieza" name="nombrePieza" value={detailProduct.nombrePieza} onChange={handleDetailInputChange} variant="outlined" size="small" required sx={{ maxWidth: '100%' }} disabled={!detailEditing} />
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <FormControl fullWidth required size="small" variant="outlined" sx={{ minWidth: 0, '& .MuiSelect-select': { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }}>
+                        <InputLabel id="detail-marca-label" shrink>Marca</InputLabel>
+                        <Select name="marcaId" value={detailProduct.marcaId} onChange={handleDetailInputChange} labelId="detail-marca-label" label="Marca" displayEmpty disabled={!detailEditing} MenuProps={{ PaperProps: { sx: { maxHeight: 320 } }, autoFocus: false }}>
+                          <MenuItem value="">Seleccione marca</MenuItem>
+                          {brands.map((b) => (
+                            <MenuItem key={b.id} value={b.id}>{b.name || b.nombre || '-'}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth size="small" variant="outlined" disabled={!detailEditing || !detailProduct.marcaId} sx={{ minWidth: 0, '& .MuiSelect-select': { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }}>
+                        <InputLabel id="detail-modelo-label" shrink>Modelo</InputLabel>
+                        <Select name="modelo" value={detailProduct.modelo} onChange={handleDetailInputChange} labelId="detail-modelo-label" label="Modelo" displayEmpty MenuProps={{ PaperProps: { sx: { maxHeight: 320 } }, autoFocus: false }}>
+                          <MenuItem value="">{detailProduct.marcaId ? 'Seleccione modelo' : 'Seleccione marca primero'}</MenuItem>
+                          {detailCarModels.map((m) => (
+                            <MenuItem key={m.id} value={m.id}>{m.model || m.name || '-'}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <TextField fullWidth label="Año desde" name="añoDesde" type="number" value={detailProduct.añoDesde} onChange={handleDetailInputChange} variant="outlined" size="small" placeholder="ej. 2013" inputProps={{ min: 1900, max: 2100 }} disabled={!detailEditing} />
+                      <TextField fullWidth label="Año hasta" name="añoHasta" type="number" value={detailProduct.añoHasta} onChange={handleDetailInputChange} variant="outlined" size="small" placeholder="ej. 2017" inputProps={{ min: 1900, max: 2100 }} disabled={!detailEditing} />
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <FormControl fullWidth required size="small" variant="outlined">
+                        <InputLabel id="detail-estado-label" shrink>Estado</InputLabel>
+                        <Select name="estado" value={detailProduct.estado} onChange={handleDetailInputChange} labelId="detail-estado-label" label="Estado" disabled={!detailEditing}>
+                          {ESTADO_OPCIONES.map((o) => (
+                            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth required size="small" variant="outlined">
+                        <InputLabel id="detail-tipo-label" shrink>Tipo</InputLabel>
+                        <Select name="tipo" value={detailProduct.tipo} onChange={handleDetailInputChange} labelId="detail-tipo-label" label="Tipo" disabled={!detailEditing}>
+                          {TIPO_OPCIONES.map((o) => (
+                            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Box>
                   </Box>
                   <Box
                     sx={{
@@ -949,41 +1210,194 @@ const Inventario = () => {
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      border: '1px solid',
+                      border: '2px dashed',
                       borderColor: 'grey.300',
                       borderRadius: 2,
                       bgcolor: 'grey.50',
                       p: 2,
                       minHeight: 280,
+                      ...(detailEditing ? { cursor: 'pointer', '&:hover': { borderColor: 'grey.500', bgcolor: 'grey.100' } } : {}),
                     }}
+                    component={detailEditing ? 'label' : 'div'}
+                    onDrop={detailEditing ? handleDetailImageDrop : undefined}
+                    onDragOver={detailEditing ? handleDragOver : undefined}
                   >
+                    {detailEditing && (
+                      <input type="file" hidden accept="image/*" multiple onChange={handleDetailImageFiles} />
+                    )}
                     <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Vista previa</Typography>
                     <Avatar
-                      src={detailImages[0]}
+                      src={detailEditAvatarSrc || undefined}
                       variant="rounded"
-                      sx={{
-                        width: 160,
-                        height: 160,
-                        bgcolor: 'grey.200',
-                      }}
+                      sx={{ width: 160, height: 160, bgcolor: 'grey.200' }}
                     >
-                      {!detailImages[0] && <ImageIcon sx={{ fontSize: 64, color: 'grey.500' }} />}
+                      {!detailEditAvatarSrc && <ImageIcon sx={{ fontSize: 64, color: 'grey.500' }} />}
                     </Avatar>
-                    {detailImages.length > 1 && (
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5 }}>{detailImages.length} imágenes</Typography>
-                    )}
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, textAlign: 'center' }}>
+                      {detailEditing
+                        ? detailCanAddMoreImages
+                          ? 'Clic o arrastrar para agregar fotos'
+                          : `Máximo ${MAX_FOTOS} imágenes`
+                        : detailImages.length > 1
+                          ? `${detailImages.length} imágenes`
+                          : detailImages[0]
+                            ? 'Imagen principal'
+                            : 'Sin imagen'}
+                    </Typography>
                   </Box>
                 </Box>
 
-                {/* Mismas vistas previas que en Nuevo Producto: grid 100x100, clic para ampliar */}
-                {detailImages.length > 0 && (
-                  <Box sx={{ mt: 2, mb: 3 }}>
-                    <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Vistas previas de las imágenes (clic para ampliar)</Typography>
+                <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+                  <TextField
+                    label="Precio"
+                    name="precio"
+                    type="number"
+                    value={detailProduct.precio}
+                    onChange={handleDetailInputChange}
+                    variant="outlined"
+                    size="small"
+                    sx={{ flex: '1 1 120px', minWidth: 0 }}
+                    InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment>, inputProps: { min: 0, step: 0.01 } }}
+                    disabled={!detailEditing}
+                  />
+                  <FormControl size="small" sx={{ flex: '1 1 140px', minWidth: 0 }}>
+                    <InputLabel shrink>Estatus</InputLabel>
+                    <Select name="estatus" value={detailProduct.estatus} onChange={handleDetailInputChange} label="Estatus" disabled={!detailEditing}>
+                      {ESTATUS_OPCIONES.map((o) => (
+                        <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl fullWidth size="small" variant="outlined" sx={{ flex: '1 1 200px', minWidth: 0, '& .MuiSelect-select': { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }}>
+                    <InputLabel id="detail-categoria-label" shrink>Categoría (opcional)</InputLabel>
+                    <Select name="categoriaId" value={detailProduct.categoriaId} onChange={handleDetailInputChange} labelId="detail-categoria-label" label="Categoría (opcional)" displayEmpty disabled={!detailEditing} MenuProps={{ PaperProps: { sx: { maxHeight: 320 } }, autoFocus: false }}>
+                      <MenuItem value="">Ninguna</MenuItem>
+                      {categories.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>{c.name || c.nombre || '-'}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+
+                <Box sx={{ display: 'flex', gap: 2, mb: 3, flexDirection: { xs: 'column', sm: 'row' } }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <TextField fullWidth label="Observaciones" name="observaciones" value={detailProduct.observaciones} onChange={handleDetailInputChange} variant="outlined" size="small" multiline rows={3} disabled={!detailEditing} />
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <TextField fullWidth label="Descripción completa" name="descripcionCompleta" value={detailProduct.descripcionCompleta} onChange={handleDetailInputChange} variant="outlined" size="small" multiline rows={3} required disabled={!detailEditing} />
+                  </Box>
+                </Box>
+
+                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Fotos de la pieza (hasta {MAX_FOTOS})</Typography>
+                {detailEditing && detailCanAddMoreImages && (
+                  <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />} sx={{ textTransform: 'none', mb: 2 }}>
+                    Cargar imágenes
+                    <input type="file" hidden accept="image/*" multiple onChange={handleDetailImageFiles} />
+                  </Button>
+                )}
+                {detailEditing && (detailExistingImages.length > 0 || detailNewImageFiles.length > 0) && (
+                  <Box sx={{ mt: 0, mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>Vistas previas (clic para ampliar; use la papelera para quitar)</Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                      {detailExistingImages.map((img, i) => (
+                        <Box
+                          key={img.id || `ex-${i}`}
+                          sx={{
+                            position: 'relative',
+                            border: '1px solid',
+                            borderColor: 'grey.300',
+                            borderRadius: 1,
+                            overflow: 'hidden',
+                            bgcolor: 'grey.100',
+                            cursor: 'pointer',
+                            '&:hover': { borderColor: 'grey.500', boxShadow: 1 },
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={img.imageUrl}
+                            alt={`Imagen ${i + 1}`}
+                            onClick={() => setDetailPreviewImageIndex(i)}
+                            sx={{ width: 100, height: 100, objectFit: 'cover', display: 'block' }}
+                          />
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeDetailExistingImage(img.id)
+                            }}
+                            disabled={!isValidUUID(img.id)}
+                            color="error"
+                            aria-label="Quitar imagen"
+                            sx={{
+                              position: 'absolute',
+                              top: 4,
+                              right: 4,
+                              bgcolor: 'rgba(255,255,255,0.9)',
+                              '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                          <Typography variant="caption" sx={{ display: 'block', px: 1, py: 0.5, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            Imagen {i + 1}
+                          </Typography>
+                        </Box>
+                      ))}
+                      {detailNewImageFiles.map((file, i) => (
+                        <Box
+                          key={`new-${i}-${file.name}`}
+                          sx={{
+                            position: 'relative',
+                            border: '1px solid',
+                            borderColor: 'grey.300',
+                            borderRadius: 1,
+                            overflow: 'hidden',
+                            bgcolor: 'grey.100',
+                            cursor: 'pointer',
+                            '&:hover': { borderColor: 'grey.500', boxShadow: 1 },
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={detailNewPreviewUrls[i]}
+                            alt={file.name}
+                            onClick={() => setDetailPreviewImageIndex(detailExistingImages.length + i)}
+                            sx={{ width: 100, height: 100, objectFit: 'cover', display: 'block' }}
+                          />
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeDetailNewImageFile(i)
+                            }}
+                            color="error"
+                            aria-label="Quitar imagen"
+                            sx={{
+                              position: 'absolute',
+                              top: 4,
+                              right: 4,
+                              bgcolor: 'rgba(255,255,255,0.9)',
+                              '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                          <Typography variant="caption" sx={{ display: 'block', px: 1, py: 0.5, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={file.name}>
+                            {file.name}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+                {!detailEditing && detailImages.length > 0 && (
+                  <Box sx={{ mt: 0, mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>Vistas previas de las imágenes cargadas (clic para ampliar)</Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                       {detailImages.map((url, i) => (
                         <Box
                           key={i}
-                          onClick={() => setDetailPreviewImageIndex(i)}
                           sx={{
                             position: 'relative',
                             border: '1px solid',
@@ -999,12 +1413,8 @@ const Inventario = () => {
                             component="img"
                             src={url}
                             alt={`Imagen ${i + 1}`}
-                            sx={{
-                              width: 100,
-                              height: 100,
-                              objectFit: 'cover',
-                              display: 'block',
-                            }}
+                            onClick={() => setDetailPreviewImageIndex(i)}
+                            sx={{ width: 100, height: 100, objectFit: 'cover', display: 'block' }}
                           />
                           <Typography variant="caption" sx={{ display: 'block', px: 1, py: 0.5, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             Imagen {i + 1}
@@ -1015,7 +1425,6 @@ const Inventario = () => {
                   </Box>
                 )}
 
-                {/* Dialog vista ampliada en detalle (misma UX que en Nuevo Producto) */}
                 <Dialog
                   open={detailPreviewImageIndex !== null}
                   onClose={() => setDetailPreviewImageIndex(null)}
@@ -1031,17 +1440,13 @@ const Inventario = () => {
                   }}
                 >
                   <DialogContent sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 280, minHeight: 200 }}>
-                    {detailPreviewImageIndex !== null && detailImages[detailPreviewImageIndex] && (
+                    {detailPreviewImageIndex !== null && detailEditLightboxUrls[detailPreviewImageIndex] && (
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
                         <Box
                           component="img"
-                          src={detailImages[detailPreviewImageIndex]}
+                          src={detailEditLightboxUrls[detailPreviewImageIndex]}
                           alt={`Imagen ${detailPreviewImageIndex + 1}`}
-                          sx={{
-                            maxWidth: '90vw',
-                            maxHeight: '75vh',
-                            objectFit: 'contain',
-                          }}
+                          sx={{ maxWidth: '90vw', maxHeight: '75vh', objectFit: 'contain' }}
                         />
                         <Typography variant="caption" sx={{ color: 'grey.400', textAlign: 'center', maxWidth: '90vw' }}>
                           Imagen {detailPreviewImageIndex + 1}
@@ -1055,94 +1460,6 @@ const Inventario = () => {
                     </Button>
                   </DialogActions>
                 </Dialog>
-
-                <Grid container spacing={2} sx={{ mb: 2, '& > .MuiGrid-item': { overflow: 'hidden' } }}>
-                  <Grid item xs={12} sm={4} sx={{ minWidth: 0, overflow: 'hidden', flex: { xs: '1 1 100%', sm: '0 0 33.333%' }, maxWidth: { xs: '100%', sm: '33.333%' } }}>
-                    <FormControl fullWidth required size="small" variant="outlined" sx={{ width: '100%', maxWidth: '100%', '& .MuiSelect-select': { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' } }}>
-                      <InputLabel id="detail-marca-label" shrink>Marca</InputLabel>
-                      <Select name="marcaId" value={detailProduct.marcaId} onChange={handleDetailInputChange} labelId="detail-marca-label" label="Marca" displayEmpty disabled={!detailEditing} MenuProps={{ PaperProps: { sx: { maxHeight: 320 } } }}>
-                        <MenuItem value="">Seleccione marca</MenuItem>
-                        {brands.map((b) => (
-                          <MenuItem key={b.id} value={b.id}>{b.name || b.nombre || '-'}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} sm={4} sx={{ minWidth: 0, overflow: 'hidden', flex: { xs: '1 1 100%', sm: '0 0 33.333%' }, maxWidth: { xs: '100%', sm: '33.333%' } }}>
-                    <FormControl fullWidth size="small" variant="outlined" disabled={!detailEditing || !detailProduct.marcaId} sx={{ width: '100%', maxWidth: '100%', '& .MuiSelect-select': { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' } }}>
-                      <InputLabel id="detail-modelo-label" shrink>Modelo</InputLabel>
-                      <Select name="modelo" value={detailProduct.modelo} onChange={handleDetailInputChange} labelId="detail-modelo-label" label="Modelo" displayEmpty MenuProps={{ PaperProps: { sx: { maxHeight: 320 } } }}>
-                        <MenuItem value="">{detailProduct.marcaId ? 'Seleccione modelo' : 'Seleccione marca primero'}</MenuItem>
-                        {detailCarModels.map((m) => (
-                          <MenuItem key={m.id} value={m.id}>{m.model || m.name || '-'}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} sm={4} sx={{ minWidth: 0, overflow: 'hidden', flex: { xs: '1 1 100%', sm: '0 0 33.333%' }, maxWidth: { xs: '100%', sm: '33.333%' } }}>
-                    <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%', maxWidth: '100%', '& .MuiSelect-select': { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' } }}>
-                      <InputLabel id="detail-categoria-label" shrink>Categoría</InputLabel>
-                      <Select name="categoriaId" value={detailProduct.categoriaId} onChange={handleDetailInputChange} labelId="detail-categoria-label" label="Categoría" displayEmpty disabled={!detailEditing} MenuProps={{ PaperProps: { sx: { maxHeight: 320 } } }}>
-                        <MenuItem value="">Ninguna</MenuItem>
-                        {categories.map((c) => (
-                          <MenuItem key={c.id} value={c.id}>{c.name || c.nombre || '-'}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                </Grid>
-
-                <Box sx={{ display: 'flex', gap: 2, mb: 3, width: '100%', flexWrap: 'wrap' }}>
-                  <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 0' }, minWidth: 0 }}>
-                    <TextField fullWidth label="Año desde" name="añoDesde" type="number" value={detailProduct.añoDesde} onChange={handleDetailInputChange} variant="outlined" size="small" inputProps={{ min: 1900, max: 2100 }} disabled={!detailEditing} />
-                  </Box>
-                  <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 0' }, minWidth: 0 }}>
-                    <TextField fullWidth label="Año hasta" name="añoHasta" type="number" value={detailProduct.añoHasta} onChange={handleDetailInputChange} variant="outlined" size="small" inputProps={{ min: 1900, max: 2100 }} disabled={!detailEditing} />
-                  </Box>
-                  <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 0' }, minWidth: 0 }}>
-                    <FormControl fullWidth size="small" variant="outlined">
-                      <InputLabel id="detail-estado-label" shrink>Estado</InputLabel>
-                      <Select name="estado" value={detailProduct.estado} onChange={handleDetailInputChange} labelId="detail-estado-label" label="Estado" disabled={!detailEditing}>
-                        {ESTADO_OPCIONES.map((o) => (
-                          <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Box>
-                  <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 0' }, minWidth: 0 }}>
-                    <FormControl fullWidth size="small" variant="outlined">
-                      <InputLabel id="detail-tipo-label" shrink>Tipo</InputLabel>
-                      <Select name="tipo" value={detailProduct.tipo} onChange={handleDetailInputChange} labelId="detail-tipo-label" label="Tipo" disabled={!detailEditing}>
-                        {TIPO_OPCIONES.map((o) => (
-                          <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Box>
-                </Box>
-
-                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Observaciones</Typography>
-                <TextField fullWidth label="Observaciones" name="observaciones" value={detailProduct.observaciones} onChange={handleDetailInputChange} variant="outlined" size="small" multiline rows={2} sx={{ mb: 3 }} disabled={!detailEditing} />
-
-                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Precio y estatus</Typography>
-                <Grid container spacing={2} sx={{ mb: 3 }}>
-                  <Grid item xs={12} sm={6}>
-                    <TextField fullWidth label="Precio" name="precio" type="number" value={detailProduct.precio} onChange={handleDetailInputChange} variant="outlined" size="small" InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment>, inputProps: { min: 0, step: 0.01 } }} disabled={!detailEditing} />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Estatus</InputLabel>
-                      <Select name="estatus" value={detailProduct.estatus} onChange={handleDetailInputChange} label="Estatus" disabled={!detailEditing}>
-                        {ESTATUS_OPCIONES.map((o) => (
-                          <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                </Grid>
-
-                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Descripción completa</Typography>
-                <TextField fullWidth label="Descripción completa" name="descripcionCompleta" value={detailProduct.descripcionCompleta} onChange={handleDetailInputChange} variant="outlined" size="small" multiline rows={4} sx={{ mb: 3 }} disabled={!detailEditing} />
               </>
             )}
           </DialogContent>
@@ -1153,7 +1470,7 @@ const Inventario = () => {
                 {detailLoading ? 'Guardando…' : 'Guardar'}
               </Button>
             ) : (
-              <Button onClick={() => setDetailEditing(true)} sx={{ textTransform: 'none', color: '#7b1fa2' }} disabled={detailLoading}>Editar</Button>
+              <Button onClick={handleStartDetailEdit} sx={{ textTransform: 'none', color: '#7b1fa2' }} disabled={detailLoading}>Editar</Button>
             )}
             <Button onClick={openDeleteConfirm} color="error" sx={{ textTransform: 'none' }} disabled={detailLoading}>
               Eliminar

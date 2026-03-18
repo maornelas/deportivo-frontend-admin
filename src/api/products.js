@@ -84,6 +84,39 @@ export async function createProduct(payload) {
 }
 
 /**
+ * Crea el producto y sube las imágenes en una sola petición (S3 + tabla product_images).
+ * @param {object} payload - Mismo shape que createProduct (sin imageUrls)
+ * @param {File[]} files - Hasta 10 archivos
+ */
+export async function createProductWithImages(payload, files) {
+  const baseUrl = getBaseUrl()
+  const formData = new FormData()
+  formData.append('product', JSON.stringify(payload))
+  const list = Array.isArray(files) ? files.slice(0, 10) : []
+  for (let i = 0; i < list.length; i++) {
+    formData.append('images', list[i])
+  }
+  const res = await fetch(`${baseUrl}/products/with-images`, {
+    method: 'POST',
+    body: formData,
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return {
+      success: false,
+      error:
+        body.message ||
+        (Array.isArray(body.message) ? body.message.join('; ') : body.error) ||
+        `Error ${res.status}`,
+    }
+  }
+  if (!body.success) {
+    return { success: false, error: body.message || 'Error al crear producto con imágenes' }
+  }
+  return { success: true, data: body.data, imagesCount: body.imagesCount }
+}
+
+/**
  * Busca productos con filtros.
  * @param {object} params - { categoryId, brandId, isActive, search, year, modelSearch, page, limit, sortBy, sortOrder }
  * @returns {Promise<{ success: boolean, data?: { products, total, page, limit, totalPages }, error?: string }>}
@@ -195,6 +228,24 @@ export async function uploadProductImages(productId, files) {
   }
   if (!body.success) {
     return { success: false, error: body.message || 'Error al subir imágenes' }
+  }
+  return { success: true }
+}
+
+/**
+ * Elimina una imagen del producto (product_images).
+ */
+export async function deleteProductImage(productId, imageId) {
+  const baseUrl = getBaseUrl()
+  const res = await fetch(`${baseUrl}/products/${productId}/images/${imageId}`, {
+    method: 'DELETE',
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success) {
+    return { success: false, error: body.message || 'Error al eliminar imagen' }
   }
   return { success: true }
 }

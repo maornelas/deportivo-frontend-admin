@@ -1,7 +1,5 @@
 import {
   Box,
-  TextField,
-  InputAdornment,
   IconButton,
   Avatar,
   Typography,
@@ -9,7 +7,6 @@ import {
   MenuItem,
 } from '@mui/material'
 import {
-  Search as SearchIcon,
   ArrowDropDown as ArrowDropDownIcon,
   Menu as MenuIcon,
   Logout as LogoutIcon,
@@ -53,7 +50,7 @@ const Header = ({ onMenuClick }) => {
   }
 
   return (
-      <Box
+    <Box
       sx={{
         height: '70px',
         bgcolor: 'background.paper',
@@ -71,28 +68,13 @@ const Header = ({ onMenuClick }) => {
         transition: 'left 0.3s ease',
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <IconButton
           onClick={onMenuClick}
-          sx={{ display: { xs: 'block', md: 'none' }, color: 'text.secondary' }}
+          sx={{ display: { xs: 'flex', md: 'none' }, color: 'text.secondary' }}
         >
           <MenuIcon />
         </IconButton>
-        <TextField
-        placeholder="Buscar"
-        size="small"
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon color="action" />
-            </InputAdornment>
-          ),
-        }}
-        sx={{
-          width: { xs: '200px', sm: '250px', md: '300px' },
-          bgcolor: 'background.default',
-        }}
-      />
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -150,4 +132,3 @@ const Header = ({ onMenuClick }) => {
 }
 
 export default Header
-

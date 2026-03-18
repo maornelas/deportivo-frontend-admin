@@ -17,11 +17,9 @@ import {
   ShoppingCart as ComprasIcon,
   MoneyOff as GastosIcon,
   RequestQuote as CotizacionIcon,
-  Receipt as ReceiptIcon,
   People as PeopleIcon,
   Group as GroupIcon,
-  Help as HelpIcon,
-  Settings as SettingsIcon,
+  MenuBook as CatalogosIcon,
 } from '@mui/icons-material'
 
 const menuItems = [
@@ -31,12 +29,11 @@ const menuItems = [
   { text: 'Ventas', icon: <VentasIcon />, path: '/ventas' },
   { text: 'Compras', icon: <ComprasIcon />, path: '/compras' },
   { text: 'Gastos', icon: <GastosIcon />, path: '/gastos' },
-  { text: 'Facturas', icon: <ReceiptIcon />, path: '/facturas' },
   { type: 'divider' },
   { text: 'Clientes', icon: <PeopleIcon />, path: '/clientes' },
   { text: 'Usuarios', icon: <GroupIcon />, path: '/usuarios' },
-  { text: 'Centro de Ayuda', icon: <HelpIcon />, path: '/ayuda' },
-  { text: 'Configuración', icon: <SettingsIcon />, path: '/configuracion' },
+  { type: 'divider' },
+  { text: 'Catálogos', icon: <CatalogosIcon />, path: '/catalogos' },
 ]
 
 const Sidebar = ({ isOpen = true, onClose }) => {
@@ -96,7 +93,7 @@ const Sidebar = ({ isOpen = true, onClose }) => {
       <List sx={{ flex: 1, paddingTop: '8px' }}>
         {menuItems.map((item, index) => {
           if (item.type === 'divider') {
-            return <Divider key="sidebar-divider" sx={{ borderColor: 'rgba(255, 255, 255, 0.2)', margin: '12px 16px' }} />
+            return <Divider key={`sidebar-divider-${index}`} sx={{ borderColor: 'rgba(255, 255, 255, 0.2)', margin: '12px 16px' }} />
           }
           const isActive = location.pathname === item.path
           return (

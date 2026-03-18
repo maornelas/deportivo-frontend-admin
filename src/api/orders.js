@@ -21,6 +21,9 @@ export async function searchOrders(params = {}) {
   if (params.orderNumber?.trim()) searchParams.set('orderNumber', params.orderNumber.trim())
   if (params.status) searchParams.set('status', params.status)
   if (params.paymentStatus) searchParams.set('paymentStatus', params.paymentStatus)
+  if (params.salesChannel === 'online' || params.salesChannel === 'advisor') {
+    searchParams.set('salesChannel', params.salesChannel)
+  }
   if (params.sortBy) searchParams.set('sortBy', params.sortBy)
   if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder)
 
@@ -165,6 +168,28 @@ export async function updateOrder(id, payload) {
   }
   if (!body.success) {
     return { success: false, error: body.message || 'Error al actualizar' }
+  }
+  return { success: true, data: body.data }
+}
+
+/**
+ * Actualiza el canal de venta (online = venta directa, advisor = asesor).
+ * @param {string} id
+ * @param {'online'|'advisor'} salesChannel
+ */
+export async function updateOrderSalesChannel(id, salesChannel) {
+  const baseUrl = getBaseUrl()
+  const res = await fetch(`${baseUrl}/order/sales-channel/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ salesChannel }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success) {
+    return { success: false, error: body.message || 'Error al actualizar canal' }
   }
   return { success: true, data: body.data }
 }
