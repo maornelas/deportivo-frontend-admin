@@ -740,8 +740,16 @@ const Inventario = () => {
                     </TableRow>
                   ) : (
                     products.map((p) => {
-                      const brandName = brands.find((b) => b.id === p.brandId)?.name ?? brands.find((b) => b.id === p.brandId)?.nombre ?? p.brandName ?? p.brandId ?? '—'
-                      const modelDisplay = p.carModel?.name ?? p.model ?? p.carModelId ?? '—'
+                      const brandName =
+                        (p.brandName && String(p.brandName).trim()) ||
+                        brands.find((b) => b.id === p.brandId)?.name ||
+                        brands.find((b) => b.id === p.brandId)?.nombre ||
+                        '—'
+                      const modelDisplay =
+                        (p.modelName && String(p.modelName).trim()) ||
+                        p.carModel?.name ||
+                        p.model ||
+                        '—'
                       const estadoLabel = p.partCondition === 'SEMINUEVO' ? 'Seminuevo' : p.partCondition === 'NUEVO' ? 'Nuevo' : p.partCondition || '—'
                       const tipoLabel = p.partType === 'GENÉRICO' ? 'Genérico' : p.partType === 'ORIGINAL' ? 'Original' : p.partType || '—'
                       return (
@@ -781,7 +789,11 @@ const Inventario = () => {
               ) : (
                 <Grid container spacing={2}>
                   {products.map((p) => {
-                    const brandName = brands.find((b) => b.id === p.brandId)?.name ?? brands.find((b) => b.id === p.brandId)?.nombre ?? p.brandName ?? p.brandId ?? '—'
+                    const brandName =
+                      (p.brandName && String(p.brandName).trim()) ||
+                      brands.find((b) => b.id === p.brandId)?.name ||
+                      brands.find((b) => b.id === p.brandId)?.nombre ||
+                      '—'
                     return (
                       <Grid item xs={6} sm={4} md={3} lg={2} key={p.id}>
                         <Card

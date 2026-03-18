@@ -60,9 +60,12 @@ const Catalogos = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
 
   const [brandDialog, setBrandDialog] = useState({ open: false, editId: null, name: '' })
+  const [brandSaving, setBrandSaving] = useState(false)
   const [modelDialog, setModelDialog] = useState({ open: false, editId: null, name: '' })
   const [deleteBrandId, setDeleteBrandId] = useState(null)
   const [deleteModelId, setDeleteModelId] = useState(null)
+  const [modelDeleting, setModelDeleting] = useState(false)
+  const [modelSaving, setModelSaving] = useState(false)
 
   const loadBrands = useCallback(async (opts = { showLoading: true }) => {
     if (opts.showLoading) setBrandsLoading(true)
@@ -114,25 +117,33 @@ const Catalogos = () => {
       setSnackbar({ open: true, message: 'El nombre de la marca es obligatorio', severity: 'warning' })
       return
     }
-    let res
-    if (brandDialog.editId) {
-      res = await updateBrand(brandDialog.editId, { name })
-    } else {
-      res = await createBrand({ name })
+    const editId = brandDialog.editId
+    const isEdit = !!editId
+    setBrandSaving(true)
+    try {
+      let res
+      if (isEdit) {
+        res = await updateBrand(editId, { name })
+      } else {
+        res = await createBrand({ name })
+      }
+      if (!res.success) {
+        setSnackbar({ open: true, message: res.error || 'Error al guardar', severity: 'error' })
+        return
+      }
+
+      setBrandDialog({ open: false, editId: null, name: '' })
+      await loadBrands({ showLoading: false })
+      if (isEdit && selectedBrand?.id === editId) {
+        setSelectedBrand((prev) => (prev ? { ...prev, name } : null))
+      }
+      if (!isEdit && res.data?.id) {
+        setSelectedBrand({ id: res.data.id, name: res.data.name || name })
+      }
+      setSnackbar({ open: true, message: isEdit ? 'Marca actualizada' : 'Marca creada', severity: 'success' })
+    } finally {
+      setBrandSaving(false)
     }
-    if (!res.success) {
-      setSnackbar({ open: true, message: res.error || 'Error al guardar', severity: 'error' })
-      return
-    }
-    setBrandDialog({ open: false, editId: null, name: '' })
-    await loadBrands({ showLoading: false })
-    if (brandDialog.editId && selectedBrand?.id === brandDialog.editId) {
-      setSelectedBrand((prev) => (prev ? { ...prev, name } : null))
-    }
-    if (!brandDialog.editId && res.data?.id) {
-      setSelectedBrand({ id: res.data.id, name: res.data.name || name })
-    }
-    setSnackbar({ open: true, message: brandDialog.editId ? 'Marca actualizada' : 'Marca creada', severity: 'success' })
   }
 
   const confirmDeleteBrand = async () => {
@@ -167,32 +178,44 @@ const Catalogos = () => {
       setSnackbar({ open: true, message: 'El nombre del modelo es obligatorio', severity: 'warning' })
       return
     }
-    let res
-    if (modelDialog.editId) {
-      res = await updateCarModel(modelDialog.editId, modelName)
-    } else {
-      res = await createCarModel(selectedBrand.id, modelName)
+    const editId = modelDialog.editId
+    const isEdit = !!editId
+    setModelSaving(true)
+    try {
+      let res
+      if (isEdit) {
+        res = await updateCarModel(editId, modelName)
+      } else {
+        res = await createCarModel(selectedBrand.id, modelName)
+      }
+      if (!res.success) {
+        setSnackbar({ open: true, message: res.error || 'Error al guardar', severity: 'error' })
+        return
+      }
+      setModelDialog({ open: false, editId: null, name: '' })
+      await loadModels(selectedBrand.id)
+      setSnackbar({ open: true, message: isEdit ? 'Modelo actualizado' : 'Modelo creado', severity: 'success' })
+    } finally {
+      setModelSaving(false)
     }
-    if (!res.success) {
-      setSnackbar({ open: true, message: res.error || 'Error al guardar', severity: 'error' })
-      return
-    }
-    setModelDialog({ open: false, editId: null, name: '' })
-    await loadModels(selectedBrand.id)
-    setSnackbar({ open: true, message: modelDialog.editId ? 'Modelo actualizado' : 'Modelo creado', severity: 'success' })
   }
 
   const confirmDeleteModel = async () => {
     if (!deleteModelId || !selectedBrand?.id) return
-    const res = await deleteCarModel(deleteModelId)
-    if (!res.success) {
-      setSnackbar({ open: true, message: res.error || 'No se pudo eliminar', severity: 'error' })
+    setModelDeleting(true)
+    try {
+      const res = await deleteCarModel(deleteModelId)
+      if (!res.success) {
+        setSnackbar({ open: true, message: res.error || 'No se pudo eliminar', severity: 'error' })
+        setDeleteModelId(null)
+        return
+      }
       setDeleteModelId(null)
-      return
+      await loadModels(selectedBrand.id)
+      setSnackbar({ open: true, message: 'Modelo eliminado', severity: 'success' })
+    } finally {
+      setModelDeleting(false)
     }
-    setDeleteModelId(null)
-    await loadModels(selectedBrand.id)
-    setSnackbar({ open: true, message: 'Modelo eliminado', severity: 'success' })
   }
 
   return (
@@ -270,12 +293,22 @@ const Catalogos = () => {
                 </Typography>
               </Box>
             ) : (
-              <TableContainer>
-                <Table size="small">
+              <TableContainer
+                sx={{
+                  maxHeight: { xs: 'min(50vh, 360px)', lg: 'calc(100vh - 300px)' },
+                  overflow: 'auto',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                }}
+              >
+                <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Marca</TableCell>
-                      <TableCell align="right">Acciones</TableCell>
+                      <TableCell sx={{ bgcolor: 'background.paper' }}>Marca</TableCell>
+                      <TableCell align="right" sx={{ bgcolor: 'background.paper' }}>
+                        Acciones
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -372,12 +405,22 @@ const Catalogos = () => {
                     ),
                   }}
                 />
-                <TableContainer>
-                  <Table size="small">
+                <TableContainer
+                  sx={{
+                    maxHeight: { xs: 'min(50vh, 360px)', lg: 'calc(100vh - 300px)' },
+                    overflow: 'auto',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                  }}
+                >
+                  <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Modelo</TableCell>
-                        <TableCell align="right">Acciones</TableCell>
+                        <TableCell sx={{ bgcolor: 'background.paper' }}>Modelo</TableCell>
+                        <TableCell align="right" sx={{ bgcolor: 'background.paper' }}>
+                          Acciones
+                        </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -430,17 +473,26 @@ const Catalogos = () => {
             />
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setBrandDialog((d) => ({ ...d, open: false }))} sx={{ textTransform: 'none' }}>
+            <Button
+              onClick={() => setBrandDialog((d) => ({ ...d, open: false }))}
+              disabled={brandSaving}
+              sx={{ textTransform: 'none' }}
+            >
               Cancelar
             </Button>
-            <Button variant="contained" onClick={saveBrand} sx={{ textTransform: 'none', bgcolor: '#7b1fa2' }}>
-              Guardar
+            <Button
+              variant="contained"
+              onClick={saveBrand}
+              disabled={brandSaving}
+              sx={{ textTransform: 'none', bgcolor: '#7b1fa2' }}
+            >
+              {brandSaving ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'Guardar'}
             </Button>
           </DialogActions>
         </Dialog>
 
-        <Dialog open={modelDialog.open} onClose={() => setModelDialog((d) => ({ ...d, open: false }))} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 2 } }}>
-          <ModalHeader title={modelDialog.editId ? 'Editar modelo' : 'Nuevo modelo'} onClose={() => setModelDialog((d) => ({ ...d, open: false }))} />
+        <Dialog open={modelDialog.open} onClose={() => !modelSaving && setModelDialog((d) => ({ ...d, open: false }))} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 2 } }}>
+          <ModalHeader title={modelDialog.editId ? 'Editar modelo' : 'Nuevo modelo'} onClose={() => !modelSaving && setModelDialog((d) => ({ ...d, open: false }))} />
           <DialogContent>
             <TextField
               autoFocus
@@ -451,14 +503,15 @@ const Catalogos = () => {
               margin="normal"
               size="small"
               placeholder="ej. A3, Corolla"
+              disabled={modelSaving}
             />
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setModelDialog((d) => ({ ...d, open: false }))} sx={{ textTransform: 'none' }}>
+            <Button onClick={() => setModelDialog((d) => ({ ...d, open: false }))} disabled={modelSaving} sx={{ textTransform: 'none' }}>
               Cancelar
             </Button>
-            <Button variant="contained" onClick={saveModel} sx={{ textTransform: 'none', bgcolor: '#7b1fa2' }}>
-              Guardar
+            <Button variant="contained" onClick={saveModel} disabled={modelSaving} sx={{ textTransform: 'none', bgcolor: '#7b1fa2' }}>
+              {modelSaving ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'Guardar'}
             </Button>
           </DialogActions>
         </Dialog>
@@ -484,11 +537,11 @@ const Catalogos = () => {
             <Typography>¿Eliminar este modelo? No podrá si hay productos que lo tienen asignado.</Typography>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setDeleteModelId(null)} sx={{ textTransform: 'none' }}>
+            <Button onClick={() => setDeleteModelId(null)} disabled={modelDeleting} sx={{ textTransform: 'none' }}>
               Cancelar
             </Button>
-            <Button color="error" variant="contained" onClick={confirmDeleteModel} sx={{ textTransform: 'none' }}>
-              Eliminar
+            <Button color="error" variant="contained" onClick={confirmDeleteModel} disabled={modelDeleting} sx={{ textTransform: 'none' }}>
+              {modelDeleting ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'Eliminar'}
             </Button>
           </DialogActions>
         </Dialog>

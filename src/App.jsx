@@ -6,7 +6,8 @@ import Inventario from './pages/Inventario'
 import Ventas from './pages/Ventas'
 import Compras from './pages/Compras'
 import Gastos from './pages/Gastos'
-import Cotizacion from './pages/Cotizacion'
+import Cotizaciones from './pages/Cotizaciones'
+import CotizacionEditor from './pages/CotizacionEditor'
 import Clientes from './pages/Clientes'
 import Usuarios from './pages/Usuarios'
 import Catalogos from './pages/Catalogos'
@@ -64,13 +65,22 @@ function App() {
         }
       />
       <Route
-        path="/cotizacion"
+        path="/cotizaciones"
         element={
           <ProtectedRoute>
-            <Cotizacion />
+            <Cotizaciones />
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/cotizaciones/:id"
+        element={
+          <ProtectedRoute>
+            <CotizacionEditor />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/cotizacion" element={<Navigate to="/cotizaciones" replace />} />
       <Route
         path="/clientes"
         element={

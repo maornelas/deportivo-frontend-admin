@@ -25,7 +25,7 @@ import {
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Inventario', icon: <InventoryIcon />, path: '/inventario' },
-  { text: 'Cotización', icon: <CotizacionIcon />, path: '/cotizacion' },
+  { text: 'Cotizaciones', icon: <CotizacionIcon />, path: '/cotizaciones' },
   { text: 'Ventas', icon: <VentasIcon />, path: '/ventas' },
   { text: 'Compras', icon: <ComprasIcon />, path: '/compras' },
   { text: 'Gastos', icon: <GastosIcon />, path: '/gastos' },
