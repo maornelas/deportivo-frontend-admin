@@ -74,6 +74,8 @@ const getInitialProducto = () => ({
   observaciones: '',
   descripcionCompleta: '',
   precio: '',
+  /** Piezas disponibles en inventario (entero ≥ 1 por defecto al crear) */
+  piezasDisponibles: '1',
   estatus: 'DISPONIBLE',
   imageFiles: [], // File[]; hasta 10
 })
@@ -87,6 +89,23 @@ const parseCarYearRange = (carYearRange) => {
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const isValidUUID = (s) => typeof s === 'string' && UUID_REGEX.test(s.trim())
 
+function formatInventoryPrice(value) {
+  if (value == null || value === '') return '—'
+  const n = Number(value)
+  if (Number.isNaN(n)) return '—'
+  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n)
+}
+
+/** Unidades en inventario desde el payload del API (lista o detalle) */
+function stockUnitsFromApi(p) {
+  if (!p || typeof p !== 'object') return null
+  const v = p.stockQuantity ?? p.stock_quantity
+  if (v == null || v === '') return null
+  const n = Math.floor(Number(v))
+  if (Number.isNaN(n)) return null
+  return Math.max(0, n)
+}
+
 const Inventario = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [openDialog, setOpenDialog] = useState(false)
@@ -95,6 +114,7 @@ const Inventario = () => {
   const [categories, setCategories] = useState([])
   const [carModels, setCarModels] = useState([])
   const [products, setProducts] = useState([])
+  const [listLoading, setListLoading] = useState(true)
   const [loading, setLoading] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [listError, setListError] = useState('')
@@ -162,19 +182,24 @@ const Inventario = () => {
   }, [])
 
   const loadProducts = useCallback(async () => {
+    setListLoading(true)
     setListError('')
-    const f = filtersRef.current
-    const res = await searchProducts({
-      limit: 100,
-      search: (f.filterPieza || '').trim() || undefined,
-      brandId: f.filterMarca || undefined,
-      modelSearch: (f.filterModelo || '').trim() || undefined,
-      year: (f.filterAño || '').trim() || undefined,
-    })
-    if (res.success && res.data) {
-      setProducts(res.data.products || [])
-    } else {
-      setListError(res.error || 'Error al cargar productos')
+    try {
+      const f = filtersRef.current
+      const res = await searchProducts({
+        limit: 100,
+        search: (f.filterPieza || '').trim() || undefined,
+        brandId: f.filterMarca || undefined,
+        modelSearch: (f.filterModelo || '').trim() || undefined,
+        year: (f.filterAño || '').trim() || undefined,
+      })
+      if (res.success && res.data) {
+        setProducts(res.data.products || [])
+      } else {
+        setListError(res.error || 'Error al cargar productos')
+      }
+    } finally {
+      setListLoading(false)
     }
   }, [])
 
@@ -304,6 +329,12 @@ const Inventario = () => {
       setSubmitError('El precio debe ser un número mayor o igual a 0.')
       return
     }
+    const piezasRaw = String(producto.piezasDisponibles ?? '').trim()
+    const piezasDisp = piezasRaw === '' ? 1 : parseInt(piezasRaw, 10)
+    if (Number.isNaN(piezasDisp) || piezasDisp < 0) {
+      setSubmitError('Las piezas disponibles deben ser un número entero mayor o igual a 0.')
+      return
+    }
 
     let carYearRange = ''
     const añoDesde = producto.añoDesde?.toString().trim()
@@ -327,7 +358,7 @@ const Inventario = () => {
       categoryId: categoryId,
       price: precio,
       isActive: producto.estatus === 'DISPONIBLE',
-      stockQuantity: 0,
+      stockQuantity: piezasDisp,
     }
     const imageFiles = (producto.imageFiles || []).slice(0, MAX_FOTOS)
     const result =
@@ -378,6 +409,7 @@ const Inventario = () => {
       observaciones: d.observations || '',
       descripcionCompleta: d.description || '',
       precio: d.price != null ? String(d.price) : '',
+      piezasDisponibles: String(stockUnitsFromApi(d) ?? 0),
       estatus: d.isActive === true ? 'DISPONIBLE' : 'VENDIDO',
       imageFiles: [],
     })
@@ -487,6 +519,12 @@ const Inventario = () => {
       setDetailError('El precio debe ser un número mayor o igual a 0.')
       return
     }
+    const piezasRawD = String(detailProduct.piezasDisponibles ?? '').trim()
+    const piezasDispD = piezasRawD === '' ? 0 : parseInt(piezasRawD, 10)
+    if (Number.isNaN(piezasDispD) || piezasDispD < 0) {
+      setDetailError('Las piezas disponibles deben ser un número entero mayor o igual a 0.')
+      return
+    }
     let carYearRange = ''
     const añoDesde = detailProduct.añoDesde?.toString().trim()
     const añoHasta = detailProduct.añoHasta?.toString().trim()
@@ -507,7 +545,7 @@ const Inventario = () => {
       categoryId: (detailProduct.categoriaId || '').trim() || undefined,
       price: precio,
       isActive: detailProduct.estatus === 'DISPONIBLE',
-      stockQuantity: 0,
+      stockQuantity: piezasDispD,
     }
     const result = await updateProduct(detailProductId, payload)
     if (!result.success) {
@@ -670,6 +708,7 @@ const Inventario = () => {
             <Button
               variant="contained"
               onClick={() => loadProducts()}
+              disabled={listLoading}
               sx={{ textTransform: 'none', backgroundColor: '#7b1fa2', '&:hover': { backgroundColor: '#6a1b9a' } }}
             >
               Buscar
@@ -684,6 +723,7 @@ const Inventario = () => {
                 filtersRef.current = { filterPieza: '', filterMarca: '', filterModelo: '', filterAño: '' }
                 loadProducts()
               }}
+              disabled={listLoading}
               sx={{ textTransform: 'none', borderColor: '#757575', color: '#757575' }}
             >
               Limpiar
@@ -727,12 +767,27 @@ const Inventario = () => {
                     <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Año</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Estado</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Tipo</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }} align="center">
+                      Piezas disp.
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }} align="right">
+                      Precio
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {products.length === 0 ? (
+                  {listLoading ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ padding: '40px' }}>
+                      <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                        <CircularProgress size={40} sx={{ color: '#7b1fa2' }} aria-label="Cargando inventario" />
+                        <Typography variant="body2" sx={{ color: '#757575', mt: 2, display: 'block' }}>
+                          Cargando productos…
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : products.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} align="center" sx={{ padding: '40px' }}>
                         <Typography variant="body2" sx={{ color: '#757575' }}>
                           No hay productos registrados. Agrega un nuevo producto o carga un archivo.
                         </Typography>
@@ -752,6 +807,7 @@ const Inventario = () => {
                         '—'
                       const estadoLabel = p.partCondition === 'SEMINUEVO' ? 'Seminuevo' : p.partCondition === 'NUEVO' ? 'Nuevo' : p.partCondition || '—'
                       const tipoLabel = p.partType === 'GENÉRICO' ? 'Genérico' : p.partType === 'ORIGINAL' ? 'Original' : p.partType || '—'
+                      const stockN = stockUnitsFromApi(p)
                       return (
                         <TableRow
                           key={p.id}
@@ -773,6 +829,12 @@ const Inventario = () => {
                           <TableCell>{p.carYearRange || '—'}</TableCell>
                           <TableCell>{estadoLabel}</TableCell>
                           <TableCell>{tipoLabel}</TableCell>
+                          <TableCell align="center" sx={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                            {stockN != null ? stockN : '—'}
+                          </TableCell>
+                          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                            {formatInventoryPrice(p.price)}
+                          </TableCell>
                         </TableRow>
                       )
                     })
@@ -782,7 +844,14 @@ const Inventario = () => {
             </TableContainer>
           ) : (
             <Box>
-              {products.length === 0 ? (
+              {listLoading ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8 }}>
+                  <CircularProgress size={40} sx={{ color: '#7b1fa2' }} aria-label="Cargando inventario" />
+                  <Typography variant="body2" sx={{ color: '#757575', mt: 2 }}>
+                    Cargando productos…
+                  </Typography>
+                </Box>
+              ) : products.length === 0 ? (
                 <Typography variant="body2" sx={{ color: '#757575', textAlign: 'center', py: 6 }}>
                   No hay productos registrados. Agrega un nuevo producto o carga un archivo.
                 </Typography>
@@ -794,6 +863,7 @@ const Inventario = () => {
                       brands.find((b) => b.id === p.brandId)?.name ||
                       brands.find((b) => b.id === p.brandId)?.nombre ||
                       '—'
+                    const stockCard = stockUnitsFromApi(p)
                     return (
                       <Grid item xs={6} sm={4} md={3} lg={2} key={p.id}>
                         <Card
@@ -832,6 +902,9 @@ const Inventario = () => {
                             </Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={brandName}>
                               {brandName}
+                            </Typography>
+                            <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5, fontWeight: 600 }}>
+                              {stockCard != null ? `Disp.: ${stockCard}` : 'Disp.: —'}
                             </Typography>
                           </CardContent>
                         </Card>
@@ -983,6 +1056,18 @@ const Inventario = () => {
                 size="small"
                 sx={{ flex: '1 1 120px', minWidth: 0 }}
                 InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment>, inputProps: { min: 0, step: 0.01 } }}
+              />
+              <TextField
+                label="Piezas disponibles"
+                name="piezasDisponibles"
+                type="number"
+                value={producto.piezasDisponibles}
+                onChange={handleInputChange}
+                variant="outlined"
+                size="small"
+                sx={{ flex: '1 1 120px', minWidth: 0 }}
+                helperText="Unidades en inventario"
+                inputProps={{ min: 0, step: 1 }}
               />
               <FormControl size="small" sx={{ flex: '1 1 140px', minWidth: 0 }}>
                 <InputLabel>Estatus</InputLabel>
@@ -1270,6 +1355,19 @@ const Inventario = () => {
                     size="small"
                     sx={{ flex: '1 1 120px', minWidth: 0 }}
                     InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment>, inputProps: { min: 0, step: 0.01 } }}
+                    disabled={!detailEditing}
+                  />
+                  <TextField
+                    label="Piezas disponibles"
+                    name="piezasDisponibles"
+                    type="number"
+                    value={detailProduct.piezasDisponibles}
+                    onChange={handleDetailInputChange}
+                    variant="outlined"
+                    size="small"
+                    sx={{ flex: '1 1 120px', minWidth: 0 }}
+                    helperText="Unidades en inventario"
+                    inputProps={{ min: 0, step: 1 }}
                     disabled={!detailEditing}
                   />
                   <FormControl size="small" sx={{ flex: '1 1 140px', minWidth: 0 }}>
