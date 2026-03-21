@@ -42,7 +42,7 @@ const Login = () => {
     const result = await login(usuario.trim(), password)
     setSubmitting(false)
     if (result.success) {
-      navigate('/dashboard')
+      navigate(result.redirectTo || '/dashboard')
     } else {
       setError(result.error || 'Usuario o contraseña incorrectos')
     }

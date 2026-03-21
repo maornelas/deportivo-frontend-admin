@@ -37,6 +37,9 @@ import {
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { searchProducts } from '../api/products'
+import { useAuth } from '../contexts/AuthContext'
+import { ACTION } from '../config/actionPermissions'
+import { usePermissionDenied } from '../hooks/usePermissionDenied'
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente', color: 'default' },
@@ -81,6 +84,8 @@ const emptyLine = () => ({
 })
 
 const Compras = () => {
+  const { canDoAction } = useAuth()
+  const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [loading, setLoading] = useState(false)
@@ -206,7 +211,16 @@ const Compras = () => {
     setProductLoading(false)
   }
 
+  const canConsultCompra = () =>
+    canDoAction(ACTION.COMPRAS_EDITAR, { requireWrite: false }) ||
+    canDoAction(ACTION.COMPRAS_CREAR, { requireWrite: false }) ||
+    canDoAction(ACTION.COMPRAS_ELIMINAR, { requireWrite: false })
+
   const openCreate = () => {
+    if (!canDoAction(ACTION.COMPRAS_CREAR)) {
+      showDenied()
+      return
+    }
     resetEditor()
     setDialogMode('create')
     setDialogOpen(true)
@@ -214,6 +228,10 @@ const Compras = () => {
   }
 
   const openView = (p) => {
+    if (!canConsultCompra()) {
+      showDenied()
+      return
+    }
     setDialogMode('view')
     setEditorId(p.id)
     setEditorProvider(p.providerName || '')
@@ -239,6 +257,10 @@ const Compras = () => {
   }
 
   const openEdit = (p) => {
+    if (!canDoAction(ACTION.COMPRAS_EDITAR)) {
+      showDenied()
+      return
+    }
     openView(p)
     setDialogMode('edit')
   }
@@ -298,6 +320,17 @@ const Compras = () => {
   }
 
   const savePurchase = async () => {
+    if (dialogMode === 'create') {
+      if (!canDoAction(ACTION.COMPRAS_CREAR)) {
+        showDenied()
+        return
+      }
+    } else if (dialogMode === 'edit') {
+      if (!canDoAction(ACTION.COMPRAS_EDITAR)) {
+        showDenied()
+        return
+      }
+    }
     const msg = validateEditor()
     if (msg) {
       setError(msg)
@@ -342,6 +375,10 @@ const Compras = () => {
   }
 
   const deletePurchase = async () => {
+    if (!canDoAction(ACTION.COMPRAS_ELIMINAR)) {
+      showDenied()
+      return
+    }
     if (!editorId) return
     setLoading(true)
     setError('')
@@ -354,6 +391,10 @@ const Compras = () => {
   }
 
   const deleteById = async (id) => {
+    if (!canDoAction(ACTION.COMPRAS_ELIMINAR)) {
+      showDenied()
+      return
+    }
     if (!id) return
     setLoading(true)
     setError('')
@@ -748,6 +789,7 @@ const Compras = () => {
             ) : null}
           </DialogActions>
         </Dialog>
+        {permissionDeniedSnackbar}
       </Box>
     </Box>
   )

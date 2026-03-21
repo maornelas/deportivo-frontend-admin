@@ -43,6 +43,9 @@ import { getUsers, getUserById, updateUser, createUser } from '../api/user'
 import { getAddressesByUser, createAddress } from '../api/userAddress'
 import { getPaymentsByUser, createPayment } from '../api/userPayment'
 import { searchOrders } from '../api/orders'
+import { useAuth } from '../contexts/AuthContext'
+import { ACTION } from '../config/actionPermissions'
+import { usePermissionDenied } from '../hooks/usePermissionDenied'
 
 function formatDate(value) {
   if (!value) return '-'
@@ -151,6 +154,10 @@ const emptyPayment = () => ({
 })
 
 const Clientes = () => {
+  const { canDoAction } = useAuth()
+  const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
+  const canEditCliente = canDoAction(ACTION.CLIENTES_EDITAR)
+  const canCrearCliente = canDoAction(ACTION.CLIENTES_CREAR)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -257,6 +264,10 @@ const Clientes = () => {
   const clientRefunds = clientOrders.filter((o) => o.status === 'refunded')
 
   const handleOpenCreate = () => {
+    if (!canCrearCliente) {
+      showDenied()
+      return
+    }
     setCreateOpen(true)
     setCreateStep(0)
     setCreateForm({ email: '', passwordHash: '', firstName: '', lastName: '', companyName: '', rfc: '', phone: '' })
@@ -303,6 +314,10 @@ const Clientes = () => {
   const handleCreateBack = () => setCreateStep((s) => Math.max(s - 1, 0))
 
   const handleSubmitCreate = async () => {
+    if (!canCrearCliente) {
+      showDenied()
+      return
+    }
     if (!createForm.email?.trim() || !createForm.passwordHash?.trim()) {
       setCreateError('Email y contraseña son obligatorios.')
       return
@@ -369,6 +384,10 @@ const Clientes = () => {
 
   const handleSaveUser = useCallback(async () => {
     if (!detailUser?.id) return
+    if (!canEditCliente) {
+      showDenied()
+      return
+    }
     setSaving(true)
     setSaveError(null)
     const result = await updateUser(detailUser.id, {
@@ -385,7 +404,7 @@ const Clientes = () => {
     } else {
       setSaveError(result.error || 'Error al guardar')
     }
-  }, [detailUser, editForm])
+  }, [detailUser, editForm, canEditCliente, showDenied])
 
   const searchLower = (search || '').toLowerCase().trim()
   const filtered =
@@ -545,16 +564,16 @@ const Clientes = () => {
                 {detailTab === 0 && (
                   <Stack spacing={2}>
                     <Typography variant="subtitle2" color="text.secondary">Información editable</Typography>
-                    <TextField label="Empresa" size="small" fullWidth value={editForm.companyName} onChange={(e) => handleEditChange('companyName', e.target.value)} />
-                    <TextField label="RFC" size="small" fullWidth value={editForm.rfc} onChange={(e) => handleEditChange('rfc', e.target.value)} />
-                    <TextField label="Teléfono" size="small" fullWidth value={editForm.phone} onChange={(e) => handleEditChange('phone', e.target.value)} />
-                    <FormControl size="small" fullWidth>
+                    <TextField label="Empresa" size="small" fullWidth value={editForm.companyName} onChange={(e) => handleEditChange('companyName', e.target.value)} disabled={!canEditCliente} />
+                    <TextField label="RFC" size="small" fullWidth value={editForm.rfc} onChange={(e) => handleEditChange('rfc', e.target.value)} disabled={!canEditCliente} />
+                    <TextField label="Teléfono" size="small" fullWidth value={editForm.phone} onChange={(e) => handleEditChange('phone', e.target.value)} disabled={!canEditCliente} />
+                    <FormControl size="small" fullWidth disabled={!canEditCliente}>
                       <InputLabel id="client-role-label">Rol</InputLabel>
                       <Select labelId="client-role-label" label="Rol" value={editForm.role} onChange={(e) => handleEditChange('role', e.target.value)}>
                         {ROLE_OPTIONS.map((opt) => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
                       </Select>
                     </FormControl>
-                    <FormControlLabel control={<Switch checked={editForm.isActive} onChange={(e) => handleEditChange('isActive', e.target.checked)} color="primary" />} label="Cliente activo" />
+                    <FormControlLabel control={<Switch checked={editForm.isActive} onChange={(e) => handleEditChange('isActive', e.target.checked)} color="primary" disabled={!canEditCliente} />} label="Cliente activo" disabled={!canEditCliente} />
                     <Typography variant="subtitle2" color="text.secondary" sx={{ pt: 1 }}>Información de cuenta</Typography>
                     <Box sx={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 0.5, alignItems: 'baseline' }}>
                       <Typography variant="caption" color="text.secondary">Email</Typography>
@@ -695,7 +714,7 @@ const Clientes = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDetail}>Cerrar</Button>
-            {detailUser && (
+            {detailUser && canEditCliente && (
               <Button variant="contained" onClick={handleSaveUser} disabled={saving}>
                 {saving ? 'Guardando…' : 'Guardar cambios'}
               </Button>
@@ -819,6 +838,7 @@ const Clientes = () => {
             )}
           </DialogActions>
         </Dialog>
+        {permissionDeniedSnackbar}
       </Box>
     </Box>
   )

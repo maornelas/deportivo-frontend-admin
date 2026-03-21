@@ -45,6 +45,9 @@ import {
   getExpenseReportSummary,
   downloadExpenseReportCsv,
 } from '../api/expenses'
+import { useAuth } from '../contexts/AuthContext'
+import { ACTION } from '../config/actionPermissions'
+import { usePermissionDenied } from '../hooks/usePermissionDenied'
 
 const LIMIT = 15
 
@@ -74,6 +77,8 @@ function sumLineItems(items) {
 const emptyItem = () => ({ concept: '', amount: '', quantity: 1 })
 
 const Gastos = () => {
+  const { canDoAction } = useAuth()
+  const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -155,6 +160,10 @@ const Gastos = () => {
   }
 
   const openCreate = () => {
+    if (!canDoAction(ACTION.GASTOS_CREAR)) {
+      showDenied()
+      return
+    }
     setFormMode('create')
     setEditingId(null)
     setExpenseDate(new Date().toISOString().slice(0, 10))
@@ -166,6 +175,10 @@ const Gastos = () => {
   }
 
   const openEdit = async (row) => {
+    if (!canDoAction(ACTION.GASTOS_EDITAR)) {
+      showDenied()
+      return
+    }
     setFormMode('edit')
     setEditingId(row.id)
     setFormLoading(true)
@@ -232,6 +245,15 @@ const Gastos = () => {
   }
 
   const handleSubmitForm = async () => {
+    if (formMode === 'create') {
+      if (!canDoAction(ACTION.GASTOS_CREAR)) {
+        showDenied()
+        return
+      }
+    } else if (!canDoAction(ACTION.GASTOS_EDITAR)) {
+      showDenied()
+      return
+    }
     const built = buildPayload()
     if (built.error) {
       setFormError(built.error)
@@ -256,6 +278,11 @@ const Gastos = () => {
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget?.id) return
+    if (!canDoAction(ACTION.GASTOS_ELIMINAR)) {
+      showDenied()
+      setDeleteTarget(null)
+      return
+    }
     setDeleteLoading(true)
     const r = await deleteExpense(deleteTarget.id)
     setDeleteLoading(false)
@@ -447,7 +474,17 @@ const Gastos = () => {
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Eliminar">
-                          <IconButton size="small" color="error" onClick={() => setDeleteTarget(row)}>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => {
+                              if (!canDoAction(ACTION.GASTOS_ELIMINAR)) {
+                                showDenied()
+                                return
+                              }
+                              setDeleteTarget(row)
+                            }}
+                          >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -679,6 +716,7 @@ const Gastos = () => {
             </Button>
           </DialogActions>
         </Dialog>
+        {permissionDeniedSnackbar}
       </Box>
     </Box>
   )

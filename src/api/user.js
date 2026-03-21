@@ -30,7 +30,7 @@ export async function getUsers(params = {}) {
 
 /**
  * Crea un nuevo usuario.
- * @param {object} payload - { email, passwordHash, firstName?, lastName?, companyName?, rfc?, phone?, role? }
+ * @param {object} payload - { email, passwordHash, firstName?, lastName?, companyName?, rfc?, phone?, role?, adminRoleId? }
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function createUser(payload) {
@@ -98,4 +98,24 @@ export async function updateUser(id, payload) {
     return { success: false, error: body.message || 'Error al actualizar' }
   }
   return { success: true, data: body.data }
+}
+
+/**
+ * Elimina un usuario por ID.
+ * @param {string} id
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
+export async function deleteUser(id) {
+  const baseUrl = getBaseUrl()
+  const res = await fetch(`${baseUrl}/user/delete/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success) {
+    return { success: false, error: body.message || 'Error al eliminar usuario' }
+  }
+  return { success: true }
 }

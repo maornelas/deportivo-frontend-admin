@@ -32,6 +32,9 @@ import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
 import { searchOrders, getOrderById, updateOrder, updateOrderSalesChannel } from '../api/orders'
+import { useAuth } from '../contexts/AuthContext'
+import { ACTION } from '../config/actionPermissions'
+import { usePermissionDenied } from '../hooks/usePermissionDenied'
 
 const ORDER_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
@@ -93,6 +96,8 @@ function getSalesChannelSubtitle(salesChannel) {
 }
 
 const Ventas = () => {
+  const { canDoAction } = useAuth()
+  const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -139,6 +144,10 @@ const Ventas = () => {
   const handleSidebarClose = () => setSidebarOpen(false)
 
   const handleRowDoubleClick = async (order) => {
+    if (!canDoAction(ACTION.VENTAS_DETALLE_ORDEN, { requireWrite: false })) {
+      showDenied()
+      return
+    }
     setDetailOrder(null)
     setDetailError('')
     setDetailLoading(true)
@@ -160,6 +169,10 @@ const Ventas = () => {
   }
 
   const handleStatusChange = async (newStatus) => {
+    if (!canDoAction(ACTION.VENTAS_CAMBIAR_ESTADO_ORDEN)) {
+      showDenied()
+      return
+    }
     if (!detailOrder?.id) return
     setStatusSaving(true)
     setDetailError('')
@@ -180,6 +193,10 @@ const Ventas = () => {
   }
 
   const handleSalesChannelChange = async (newChannel) => {
+    if (!canDoAction(ACTION.VENTAS_CAMBIAR_ESTADO_ORDEN)) {
+      showDenied()
+      return
+    }
     if (!detailOrder?.id || !newChannel) return
     setChannelSaving(true)
     setDetailError('')
@@ -354,6 +371,7 @@ const Ventas = () => {
           </DialogContent>
           <DialogActions><Button onClick={handleCloseDetail} color="inherit">Cerrar</Button></DialogActions>
         </Dialog>
+        {permissionDeniedSnackbar}
       </Box>
     </Box>
   )

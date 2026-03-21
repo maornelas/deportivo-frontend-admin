@@ -26,6 +26,9 @@ import { Search as SearchIcon, Add as AddIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { listQuotations } from '../api/quotations'
+import { useAuth } from '../contexts/AuthContext'
+import { ACTION } from '../config/actionPermissions'
+import { usePermissionDenied } from '../hooks/usePermissionDenied'
 
 const STATUS = {
   draft: { label: 'Borrador', color: 'default' },
@@ -49,6 +52,8 @@ function formatMoney(n, c = 'MXN') {
 
 export default function Cotizaciones() {
   const navigate = useNavigate()
+  const { canDoAction } = useAuth()
+  const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -109,7 +114,18 @@ export default function Cotizaciones() {
           <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', fontSize: { xs: '24px', md: '32px' } }}>
             Cotizaciones
           </Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/cotizaciones/nueva')} sx={{ bgcolor: '#7B2CBF', '&:hover': { bgcolor: '#6A26A8' } }}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              if (!canDoAction(ACTION.COTIZACIONES_CREAR)) {
+                showDenied()
+                return
+              }
+              navigate('/cotizaciones/nueva')
+            }}
+            sx={{ bgcolor: '#7B2CBF', '&:hover': { bgcolor: '#6A26A8' } }}
+          >
             Nueva cotización
           </Button>
         </Box>
@@ -169,7 +185,13 @@ export default function Cotizaciones() {
                         key={q.id}
                         hover
                         sx={{ cursor: 'pointer' }}
-                        onClick={() => navigate(`/cotizaciones/${q.id}`)}
+                        onClick={() => {
+                          if (!canDoAction(ACTION.COTIZACIONES_EDITAR)) {
+                            showDenied()
+                            return
+                          }
+                          navigate(`/cotizaciones/${q.id}`)
+                        }}
                       >
                         <TableCell>
                           <Typography variant="body2" fontFamily="monospace" fontSize={12}>{q.id.slice(0, 8)}…</Typography>
@@ -190,6 +212,7 @@ export default function Cotizaciones() {
             </>
           )}
         </TableContainer>
+        {permissionDeniedSnackbar}
       </Box>
     </Box>
   )

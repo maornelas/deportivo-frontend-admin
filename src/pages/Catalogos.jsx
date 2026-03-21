@@ -43,8 +43,13 @@ import {
   updateCarModel,
   deleteCarModel,
 } from '../api/catalog'
+import { useAuth } from '../contexts/AuthContext'
+import { ACTION } from '../config/actionPermissions'
+import { usePermissionDenied } from '../hooks/usePermissionDenied'
 
 const Catalogos = () => {
+  const { canDoAction } = useAuth()
+  const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const navigate = useNavigate()
   const location = useLocation()
   const fromInventario = location.state?.from === 'inventario'
@@ -108,17 +113,38 @@ const Catalogos = () => {
     return models.filter((m) => (m.model || '').toLowerCase().includes(q))
   }, [models, modelSearch])
 
-  const openNewBrand = () => setBrandDialog({ open: true, editId: null, name: '' })
-  const openEditBrand = (b) => setBrandDialog({ open: true, editId: b.id, name: b.name || '' })
+  const openNewBrand = () => {
+    if (!canDoAction(ACTION.CATALOGOS_MARCA_CREAR)) {
+      showDenied()
+      return
+    }
+    setBrandDialog({ open: true, editId: null, name: '' })
+  }
+  const openEditBrand = (b) => {
+    if (!canDoAction(ACTION.CATALOGOS_MARCA_EDITAR)) {
+      showDenied()
+      return
+    }
+    setBrandDialog({ open: true, editId: b.id, name: b.name || '' })
+  }
 
   const saveBrand = async () => {
+    const isEdit = !!brandDialog.editId
+    if (isEdit) {
+      if (!canDoAction(ACTION.CATALOGOS_MARCA_EDITAR)) {
+        showDenied()
+        return
+      }
+    } else if (!canDoAction(ACTION.CATALOGOS_MARCA_CREAR)) {
+      showDenied()
+      return
+    }
     const name = (brandDialog.name || '').trim()
     if (!name) {
       setSnackbar({ open: true, message: 'El nombre de la marca es obligatorio', severity: 'warning' })
       return
     }
     const editId = brandDialog.editId
-    const isEdit = !!editId
     setBrandSaving(true)
     try {
       let res
@@ -148,6 +174,11 @@ const Catalogos = () => {
 
   const confirmDeleteBrand = async () => {
     if (!deleteBrandId) return
+    if (!canDoAction(ACTION.CATALOGOS_MARCA_ELIMINAR)) {
+      showDenied()
+      setDeleteBrandId(null)
+      return
+    }
     const res = await deleteBrand(deleteBrandId)
     if (!res.success) {
       setSnackbar({ open: true, message: res.error || 'No se pudo eliminar la marca', severity: 'error' })
@@ -168,18 +199,37 @@ const Catalogos = () => {
       setSnackbar({ open: true, message: 'Seleccione una marca primero', severity: 'warning' })
       return
     }
+    if (!canDoAction(ACTION.CATALOGOS_MODELO_CREAR)) {
+      showDenied()
+      return
+    }
     setModelDialog({ open: true, editId: null, name: '' })
   }
-  const openEditModel = (m) => setModelDialog({ open: true, editId: m.id, name: m.model || '' })
+  const openEditModel = (m) => {
+    if (!canDoAction(ACTION.CATALOGOS_MODELO_EDITAR)) {
+      showDenied()
+      return
+    }
+    setModelDialog({ open: true, editId: m.id, name: m.model || '' })
+  }
 
   const saveModel = async () => {
+    const isEdit = !!modelDialog.editId
+    if (isEdit) {
+      if (!canDoAction(ACTION.CATALOGOS_MODELO_EDITAR)) {
+        showDenied()
+        return
+      }
+    } else if (!canDoAction(ACTION.CATALOGOS_MODELO_CREAR)) {
+      showDenied()
+      return
+    }
     const modelName = (modelDialog.name || '').trim()
     if (!modelName) {
       setSnackbar({ open: true, message: 'El nombre del modelo es obligatorio', severity: 'warning' })
       return
     }
     const editId = modelDialog.editId
-    const isEdit = !!editId
     setModelSaving(true)
     try {
       let res
@@ -202,6 +252,11 @@ const Catalogos = () => {
 
   const confirmDeleteModel = async () => {
     if (!deleteModelId || !selectedBrand?.id) return
+    if (!canDoAction(ACTION.CATALOGOS_MODELO_ELIMINAR)) {
+      showDenied()
+      setDeleteModelId(null)
+      return
+    }
     setModelDeleting(true)
     try {
       const res = await deleteCarModel(deleteModelId)
@@ -330,7 +385,18 @@ const Catalogos = () => {
                           <IconButton size="small" onClick={() => openEditBrand(b)} color="primary" aria-label="Editar marca">
                             <EditIcon fontSize="small" />
                           </IconButton>
-                          <IconButton size="small" onClick={() => setDeleteBrandId(b.id)} color="error" aria-label="Eliminar marca">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              if (!canDoAction(ACTION.CATALOGOS_MARCA_ELIMINAR)) {
+                                showDenied()
+                                return
+                              }
+                              setDeleteBrandId(b.id)
+                            }}
+                            color="error"
+                            aria-label="Eliminar marca"
+                          >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </TableCell>
@@ -431,7 +497,18 @@ const Catalogos = () => {
                             <IconButton size="small" onClick={() => openEditModel(m)} color="primary" aria-label="Editar modelo">
                               <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" onClick={() => setDeleteModelId(m.id)} color="error" aria-label="Eliminar modelo">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                if (!canDoAction(ACTION.CATALOGOS_MODELO_ELIMINAR)) {
+                                  showDenied()
+                                  return
+                                }
+                                setDeleteModelId(m.id)
+                              }}
+                              color="error"
+                              aria-label="Eliminar modelo"
+                            >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </TableCell>
@@ -551,6 +628,7 @@ const Catalogos = () => {
             {snackbar.message}
           </Alert>
         </Snackbar>
+        {permissionDeniedSnackbar}
       </Box>
     </Box>
   )

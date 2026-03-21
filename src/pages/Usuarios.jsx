@@ -20,17 +20,32 @@ import {
   Button,
   Stack,
   FormControl,
+  FormHelperText,
   InputLabel,
   Select,
   MenuItem,
   Switch,
   FormControlLabel,
+  IconButton,
+  Snackbar,
 } from '@mui/material'
-import { Search as SearchIcon, Add as AddIcon } from '@mui/icons-material'
+import {
+  Search as SearchIcon,
+  Add as AddIcon,
+  Visibility,
+  VisibilityOff,
+  CheckCircle,
+  RadioButtonUnchecked,
+  Delete as DeleteIcon,
+} from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
-import { getUsers, getUserById, updateUser, createUser } from '../api/user'
+import { getUsers, getUserById, updateUser, createUser, deleteUser } from '../api/user'
+import { getRoles as getRbacRoles } from '../api/rbac'
+import { useAuth } from '../contexts/AuthContext'
+import { ACTION } from '../config/actionPermissions'
+import { usePermissionDenied } from '../hooks/usePermissionDenied'
 
 function formatDate(value) {
   if (!value) return '-'
@@ -65,7 +80,25 @@ function getRoleLabel(role) {
   return opt ? opt.label : role
 }
 
+/** Política: más de 8 caracteres, al menos un número, una minúscula y una mayúscula */
+function getPasswordPolicyState(password) {
+  const p = password || ''
+  return {
+    lengthOver8: p.length > 8,
+    hasNumber: /\d/.test(p),
+    hasLowercase: /[a-z]/.test(p),
+    hasUppercase: /[A-Z]/.test(p),
+  }
+}
+
+function passwordMeetsPolicy(password) {
+  const s = getPasswordPolicyState(password)
+  return s.lengthOver8 && s.hasNumber && s.hasLowercase && s.hasUppercase
+}
+
 const Usuarios = () => {
+  const { canDoAction } = useAuth()
+  const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -74,39 +107,65 @@ const Usuarios = () => {
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailUser, setDetailUser] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [editForm, setEditForm] = useState({ companyName: '', rfc: '', phone: '', role: 'customer', isActive: true })
+  const [editForm, setEditForm] = useState({
+    companyName: '',
+    rfc: '',
+    phone: '',
+    role: 'customer',
+    isActive: true,
+    adminRoleId: '',
+  })
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({
     email: '',
     passwordHash: '',
+    confirmPassword: '',
     firstName: '',
     lastName: '',
     companyName: '',
     rfc: '',
     phone: '',
-    role: 'admin',
+    /** UUID del rol en tabla `roles` (RBAC) */
+    createRoleSelection: '',
   })
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState(null)
+  const [showCreatePassword, setShowCreatePassword] = useState(false)
+  const [showCreatePasswordConfirm, setShowCreatePasswordConfirm] = useState(false)
+  const [rbacRoles, setRbacRoles] = useState([])
 
-  const loadUsers = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const loadUsers = useCallback(async (opts = {}) => {
+    const silent = opts.silent === true
+    if (!silent) {
+      setLoading(true)
+      setError(null)
+    }
     const result = await getUsers({ activeOnly: false, excludeRole: 'customer' })
-    setLoading(false)
+    if (!silent) setLoading(false)
     if (result.success && Array.isArray(result.data)) {
       setUsers(result.data)
-    } else {
+      return true
+    }
+    if (!silent) {
       setError(result.error || 'Error al cargar usuarios')
       setUsers([])
     }
+    return false
   }, [])
 
   useEffect(() => {
     loadUsers()
   }, [loadUsers])
+
+  useEffect(() => {
+    getRbacRoles().then((r) => {
+      if (r.success && Array.isArray(r.data)) setRbacRoles(r.data)
+    })
+  }, [])
 
   const handleMenuClick = () => {
     setSidebarOpen(!sidebarOpen)
@@ -133,6 +192,7 @@ const Usuarios = () => {
         phone: u.phone ?? '',
         role: u.role ?? 'customer',
         isActive: u.isActive !== false,
+        adminRoleId: u.adminRoleId ?? '',
       })
     } else {
       setDetailUser(null)
@@ -151,37 +211,89 @@ const Usuarios = () => {
   }
 
   const handleSaveUser = useCallback(async () => {
+    if (!canDoAction(ACTION.USUARIOS_EDITAR)) {
+      showDenied()
+      return
+    }
     if (!detailUser?.id) return
     setSaving(true)
     setSaveError(null)
-    const result = await updateUser(detailUser.id, {
+    const payload = {
       companyName: editForm.companyName || undefined,
       rfc: editForm.rfc || undefined,
       phone: editForm.phone || undefined,
       role: editForm.role,
       isActive: editForm.isActive,
-    })
+    }
+    if (editForm.role === 'admin' || editForm.role === 'moderator') {
+      payload.adminRoleId = editForm.adminRoleId ? editForm.adminRoleId : null
+    }
+    const result = await updateUser(detailUser.id, payload)
     setSaving(false)
     if (result.success && result.data) {
       setDetailUser(result.data)
       setUsers((prev) => prev.map((u) => (u.id === result.data.id ? result.data : u)))
+      setSnackbar({
+        open: true,
+        message: 'Usuario actualizado correctamente.',
+        severity: 'success',
+      })
     } else {
       setSaveError(result.error || 'Error al guardar')
     }
-  }, [detailUser, editForm])
+  }, [detailUser, editForm, canDoAction, showDenied])
+
+  const handleDeleteUser = useCallback(async () => {
+    if (!canDoAction(ACTION.USUARIOS_ELIMINAR)) {
+      showDenied()
+      return
+    }
+    if (!detailUser?.id) return
+    if (
+      !window.confirm(
+        `¿Eliminar definitivamente al usuario "${detailUser.email}"? Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return
+    }
+    setDeleting(true)
+    setSaveError(null)
+    const id = detailUser.id
+    const result = await deleteUser(id)
+    setDeleting(false)
+    if (result.success) {
+      handleCloseDetail()
+      setUsers((prev) => prev.filter((u) => u.id !== id))
+      setSnackbar({
+        open: true,
+        message: 'Usuario eliminado correctamente.',
+        severity: 'success',
+      })
+    } else {
+      setSaveError(result.error || 'No se pudo eliminar el usuario')
+    }
+  }, [detailUser, canDoAction, showDenied])
 
   const handleOpenCreate = () => {
+    if (!canDoAction(ACTION.USUARIOS_CREAR)) {
+      showDenied()
+      return
+    }
     setCreateOpen(true)
+    const defaultRbac = rbacRoles.length > 0 ? rbacRoles[0].id : ''
     setCreateForm({
       email: '',
       passwordHash: '',
+      confirmPassword: '',
       firstName: '',
       lastName: '',
       companyName: '',
       rfc: '',
       phone: '',
-      role: 'admin',
+      createRoleSelection: defaultRbac,
     })
+    setShowCreatePassword(false)
+    setShowCreatePasswordConfirm(false)
     setCreateError(null)
   }
 
@@ -196,12 +308,51 @@ const Usuarios = () => {
   }
 
   const handleSubmitCreate = async () => {
-    if (!createForm.email?.trim() || !createForm.passwordHash?.trim()) {
-      setCreateError('Email y contraseña son obligatorios.')
+    if (!canDoAction(ACTION.USUARIOS_CREAR)) {
+      showDenied()
       return
     }
+    if (!createForm.email?.trim()) {
+      setCreateError('El email es obligatorio.')
+      return
+    }
+    if (!createForm.passwordHash?.trim()) {
+      setCreateError('La contraseña es obligatoria.')
+      return
+    }
+    if (!passwordMeetsPolicy(createForm.passwordHash)) {
+      setCreateError(
+        'La contraseña debe tener más de 8 caracteres e incluir al menos un número, una minúscula y una mayúscula.',
+      )
+      return
+    }
+    if (createForm.passwordHash !== createForm.confirmPassword) {
+      setCreateError('La confirmación de contraseña no coincide.')
+      return
+    }
+    const roleId = (createForm.createRoleSelection || '').trim()
+    if (!roleId) {
+      setCreateError('Selecciona un rol. Si no hay opciones, crea uno en Roles y permisos.')
+      return
+    }
+    const rbacRole = rbacRoles.find((r) => r.id === roleId)
+    if (!rbacRole) {
+      setCreateError('El rol seleccionado ya no existe. Vuelve a elegir uno.')
+      return
+    }
+    const slug = (rbacRole.slug || '').toLowerCase()
+    let role = 'admin'
+    let adminRoleId = roleId
+    if (slug === 'customer') {
+      role = 'customer'
+      adminRoleId = undefined
+    } else if (slug === 'moderator') {
+      role = 'moderator'
+    }
+
     setCreateLoading(true)
     setCreateError(null)
+
     const result = await createUser({
       email: createForm.email.trim(),
       passwordHash: createForm.passwordHash,
@@ -210,15 +361,46 @@ const Usuarios = () => {
       companyName: createForm.companyName?.trim() || undefined,
       rfc: createForm.rfc?.trim() || undefined,
       phone: createForm.phone?.trim() || undefined,
-      role: createForm.role,
+      role,
+      ...(adminRoleId ? { adminRoleId } : {}),
     })
     setCreateLoading(false)
     if (result.success) {
+      const created = result.data
       handleCloseCreate()
-      loadUsers()
+      const refreshed = await loadUsers({ silent: true })
+      if (
+        !refreshed &&
+        created?.id &&
+        (created.role === 'admin' || created.role === 'moderator')
+      ) {
+        setUsers((prev) => (prev.some((u) => u.id === created.id) ? prev : [created, ...prev]))
+      }
+      setSnackbar({
+        open: true,
+        message: refreshed
+          ? 'Usuario creado correctamente.'
+          : 'Usuario creado. No se pudo refrescar la lista; recarga la página si no ves los cambios.',
+        severity: refreshed ? 'success' : 'warning',
+      })
     } else {
       setCreateError(result.error || 'Error al crear usuario')
     }
+  }
+
+  const rowRoleDisplay = (u) => {
+    if (!u) return '-'
+    if (u.role === 'customer') return 'Cliente'
+    if (u.role === 'moderator' && !u.adminRoleId) return 'Moderador'
+    if (u.role === 'moderator' && u.adminRoleId) {
+      const r = rbacRoles.find((x) => x.id === u.adminRoleId)
+      return r ? `Moderador · ${r.name}` : 'Moderador'
+    }
+    if (u.role === 'admin' && u.adminRoleId) {
+      const r = rbacRoles.find((x) => x.id === u.adminRoleId)
+      return r ? r.name : 'Admin'
+    }
+    return getRoleLabel(u.role)
   }
 
   const searchLower = (search || '').toLowerCase().trim()
@@ -232,6 +414,16 @@ const Usuarios = () => {
             (u.lastName && u.lastName.toLowerCase().includes(searchLower)) ||
             (u.companyName && u.companyName.toLowerCase().includes(searchLower))
         )
+
+  const createPwdPolicy = getPasswordPolicyState(createForm.passwordHash)
+  const createPwdPolicyRows = [
+    { ok: createPwdPolicy.lengthOver8, label: 'Más de 8 caracteres' },
+    { ok: createPwdPolicy.hasNumber, label: 'Al menos un número' },
+    { ok: createPwdPolicy.hasLowercase, label: 'Al menos una letra minúscula' },
+    { ok: createPwdPolicy.hasUppercase, label: 'Al menos una letra mayúscula' },
+  ]
+  const confirmPwdMismatch =
+    Boolean(createForm.confirmPassword) && createForm.passwordHash !== createForm.confirmPassword
 
   return (
     <Box sx={{ display: 'flex' }}>
@@ -344,7 +536,7 @@ const Usuarios = () => {
                           {[u.firstName, u.lastName].filter(Boolean).join(' ') || '-'}
                         </TableCell>
                         <TableCell>{u.companyName ?? '-'}</TableCell>
-                        <TableCell>{getRoleLabel(u.role)}</TableCell>
+                        <TableCell>{rowRoleDisplay(u)}</TableCell>
                         <TableCell>{u.isActive === false ? 'No' : 'Sí'}</TableCell>
                         <TableCell>{formatDate(u.createdAt)}</TableCell>
                       </TableRow>
@@ -422,6 +614,27 @@ const Usuarios = () => {
                     ))}
                   </Select>
                 </FormControl>
+                {(editForm.role === 'admin' || editForm.role === 'moderator') && (
+                  <FormControl size="small" fullWidth>
+                    <InputLabel id="user-admin-rbac-label">Rol del panel (permisos)</InputLabel>
+                    <Select
+                      labelId="user-admin-rbac-label"
+                      label="Rol del panel (permisos)"
+                      value={editForm.adminRoleId || ''}
+                      onChange={(e) => handleEditChange('adminRoleId', e.target.value)}
+                    >
+                      <MenuItem value="">
+                        <em>Sin asignar — acceso total (solo admin legacy)</em>
+                      </MenuItem>
+                      {rbacRoles.map((r) => (
+                        <MenuItem key={r.id} value={r.id}>
+                          {r.name}
+                          {r.isSystem ? ' (sistema)' : ''}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
                 <FormControlLabel
                   control={
                     <Switch
@@ -454,63 +667,205 @@ const Usuarios = () => {
               <Typography color="text.secondary">No se pudo cargar el usuario.</Typography>
             )}
           </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDetail}>Cerrar</Button>
+          <DialogActions
+            sx={{
+              flexWrap: 'wrap',
+              gap: 1,
+              justifyContent: 'space-between',
+              px: 2,
+              py: 1.5,
+            }}
+          >
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              <Button onClick={handleCloseDetail}>Cerrar</Button>
+              {detailUser && (
+                <Button
+                  color="error"
+                  variant="outlined"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDeleteUser}
+                  disabled={saving || deleting}
+                >
+                  {deleting ? 'Eliminando…' : 'Eliminar'}
+                </Button>
+              )}
+            </Box>
             {detailUser && (
-              <Button
-                variant="contained"
-                onClick={handleSaveUser}
-                disabled={saving}
-              >
+              <Button variant="contained" onClick={handleSaveUser} disabled={saving || deleting}>
                 {saving ? 'Guardando…' : 'Guardar'}
               </Button>
             )}
           </DialogActions>
         </Dialog>
 
-        <Dialog open={createOpen} onClose={handleCloseCreate} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
+        <Dialog open={createOpen} onClose={handleCloseCreate} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
           <ModalHeader title="Crear usuario" onClose={handleCloseCreate} />
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              <TextField
-                label="Email"
-                type="email"
-                size="small"
-                fullWidth
-                required
-                value={createForm.email}
-                onChange={(e) => handleCreateChange('email', e.target.value)}
-              />
-              <TextField
-                label="Contraseña"
-                type="password"
-                size="small"
-                fullWidth
-                required
-                value={createForm.passwordHash}
-                onChange={(e) => handleCreateChange('passwordHash', e.target.value)}
-              />
-              <TextField label="Nombre" size="small" fullWidth value={createForm.firstName} onChange={(e) => handleCreateChange('firstName', e.target.value)} />
-              <TextField label="Apellido" size="small" fullWidth value={createForm.lastName} onChange={(e) => handleCreateChange('lastName', e.target.value)} />
-              <TextField label="Empresa" size="small" fullWidth value={createForm.companyName} onChange={(e) => handleCreateChange('companyName', e.target.value)} />
-              <TextField label="RFC" size="small" fullWidth value={createForm.rfc} onChange={(e) => handleCreateChange('rfc', e.target.value)} />
-              <TextField label="Teléfono" size="small" fullWidth value={createForm.phone} onChange={(e) => handleCreateChange('phone', e.target.value)} />
-              <FormControl size="small" fullWidth>
-                <InputLabel id="create-role-label">Rol</InputLabel>
-                <Select
-                  labelId="create-role-label"
-                  label="Rol"
-                  value={createForm.role}
-                  onChange={(e) => handleCreateChange('role', e.target.value)}
-                >
-                  {ROLE_OPTIONS.map((opt) => (
-                    <MenuItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {createError && <Alert severity="error" onClose={() => setCreateError(null)}>{createError}</Alert>}
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                  gap: 2,
+                  alignItems: 'start',
+                }}
+              >
+                <TextField
+                  label="Email"
+                  type="email"
+                  size="small"
+                  fullWidth
+                  required
+                  value={createForm.email}
+                  onChange={(e) => handleCreateChange('email', e.target.value)}
+                  sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
+                />
+                <TextField
+                  label="Nombre"
+                  size="small"
+                  fullWidth
+                  value={createForm.firstName}
+                  onChange={(e) => handleCreateChange('firstName', e.target.value)}
+                />
+                <TextField
+                  label="Apellido"
+                  size="small"
+                  fullWidth
+                  value={createForm.lastName}
+                  onChange={(e) => handleCreateChange('lastName', e.target.value)}
+                />
+                <TextField
+                  label="Empresa"
+                  size="small"
+                  fullWidth
+                  value={createForm.companyName}
+                  onChange={(e) => handleCreateChange('companyName', e.target.value)}
+                />
+                <TextField
+                  label="RFC"
+                  size="small"
+                  fullWidth
+                  value={createForm.rfc}
+                  onChange={(e) => handleCreateChange('rfc', e.target.value)}
+                />
+                <TextField
+                  label="Teléfono"
+                  size="small"
+                  fullWidth
+                  value={createForm.phone}
+                  onChange={(e) => handleCreateChange('phone', e.target.value)}
+                />
+                <FormControl size="small" fullWidth>
+                  <InputLabel id="create-role-label">Rol</InputLabel>
+                  <Select
+                    labelId="create-role-label"
+                    label="Rol"
+                    value={createForm.createRoleSelection}
+                    onChange={(e) => handleCreateChange('createRoleSelection', e.target.value)}
+                    displayEmpty
+                    renderValue={(selected) => {
+                      if (!selected) return <em>Selecciona un rol</em>
+                      const r = rbacRoles.find((x) => x.id === selected)
+                      return r ? `${r.name}${r.isSystem ? ' (sistema)' : ''}` : selected
+                    }}
+                  >
+                    {rbacRoles.length === 0 ? (
+                      <MenuItem value="" disabled>
+                        No hay roles. Crea uno en Roles y permisos.
+                      </MenuItem>
+                    ) : (
+                      rbacRoles.map((r) => (
+                        <MenuItem key={r.id} value={r.id}>
+                          {r.name}
+                          {r.isSystem ? ' (sistema)' : ''}
+                        </MenuItem>
+                      ))
+                    )}
+                  </Select>
+                  {rbacRoles.length === 0 && (
+                    <FormHelperText>
+                      Crea al menos un rol en «Roles y permisos» para poder asignarlo aquí.
+                    </FormHelperText>
+                  )}
+                </FormControl>
+
+                <TextField
+                  label="Contraseña"
+                  type={showCreatePassword ? 'text' : 'password'}
+                  size="small"
+                  fullWidth
+                  required
+                  autoComplete="new-password"
+                  value={createForm.passwordHash}
+                  onChange={(e) => handleCreateChange('passwordHash', e.target.value)}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          aria-label={showCreatePassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                          onClick={() => setShowCreatePassword((v) => !v)}
+                          edge="end"
+                          size="small"
+                        >
+                          {showCreatePassword ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <TextField
+                  label="Confirmar contraseña"
+                  type={showCreatePasswordConfirm ? 'text' : 'password'}
+                  size="small"
+                  fullWidth
+                  required
+                  autoComplete="new-password"
+                  value={createForm.confirmPassword}
+                  onChange={(e) => handleCreateChange('confirmPassword', e.target.value)}
+                  error={confirmPwdMismatch}
+                  helperText={confirmPwdMismatch ? 'Las contraseñas no coinciden' : undefined}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          aria-label={showCreatePasswordConfirm ? 'Ocultar contraseña' : 'Ver contraseña'}
+                          onClick={() => setShowCreatePasswordConfirm((v) => !v)}
+                          edge="end"
+                          size="small"
+                        >
+                          {showCreatePasswordConfirm ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+
+                <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" sx={{ mb: 1 }}>
+                    Requisitos de la contraseña
+                  </Typography>
+                  <Stack spacing={0.75}>
+                    {createPwdPolicyRows.map(({ ok, label }) => (
+                      <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {ok ? (
+                          <CheckCircle sx={{ fontSize: 20, color: 'success.main', flexShrink: 0 }} />
+                        ) : (
+                          <RadioButtonUnchecked sx={{ fontSize: 20, color: 'action.disabled', flexShrink: 0 }} />
+                        )}
+                        <Typography variant="body2" sx={{ color: ok ? 'success.dark' : 'text.secondary' }}>
+                          {label}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Box>
+              </Box>
+
+              {createError && (
+                <Alert severity="error" onClose={() => setCreateError(null)}>
+                  {createError}
+                </Alert>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions>
@@ -520,6 +875,27 @@ const Usuarios = () => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={5000}
+          onClose={(_, reason) => {
+            if (reason === 'clickaway') return
+            setSnackbar((s) => ({ ...s, open: false }))
+          }}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+          sx={{ mt: { xs: 1, md: 9 } }}
+        >
+          <Alert
+            severity={snackbar.severity}
+            variant="filled"
+            onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+            sx={{ width: '100%', boxShadow: 3 }}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+        {permissionDeniedSnackbar}
       </Box>
     </Box>
   )

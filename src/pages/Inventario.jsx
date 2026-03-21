@@ -44,6 +44,9 @@ import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
 import { getBrands, getCategories, getCarModelsByBrand, createProduct, createProductWithImages, searchProducts, uploadProductImages, deleteProductImage, getProductById, updateProduct, deleteProduct } from '../api/products'
+import { useAuth } from '../contexts/AuthContext'
+import { ACTION } from '../config/actionPermissions'
+import { usePermissionDenied } from '../hooks/usePermissionDenied'
 
 const ESTADO_OPCIONES = [
   { value: 'NUEVO', label: 'Nuevo' },
@@ -107,6 +110,8 @@ function stockUnitsFromApi(p) {
 }
 
 const Inventario = () => {
+  const { canDoAction } = useAuth()
+  const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [openDialog, setOpenDialog] = useState(false)
   const [producto, setProducto] = useState(getInitialProducto())
@@ -212,6 +217,10 @@ const Inventario = () => {
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null)
 
   const handleOpenDialog = () => {
+    if (!canDoAction(ACTION.INVENTARIO_CREAR_PRODUCTO)) {
+      showDenied()
+      return
+    }
     setOpenDialog(true)
     setSubmitError('')
     setProducto(getInitialProducto())
@@ -307,6 +316,10 @@ const Inventario = () => {
   }
 
   const handleSubmit = async () => {
+    if (!canDoAction(ACTION.INVENTARIO_CREAR_PRODUCTO)) {
+      showDenied()
+      return
+    }
     setSubmitError('')
     const nombrePieza = (producto.nombrePieza || '').trim()
     const sku = `PROD-${Date.now()}`
@@ -443,6 +456,10 @@ const Inventario = () => {
   }
 
   const handleStartDetailEdit = () => {
+    if (!canDoAction(ACTION.INVENTARIO_EDITAR_PRODUCTO)) {
+      showDenied()
+      return
+    }
     setDetailExistingImages(detailServerImages.map((x) => ({ id: x.id, imageUrl: x.imageUrl })))
     setDetailNewImageFiles([])
     setDetailDeletedImageIds([])
@@ -502,6 +519,10 @@ const Inventario = () => {
   }
 
   const handleDetailSave = async () => {
+    if (!canDoAction(ACTION.INVENTARIO_EDITAR_PRODUCTO)) {
+      showDenied()
+      return
+    }
     if (!detailProductId) return
     setDetailError('')
     const nombrePieza = (detailProduct.nombrePieza || '').trim()
@@ -579,12 +600,20 @@ const Inventario = () => {
   }
 
   const openDeleteConfirm = () => {
+    if (!canDoAction(ACTION.INVENTARIO_ELIMINAR_PRODUCTO)) {
+      showDenied()
+      return
+    }
     if (detailProductId) setDeleteConfirmOpen(true)
   }
 
   const closeDeleteConfirm = () => setDeleteConfirmOpen(false)
 
   const handleConfirmDelete = async () => {
+    if (!canDoAction(ACTION.INVENTARIO_ELIMINAR_PRODUCTO)) {
+      showDenied()
+      return
+    }
     if (!detailProductId) return
     setDetailError('')
     setDetailLoading(true)
@@ -1627,6 +1656,7 @@ const Inventario = () => {
             {snackbar.message}
           </Alert>
         </Snackbar>
+        {permissionDeniedSnackbar}
       </Box>
     </Box>
   )

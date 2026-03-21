@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import {
   Box,
   List,
@@ -20,6 +21,7 @@ import {
   People as PeopleIcon,
   Group as GroupIcon,
   MenuBook as CatalogosIcon,
+  AdminPanelSettings as RolesIcon,
 } from '@mui/icons-material'
 
 const menuItems = [
@@ -34,11 +36,32 @@ const menuItems = [
   { text: 'Usuarios', icon: <GroupIcon />, path: '/usuarios' },
   { type: 'divider' },
   { text: 'Catálogos', icon: <CatalogosIcon />, path: '/catalogos' },
+  { text: 'Roles y permisos', icon: <RolesIcon />, path: '/roles' },
 ]
 
 const Sidebar = ({ isOpen = true, onClose }) => {
   const navigate = useNavigate()
   const location = useLocation()
+  const { canViewPath } = useAuth()
+
+  const visibleMenu = useMemo(() => {
+    const out = []
+    let pendingDivider = false
+    for (const item of menuItems) {
+      if (item.type === 'divider') {
+        pendingDivider = true
+        continue
+      }
+      if (item.path && canViewPath(item.path)) {
+        if (pendingDivider && out.length > 0) {
+          out.push({ type: 'divider' })
+        }
+        pendingDivider = false
+        out.push(item)
+      }
+    }
+    return out
+  }, [canViewPath])
 
   return (
     <>
@@ -91,11 +114,13 @@ const Sidebar = ({ isOpen = true, onClose }) => {
       </Box>
 
       <List sx={{ flex: 1, paddingTop: '8px' }}>
-        {menuItems.map((item, index) => {
+        {visibleMenu.map((item, index) => {
           if (item.type === 'divider') {
             return <Divider key={`sidebar-divider-${index}`} sx={{ borderColor: 'rgba(255, 255, 255, 0.2)', margin: '12px 16px' }} />
           }
-          const isActive = location.pathname === item.path
+          const isActive =
+            location.pathname === item.path ||
+            (item.path !== '/dashboard' && location.pathname.startsWith(`${item.path}/`))
           return (
             <ListItem key={item.text} disablePadding>
               <ListItemButton

@@ -1,5 +1,6 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
+import { pathRequiresModule, firstAccessiblePathFromRbac } from './config/adminModules'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Inventario from './pages/Inventario'
@@ -12,11 +13,17 @@ import Clientes from './pages/Clientes'
 import Usuarios from './pages/Usuarios'
 import Catalogos from './pages/Catalogos'
 import Perfil from './pages/Perfil'
+import Roles from './pages/Roles'
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, user, canViewPath } = useAuth()
+  const location = useLocation()
   if (loading) return null
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (pathRequiresModule(location.pathname) && !canViewPath(location.pathname)) {
+    const fallback = user?.rbac ? firstAccessiblePathFromRbac(user.rbac) : '/perfil'
+    return <Navigate to={fallback} replace />
+  }
   return children
 }
 
@@ -102,6 +109,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Catalogos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/roles"
+        element={
+          <ProtectedRoute>
+            <Roles />
           </ProtectedRoute>
         }
       />

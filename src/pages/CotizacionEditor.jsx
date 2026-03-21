@@ -53,6 +53,9 @@ import {
 } from '../api/quotations'
 import { searchProducts, getBrands, getCarModelsByBrand, getProductById } from '../api/products'
 import { getUsers } from '../api/user'
+import { useAuth } from '../contexts/AuthContext'
+import { ACTION } from '../config/actionPermissions'
+import { usePermissionDenied } from '../hooks/usePermissionDenied'
 
 function lineCalc(unitPrice, qty) {
   const q = Math.max(1, parseInt(qty, 10) || 1)
@@ -150,6 +153,8 @@ export default function CotizacionEditor() {
   const { id } = useParams()
   const isNew = !id || id === 'nueva'
   const navigate = useNavigate()
+  const { canDoAction } = useAuth()
+  const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -462,6 +467,16 @@ export default function CotizacionEditor() {
 
   /** Crea o actualiza la cotización con estado enviada y regenera el PDF en el servidor. */
   const generateQuotation = async () => {
+    const creating = isNew || !quotationId
+    if (creating) {
+      if (!canDoAction(ACTION.COTIZACIONES_CREAR)) {
+        showDenied()
+        return
+      }
+    } else if (!canDoAction(ACTION.COTIZACIONES_EDITAR)) {
+      showDenied()
+      return
+    }
     if (!clientName.trim()) {
       setError('Indique el nombre del cliente')
       return
@@ -526,6 +541,10 @@ export default function CotizacionEditor() {
   }
 
   const handleDelete = async () => {
+    if (!canDoAction(ACTION.COTIZACIONES_ELIMINAR)) {
+      showDenied()
+      return
+    }
     if (!quotationId) return
     const r = await deleteQuotation(quotationId)
     setDeleteOpen(false)
@@ -591,7 +610,18 @@ export default function CotizacionEditor() {
                 Descargar PDF
               </Button>
               {!isNew && (
-                <Button color="error" variant="outlined" size="small" onClick={() => setDeleteOpen(true)}>
+                <Button
+                  color="error"
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    if (!canDoAction(ACTION.COTIZACIONES_ELIMINAR)) {
+                      showDenied()
+                      return
+                    }
+                    setDeleteOpen(true)
+                  }}
+                >
                   Eliminar
                 </Button>
               )}
@@ -1276,6 +1306,7 @@ export default function CotizacionEditor() {
             <Button color="error" variant="contained" onClick={handleDelete}>Eliminar</Button>
           </DialogActions>
         </Dialog>
+        {permissionDeniedSnackbar}
       </Box>
     </Box>
   )
