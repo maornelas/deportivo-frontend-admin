@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Box,
   Typography,
@@ -15,6 +15,7 @@ import {
   InputAdornment,
   CircularProgress,
   Alert,
+  Snackbar,
   Button,
   MenuItem,
   Select,
@@ -52,6 +53,7 @@ function formatMoney(n, c = 'MXN') {
 
 export default function Cotizaciones() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { canDoAction } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -67,6 +69,7 @@ export default function Cotizaciones() {
   const [clientApplied, setClientApplied] = useState('')
   const [search, setSearch] = useState('')
   const [searchApplied, setSearchApplied] = useState('')
+  const [deletedToast, setDeletedToast] = useState(false)
 
   const fetchList = useCallback(async () => {
     setLoading(true)
@@ -90,6 +93,13 @@ export default function Cotizaciones() {
   useEffect(() => {
     fetchList()
   }, [fetchList])
+
+  useEffect(() => {
+    if (!location.state?.quotationDeleted) return
+    setDeletedToast(true)
+    navigate(`${location.pathname}${location.search || ''}`, { replace: true, state: {} })
+    void fetchList()
+  }, [location.state?.quotationDeleted, location.pathname, location.search, navigate, fetchList])
 
   const applyFilters = () => {
     setClientApplied(clientSearch)
@@ -212,6 +222,26 @@ export default function Cotizaciones() {
             </>
           )}
         </TableContainer>
+
+        <Snackbar
+          open={deletedToast}
+          autoHideDuration={5000}
+          onClose={(_, reason) => {
+            if (reason === 'clickaway') return
+            setDeletedToast(false)
+          }}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+          sx={{ mt: { xs: 1, md: 9 } }}
+        >
+          <Alert
+            severity="success"
+            variant="filled"
+            onClose={() => setDeletedToast(false)}
+            sx={{ boxShadow: 3 }}
+          >
+            La cotización se eliminó correctamente.
+          </Alert>
+        </Snackbar>
         {permissionDeniedSnackbar}
       </Box>
     </Box>

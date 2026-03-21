@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Box,
@@ -106,7 +106,38 @@ function partTypeLabel(v) {
 }
 
 function partConditionLabel(v) {
-  return v === 'SEMINUEVO' ? 'Seminuevo' : 'Nuevo'
+  if (v == null || v === '') return '—'
+  const u = String(v).toUpperCase()
+  if (u === 'SEMINUEVO' || u === 'USADO') return 'Seminuevo'
+  return 'Nuevo'
+}
+
+/** Marca en PDF (Original / No original / Seminueva) desde pieza manual */
+function lineToPdfPartConditionFromManual(l) {
+  if (!l.isManual || !l.partType) return undefined
+  if (l.partCondition === 'SEMINUEVO') return 'seminueva'
+  if (l.partType === 'GENÉRICO') return 'non_original'
+  return 'original'
+}
+
+/** Tipo de refacción según datos del producto en inventario */
+function mapProductPartsToPdfPartCondition(partType, partCondition) {
+  const c = String(partCondition ?? '').toUpperCase()
+  if (c === 'SEMINUEVO' || c === 'USADO') return 'seminueva'
+  const t = String(partType ?? '').toUpperCase()
+  if (t.includes('GEN') || t === 'GENERICO') return 'non_original'
+  return 'original'
+}
+
+function resolvePartConditionForApi(l) {
+  const s = l.savedPartCondition
+  if (s === 'original' || s === 'non_original' || s === 'seminueva') return s
+  const fromManual = lineToPdfPartConditionFromManual(l)
+  if (fromManual) return fromManual
+  if (l.productPartType != null || l.productPartCondition != null) {
+    return mapProductPartsToPdfPartCondition(l.productPartType, l.productPartCondition)
+  }
+  return undefined
 }
 
 /** Nombre que se envía al API / PDF (incluye tipo y estado en piezas manuales) */
@@ -153,7 +184,7 @@ export default function CotizacionEditor() {
   const { id } = useParams()
   const isNew = !id || id === 'nueva'
   const navigate = useNavigate()
-  const { canDoAction } = useAuth()
+  const { canDoAction, user } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -166,6 +197,10 @@ export default function CotizacionEditor() {
   const [clientPhone, setClientPhone] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [notes, setNotes] = useState('')
+  const [advisorName, setAdvisorName] = useState('')
+  const advisorSeededRef = useRef(false)
+  const [claimNumber, setClaimNumber] = useState('')
+  const [serialNumber, setSerialNumber] = useState('')
   const [status, setStatus] = useState('draft')
 
   /** Carrito: solo piezas agregadas desde búsqueda */
@@ -180,11 +215,7 @@ export default function CotizacionEditor() {
   const [productOptions, setProductOptions] = useState([])
   const [productLoading, setProductLoading] = useState(false)
 
-  /** Pieza manual (fuera de inventario) */
-  const [manualBrandId, setManualBrandId] = useState('')
-  const [manualModel, setManualModel] = useState('')
-  const [manualCarModels, setManualCarModels] = useState([])
-  const [manualYear, setManualYear] = useState('')
+  /** Pieza manual (fuera de inventario) — marca/modelo/año vienen de «Datos del Vehículo» */
   const [manualPieceName, setManualPieceName] = useState('')
   const [manualPartType, setManualPartType] = useState('ORIGINAL')
   const [manualPartCondition, setManualPartCondition] = useState('NUEVO')
@@ -193,12 +224,17 @@ export default function CotizacionEditor() {
   /** 0 = buscar inventario, 1 = pieza externa */
   const [pieceSectionTab, setPieceSectionTab] = useState(0)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [quotationPdfUrl, setQuotationPdfUrl] = useState(null)
   const [imageGallery, setImageGallery] = useState({ open: false, urls: [], index: 0, title: '' })
   const [busyModal, setBusyModal] = useState({ open: false, message: '' })
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
 
   const totals = useMemo(() => totalsFromLines(cartLines), [cartLines])
+  const vehicleBrandNameForApi = useMemo(
+    () => (brands.find((b) => b.id === filterBrandId)?.name || '').trim(),
+    [brands, filterBrandId],
+  )
   const totalPiezas = useMemo(
     () => cartLines.reduce((s, l) => s + Math.max(1, parseInt(l.quantity, 10) || 1), 0),
     [cartLines],
@@ -231,15 +267,13 @@ export default function CotizacionEditor() {
   }, [filterBrandId])
 
   useEffect(() => {
-    if (!manualBrandId) {
-      setManualCarModels([])
-      setManualModel('')
-      return
+    if (!isNew || advisorSeededRef.current) return
+    const n = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
+    if (n) {
+      setAdvisorName(n)
+      advisorSeededRef.current = true
     }
-    getCarModelsByBrand(manualBrandId).then((r) => {
-      if (r.success) setManualCarModels(r.data || [])
-    })
-  }, [manualBrandId])
+  }, [isNew, user])
 
   useEffect(() => {
     if (isNew) return
@@ -260,8 +294,23 @@ export default function CotizacionEditor() {
       setClientName(q.clientName || '')
       setClientPhone(q.clientPhone || '')
       setClientEmail(q.clientEmail || '')
+      setAdvisorName(q.advisorName || '')
       setNotes(q.notes || '')
+      setClaimNumber(q.claimNumber || '')
+      setSerialNumber(q.serialNumber || '')
       setStatus(q.status || 'draft')
+      const brandsRes = await getBrands({ activeOnly: true })
+      const brandList = brandsRes.success ? brandsRes.data || [] : []
+      if (brandsRes.success) setBrands(brandList)
+      let matchedBrandId = ''
+      if (q.vehicleBrand?.trim()) {
+        const vn = q.vehicleBrand.trim().toLowerCase()
+        const hit = brandList.find((b) => (b.name || '').trim().toLowerCase() === vn)
+        if (hit) matchedBrandId = hit.id
+      }
+      setFilterBrandId(matchedBrandId)
+      setFilterModel(q.vehicleModel || '')
+      setFilterYear(q.vehicleYear || '')
       setQuotationPdfUrl(q.pdfUrl || null)
       if (q.items?.length) {
         const baseLines = q.items.map((it) => {
@@ -278,28 +327,39 @@ export default function CotizacionEditor() {
             carModel: it.carModel || '',
             carYears: it.carYears || '',
             isManual,
+            savedPartCondition: it.partCondition || undefined,
             ...(parsed.partType ? { partType: parsed.partType, partCondition: parsed.partCondition } : {}),
           }
         })
         const productIds = [...new Set(baseLines.map((l) => l.productId).filter(Boolean))]
-        const stockByProductId = new Map()
+        const productMetaById = new Map()
         if (productIds.length) {
           await Promise.all(
             productIds.map(async (pid) => {
               const pr = await getProductById(pid)
               if (cancelled || !pr.success || !pr.data) return
-              const u = inventoryUnitsFromProduct(pr.data)
-              if (u != null) stockByProductId.set(pid, u)
+              const p = pr.data
+              const u = inventoryUnitsFromProduct(p)
+              productMetaById.set(pid, {
+                stockQuantity: u,
+                partType: p.partType ?? p.part_type,
+                partCondition: p.partCondition ?? p.part_condition,
+              })
             }),
           )
         }
         if (cancelled) return
         setCartLines(
-          baseLines.map((l) =>
-            l.productId && stockByProductId.has(l.productId)
-              ? { ...l, stockQuantity: stockByProductId.get(l.productId) }
-              : l,
-          ),
+          baseLines.map((l) => {
+            if (!l.productId || !productMetaById.has(l.productId)) return l
+            const m = productMetaById.get(l.productId)
+            return {
+              ...l,
+              ...(m.stockQuantity != null ? { stockQuantity: m.stockQuantity } : {}),
+              productPartType: m.partType,
+              productPartCondition: m.partCondition,
+            }
+          }),
         )
       } else {
         setCartLines([])
@@ -336,6 +396,7 @@ export default function CotizacionEditor() {
     carBrand: (l.carBrand || '').trim() || undefined,
     carModel: (l.carModel || '').trim() || undefined,
     carYears: (l.carYears || '').trim() || undefined,
+    partCondition: resolvePartConditionForApi(l),
   }))
 
   const capQtyToStock = (line, qty) => {
@@ -360,6 +421,8 @@ export default function CotizacionEditor() {
         const merged = {
           ...line,
           stockQuantity: inv != null ? inv : line.stockQuantity,
+          productPartType: line.productPartType ?? p.partType ?? p.part_type,
+          productPartCondition: line.productPartCondition ?? p.partCondition ?? p.part_condition,
           quantity: capQtyToStock(
             { ...line, stockQuantity: inv != null ? inv : line.stockQuantity },
             (parseInt(line.quantity, 10) || 1) + 1,
@@ -381,6 +444,8 @@ export default function CotizacionEditor() {
           carBrand: (p.brandName || '').trim(),
           carModel: (p.modelName || '').trim(),
           carYears: (p.carYearRange || '').trim(),
+          productPartType: p.partType ?? p.part_type,
+          productPartCondition: p.partCondition ?? p.part_condition,
           ...(inv != null ? { stockQuantity: inv } : {}),
         },
       ]
@@ -414,8 +479,8 @@ export default function CotizacionEditor() {
   const addManualPartToCart = () => {
     setManualFormError('')
     const name = (manualPieceName || '').trim()
-    if (!manualBrandId) {
-      setManualFormError('Selecciona la marca del vehículo.')
+    if (!filterBrandId) {
+      setManualFormError('Selecciona la marca en «Datos del Vehículo».')
       return
     }
     if (!name) {
@@ -427,9 +492,9 @@ export default function CotizacionEditor() {
       setManualFormError('Indica un precio unitario válido (mayor o igual a 0).')
       return
     }
-    const brandName = (brands.find((b) => b.id === manualBrandId)?.name || '').trim()
-    const modelName = (manualModel || '').trim()
-    const years = (manualYear || '').trim()
+    const brandName = (brands.find((b) => b.id === filterBrandId)?.name || '').trim()
+    const modelName = (filterModel || '').trim()
+    const years = (filterYear || '').trim()
     const sku = `EXT-${Date.now()}`
     setCartLines((prev) => [
       ...prev,
@@ -450,8 +515,6 @@ export default function CotizacionEditor() {
     ])
     setManualPieceName('')
     setManualUnitPrice('')
-    setManualYear('')
-    setManualModel('')
     setSnackbar({ open: true, message: 'Pieza externa agregada al carrito', severity: 'success' })
   }
 
@@ -491,7 +554,13 @@ export default function CotizacionEditor() {
       clientName: clientName.trim(),
       clientPhone: clientPhone.trim() || undefined,
       clientEmail: clientEmail.trim() || undefined,
+      advisorName: advisorName.trim() || undefined,
       notes: notes.trim() || undefined,
+      claimNumber: claimNumber.trim() || undefined,
+      serialNumber: serialNumber.trim() || undefined,
+      vehicleBrand: vehicleBrandNameForApi || undefined,
+      vehicleModel: filterModel.trim() || undefined,
+      vehicleYear: filterYear.trim() || undefined,
       status: 'sent',
       items: itemsPayload,
     }
@@ -546,13 +615,19 @@ export default function CotizacionEditor() {
       return
     }
     if (!quotationId) return
-    const r = await deleteQuotation(quotationId)
-    setDeleteOpen(false)
-    if (!r.success) {
-      setError(r.error || 'No se pudo eliminar')
-      return
+    setDeleteLoading(true)
+    setError('')
+    try {
+      const r = await deleteQuotation(quotationId)
+      if (!r.success) {
+        setError(r.error || 'No se pudo eliminar')
+        return
+      }
+      setDeleteOpen(false)
+      navigate('/cotizaciones', { replace: true, state: { quotationDeleted: true } })
+    } finally {
+      setDeleteLoading(false)
     }
-    navigate('/cotizaciones')
   }
 
   const canDownloadPdf = Boolean(quotationPdfUrl) && !busyModal.open
@@ -710,8 +785,48 @@ export default function CotizacionEditor() {
                     />
                     <TextField label="Teléfono" size="small" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} sx={{ width: 150 }} />
                     <TextField label="Email" size="small" type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} sx={{ minWidth: 200 }} />
+                    <TextField
+                      label="Nombre del asesor (PDF)"
+                      size="small"
+                      value={advisorName}
+                      onChange={(e) => setAdvisorName(e.target.value)}
+                      placeholder="Tabla Asesor en el PDF"
+                      sx={{ minWidth: 220, flex: '1 1 200px' }}
+                      inputProps={{ maxLength: 255 }}
+                    />
                   </Box>
-                  <TextField label="Notas" size="small" fullWidth multiline minRows={2} value={notes} onChange={(e) => setNotes(e.target.value)} sx={{ mt: 2 }} />
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, mb: 0.5 }}>
+                    Opcional para el PDF: notas, siniestro y no. de serie
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start' }}>
+                    <TextField
+                      label="Notas"
+                      size="small"
+                      multiline
+                      minRows={2}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      sx={{ flex: '1 1 240px', minWidth: 200 }}
+                    />
+                    <TextField
+                      label="Número de siniestro"
+                      size="small"
+                      value={claimNumber}
+                      onChange={(e) => setClaimNumber(e.target.value)}
+                      placeholder="Ej. B82263851"
+                      sx={{ flex: '1 1 200px', minWidth: 180 }}
+                      inputProps={{ maxLength: 120 }}
+                    />
+                    <TextField
+                      label="No. de serie"
+                      size="small"
+                      value={serialNumber}
+                      onChange={(e) => setSerialNumber(e.target.value)}
+                      placeholder="VIN o no. de serie"
+                      sx={{ flex: '1 1 200px', minWidth: 180 }}
+                      inputProps={{ maxLength: 120 }}
+                    />
+                  </Box>
                   {!isNew && (
                     <FormControl size="small" sx={{ mt: 2, minWidth: 200 }}>
                       <InputLabel>Estado</InputLabel>
@@ -723,6 +838,59 @@ export default function CotizacionEditor() {
                       </Select>
                     </FormControl>
                   )}
+                  </Box>
+                </Paper>
+
+                <Paper sx={{ mb: 2, overflow: 'hidden' }} elevation={2}>
+                  <Box sx={sectionHeaderSx}>
+                    <Typography variant="subtitle1" fontWeight={700} letterSpacing={0.3}>
+                      Datos del Vehículo
+                    </Typography>
+                  </Box>
+                  <Box sx={{ p: 2 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Una sola unidad para toda la cotización. Estos mismos datos se usan al buscar en inventario y al agregar piezas externas.
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end' }}>
+                      <FormControl size="small" sx={{ minWidth: 180 }}>
+                        <InputLabel>Marca</InputLabel>
+                        <Select
+                          label="Marca"
+                          value={filterBrandId}
+                          onChange={(e) => {
+                            setFilterBrandId(e.target.value)
+                            setFilterModel('')
+                          }}
+                        >
+                          <MenuItem value="">Todas / sin especificar</MenuItem>
+                          {brands.map((b) => (
+                            <MenuItem key={b.id} value={b.id}>
+                              {b.name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl size="small" sx={{ minWidth: 200 }} disabled={!filterBrandId}>
+                        <InputLabel>Modelo</InputLabel>
+                        <Select label="Modelo" value={filterModel} onChange={(e) => setFilterModel(e.target.value)}>
+                          <MenuItem value="">Todos / sin especificar</MenuItem>
+                          {carModels.map((m) => (
+                            <MenuItem key={m.id} value={m.model}>
+                              {m.model}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <TextField
+                        label="Año"
+                        size="small"
+                        placeholder="2024"
+                        value={filterYear}
+                        onChange={(e) => setFilterYear(e.target.value)}
+                        sx={{ width: 110 }}
+                        inputProps={{ maxLength: 32 }}
+                      />
+                    </Box>
                   </Box>
                 </Paper>
 
@@ -749,43 +917,14 @@ export default function CotizacionEditor() {
 
                   {pieceSectionTab === 0 && (
                     <Box sx={{ p: 2 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Filtra por marca, versión, año y nombre. Luego agrega cada pieza al carrito con el botón correspondiente.
-                      </Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 2, alignItems: 'flex-end' }}>
-                        <FormControl size="small" sx={{ minWidth: 160 }}>
-                          <InputLabel>Marca</InputLabel>
-                          <Select
-                            label="Marca"
-                            value={filterBrandId}
-                            onChange={(e) => {
-                              setFilterBrandId(e.target.value)
-                              setFilterModel('')
-                            }}
-                          >
-                            <MenuItem value="">Todas</MenuItem>
-                            {brands.map((b) => (
-                              <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <FormControl size="small" sx={{ minWidth: 180 }} disabled={!filterBrandId}>
-                          <InputLabel>Versión</InputLabel>
-                          <Select label="Versión" value={filterModel} onChange={(e) => setFilterModel(e.target.value)}>
-                            <MenuItem value="">Todas</MenuItem>
-                            {carModels.map((m) => (
-                              <MenuItem key={m.id} value={m.model}>{m.model}</MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <TextField label="Año" size="small" placeholder="2020" value={filterYear} onChange={(e) => setFilterYear(e.target.value)} sx={{ width: 100 }} />
                         <TextField
                           label="Nombre pieza"
                           size="small"
                           placeholder="faro, filtro…"
                           value={filterPieceName}
                           onChange={(e) => setFilterPieceName(e.target.value)}
-                          sx={{ minWidth: 200, flex: 1 }}
+                          sx={{ minWidth: 220, flex: 1 }}
                         />
                         <Button variant="contained" startIcon={<SearchIcon />} onClick={runProductSearch} disabled={productLoading} size="small">
                           Buscar
@@ -796,7 +935,9 @@ export default function CotizacionEditor() {
                         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={32} /></Box>
                       ) : productOptions.length === 0 ? (
                         <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                          {filterBrandId || filterPieceName || filterYear ? 'Sin resultados. Prueba otros filtros.' : 'Usa los filtros y pulsa Buscar.'}
+                          {filterPieceName?.trim() || filterBrandId || filterModel || filterYear
+                            ? 'Sin resultados. Prueba otro nombre o ajusta marca/modelo/año en Datos del Vehículo.'
+                            : 'Escribe el nombre de la pieza y pulsa Buscar (opcional: define el vehículo arriba para acotar).'}
                         </Typography>
                       ) : (
                         <List dense disablePadding sx={{ maxHeight: 420, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
@@ -854,7 +995,7 @@ export default function CotizacionEditor() {
                   {pieceSectionTab === 1 && (
                     <Box sx={{ p: 2 }}>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Piezas conseguidas fuera del catálogo. No se vinculan a un producto del inventario.
+                        Piezas fuera del catálogo. Marca, modelo y año del vehículo están en <strong>Datos del Vehículo</strong> (requerida la marca para agregar al carrito).
                       </Typography>
                       {manualFormError && (
                         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setManualFormError('')}>
@@ -862,43 +1003,6 @@ export default function CotizacionEditor() {
                         </Alert>
                       )}
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'flex-end' }}>
-                        <FormControl size="small" sx={{ minWidth: 160 }} required>
-                          <InputLabel>Marca</InputLabel>
-                          <Select
-                            label="Marca"
-                            value={manualBrandId}
-                            onChange={(e) => {
-                              setManualBrandId(e.target.value)
-                              setManualModel('')
-                            }}
-                          >
-                            <MenuItem value="">Seleccione</MenuItem>
-                            {brands.map((b) => (
-                              <MenuItem key={b.id} value={b.id}>
-                                {b.name}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <FormControl size="small" sx={{ minWidth: 180 }} disabled={!manualBrandId}>
-                          <InputLabel>Modelo</InputLabel>
-                          <Select label="Modelo" value={manualModel} onChange={(e) => setManualModel(e.target.value)}>
-                            <MenuItem value="">Opcional</MenuItem>
-                            {manualCarModels.map((m) => (
-                              <MenuItem key={m.id} value={m.model}>
-                                {m.model}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <TextField
-                          label="Año"
-                          size="small"
-                          placeholder="ej. 2018"
-                          value={manualYear}
-                          onChange={(e) => setManualYear(e.target.value)}
-                          sx={{ width: 100 }}
-                        />
                         <Box
                           sx={{
                             flex: '1 1 420px',
@@ -1090,6 +1194,18 @@ export default function CotizacionEditor() {
                                   sx={{ mt: 0.125, mb: 0.125, lineHeight: 1.25, fontSize: '0.7rem' }}
                                 >
                                   {partTypeLabel(l.partType)} · {partConditionLabel(l.partCondition)}
+                                </Typography>
+                              ) : null}
+                              {!l.isManual && (l.productPartType || l.productPartCondition) ? (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  display="block"
+                                  sx={{ mt: 0.125, mb: 0.125, lineHeight: 1.25, fontSize: '0.7rem' }}
+                                >
+                                  {l.productPartType ? partTypeLabel(l.productPartType) : '—'}
+                                  {' · '}
+                                  {l.productPartCondition ? partConditionLabel(l.productPartCondition) : '—'}
                                 </Typography>
                               ) : null}
                               {vehicleInfo ? (
@@ -1299,11 +1415,34 @@ export default function CotizacionEditor() {
           </Alert>
         </Snackbar>
 
-        <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>
+        <Dialog
+          open={deleteOpen}
+          onClose={() => {
+            if (!deleteLoading) setDeleteOpen(false)
+          }}
+          disableEscapeKeyDown={deleteLoading}
+          PaperProps={{ sx: { position: 'relative', minWidth: 320 } }}
+        >
           <DialogTitle>¿Eliminar cotización?</DialogTitle>
-          <DialogActions>
-            <Button onClick={() => setDeleteOpen(false)}>Cancelar</Button>
-            <Button color="error" variant="contained" onClick={handleDelete}>Eliminar</Button>
+          <DialogContent>
+            {deleteLoading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2, minHeight: 56 }}>
+                <CircularProgress size={32} />
+                <Typography color="text.secondary">Eliminando cotización…</Typography>
+              </Box>
+            ) : (
+              <Typography color="text.secondary" variant="body2">
+                Esta acción no se puede deshacer.
+              </Typography>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setDeleteOpen(false)} disabled={deleteLoading}>
+              Cancelar
+            </Button>
+            <Button color="error" variant="contained" onClick={handleDelete} disabled={deleteLoading}>
+              {deleteLoading ? 'Eliminando…' : 'Eliminar'}
+            </Button>
           </DialogActions>
         </Dialog>
         {permissionDeniedSnackbar}
