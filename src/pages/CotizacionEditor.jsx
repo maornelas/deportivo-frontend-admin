@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Box,
@@ -81,14 +81,6 @@ function formatMoney(n) {
 
 function cartLineKey(productId, sku) {
   return productId ? `id:${productId}` : `sku:${sku || ''}`
-}
-
-/** Texto Marca · Modelo · Año para líneas del carrito */
-function formatCartVehicleInfo(line) {
-  const parts = [line.carBrand, line.carModel, line.carYears]
-    .map((x) => (typeof x === 'string' ? x.trim() : x))
-    .filter(Boolean)
-  return parts.join(' · ')
 }
 
 const PIEZA_MANUAL_TIPO = [
@@ -197,8 +189,6 @@ export default function CotizacionEditor() {
   const [clientPhone, setClientPhone] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [notes, setNotes] = useState('')
-  const [advisorName, setAdvisorName] = useState('')
-  const advisorSeededRef = useRef(false)
   const [claimNumber, setClaimNumber] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
   const [status, setStatus] = useState('draft')
@@ -235,6 +225,11 @@ export default function CotizacionEditor() {
     () => (brands.find((b) => b.id === filterBrandId)?.name || '').trim(),
     [brands, filterBrandId],
   )
+  /** Vehículo único (Datos del Vehículo) — se muestra en el header del carrito */
+  const cartHeaderVehicle = useMemo(() => {
+    const parts = [vehicleBrandNameForApi, filterModel?.trim(), filterYear?.trim()].filter(Boolean)
+    return parts.length ? parts.join(' - ') : ''
+  }, [vehicleBrandNameForApi, filterModel, filterYear])
   const totalPiezas = useMemo(
     () => cartLines.reduce((s, l) => s + Math.max(1, parseInt(l.quantity, 10) || 1), 0),
     [cartLines],
@@ -267,15 +262,6 @@ export default function CotizacionEditor() {
   }, [filterBrandId])
 
   useEffect(() => {
-    if (!isNew || advisorSeededRef.current) return
-    const n = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
-    if (n) {
-      setAdvisorName(n)
-      advisorSeededRef.current = true
-    }
-  }, [isNew, user])
-
-  useEffect(() => {
     if (isNew) return
     let cancelled = false
     ;(async () => {
@@ -294,7 +280,6 @@ export default function CotizacionEditor() {
       setClientName(q.clientName || '')
       setClientPhone(q.clientPhone || '')
       setClientEmail(q.clientEmail || '')
-      setAdvisorName(q.advisorName || '')
       setNotes(q.notes || '')
       setClaimNumber(q.claimNumber || '')
       setSerialNumber(q.serialNumber || '')
@@ -554,7 +539,8 @@ export default function CotizacionEditor() {
       clientName: clientName.trim(),
       clientPhone: clientPhone.trim() || undefined,
       clientEmail: clientEmail.trim() || undefined,
-      advisorName: advisorName.trim() || undefined,
+      pdfAdvisorName:
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.email?.trim() || undefined,
       notes: notes.trim() || undefined,
       claimNumber: claimNumber.trim() || undefined,
       serialNumber: serialNumber.trim() || undefined,
@@ -785,15 +771,6 @@ export default function CotizacionEditor() {
                     />
                     <TextField label="Teléfono" size="small" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} sx={{ width: 150 }} />
                     <TextField label="Email" size="small" type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} sx={{ minWidth: 200 }} />
-                    <TextField
-                      label="Nombre del asesor (PDF)"
-                      size="small"
-                      value={advisorName}
-                      onChange={(e) => setAdvisorName(e.target.value)}
-                      placeholder="Tabla Asesor en el PDF"
-                      sx={{ minWidth: 220, flex: '1 1 200px' }}
-                      inputProps={{ maxLength: 255 }}
-                    />
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, mb: 0.5 }}>
                     Opcional para el PDF: notas, siniestro y no. de serie
@@ -1120,6 +1097,21 @@ export default function CotizacionEditor() {
                   <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', ml: { xs: 0, sm: 1 } }}>
                     ({cartLines.length} {cartLines.length === 1 ? 'línea' : 'líneas'} · {totalPiezas} piezas)
                   </Typography>
+                  {cartHeaderVehicle ? (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'rgba(255,255,255,0.95)',
+                        fontWeight: 600,
+                        ml: { xs: 0, sm: 'auto' },
+                        width: { xs: '100%', sm: 'auto' },
+                        textAlign: { xs: 'left', sm: 'right' },
+                        pl: { xs: 0, sm: 1 },
+                      }}
+                    >
+                      {cartHeaderVehicle}
+                    </Typography>
+                  ) : null}
                 </Box>
                 <Box
                   sx={{
@@ -1140,7 +1132,6 @@ export default function CotizacionEditor() {
                       <List dense disablePadding>
                         {cartLines.map((l) => {
                           const { sub, qty } = lineCalc(l.unitPrice, l.quantity)
-                          const vehicleInfo = formatCartVehicleInfo(l)
                           const invN = !l.isManual ? normalizeInventoryUnits(l.stockQuantity) : null
                           const maxPieces = invN != null ? Math.max(1, invN) : undefined
                           return (
@@ -1208,23 +1199,13 @@ export default function CotizacionEditor() {
                                   {l.productPartCondition ? partConditionLabel(l.productPartCondition) : '—'}
                                 </Typography>
                               ) : null}
-                              {vehicleInfo ? (
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                  display="block"
-                                  sx={{ mt: 0.125, mb: 0.125, lineHeight: 1.25, fontSize: '0.7rem' }}
-                                >
-                                  {vehicleInfo}
-                                </Typography>
-                              ) : null}
                               <Typography
                                 variant="caption"
                                 color="text.secondary"
                                 display="block"
                                 sx={{ mb: 0.35, lineHeight: 1.25, fontSize: '0.7rem' }}
                               >
-                                SKU {l.sku || '—'} · {formatMoney(l.unitPrice)} c/u
+                                SKU {l.sku || '—'}
                               </Typography>
                               {invN != null ? (
                                 <Typography
@@ -1393,13 +1374,16 @@ export default function CotizacionEditor() {
               p: { xs: 4, sm: 6 },
               minWidth: { xs: '85vw', sm: 400 },
               maxWidth: 480,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
               textAlign: 'center',
               borderRadius: 2,
             },
           }}
         >
-          <CircularProgress size={72} thickness={4} sx={{ mb: 3, color: '#7B2CBF' }} />
-          <Typography variant="h6" sx={{ fontWeight: 600, color: '#424242', px: 1 }}>
+          <CircularProgress size={72} thickness={4} sx={{ mb: 3, color: '#7B2CBF', display: 'block' }} />
+          <Typography variant="h6" sx={{ fontWeight: 600, color: '#424242', px: 1, width: '100%' }}>
             {busyModal.message}
           </Typography>
         </Dialog>
