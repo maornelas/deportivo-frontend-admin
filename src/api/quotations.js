@@ -1,11 +1,6 @@
-const getBaseUrl = () => {
-  const url = import.meta.env.VITE_API_URL
-  if (url) return url.replace(/\/$/, '')
-  return 'http://localhost:3000/api/v1'
-}
+import { apiFetch, getBaseUrl } from './http'
 
 export async function listQuotations(params = {}) {
-  const baseUrl = getBaseUrl()
   const sp = new URLSearchParams()
   if (params.page) sp.set('page', String(params.page))
   if (params.limit) sp.set('limit', String(params.limit))
@@ -14,7 +9,7 @@ export async function listQuotations(params = {}) {
   if (params.endDate) sp.set('endDate', params.endDate)
   if (params.clientSearch?.trim()) sp.set('clientSearch', params.clientSearch.trim())
   if (params.search?.trim()) sp.set('search', params.search.trim())
-  const res = await fetch(`${baseUrl}/quotations?${sp}`)
+  const res = await apiFetch(`/quotations?${sp}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { success: false, error: body.message || body.error || `Error ${res.status}` }
   if (!body.success || !body.data) return { success: false, error: body.message || 'Error al cargar' }
@@ -22,8 +17,7 @@ export async function listQuotations(params = {}) {
 }
 
 export async function getQuotation(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/quotations/${id}`)
+  const res = await apiFetch(`/quotations/${id}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { success: false, error: body.message || body.error || `Error ${res.status}` }
   if (!body.success || !body.data) return { success: false, error: 'No encontrada' }
@@ -31,8 +25,7 @@ export async function getQuotation(id) {
 }
 
 export async function createQuotation(payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/quotations`, {
+  const res = await apiFetch('/quotations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -44,8 +37,7 @@ export async function createQuotation(payload) {
 }
 
 export async function updateQuotation(id, payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/quotations/${id}`, {
+  const res = await apiFetch(`/quotations/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -57,8 +49,7 @@ export async function updateQuotation(id, payload) {
 }
 
 export async function deleteQuotation(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/quotations/${id}`, { method: 'DELETE' })
+  const res = await apiFetch(`/quotations/${id}`, { method: 'DELETE' })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { success: false, error: body.message || body.error || `Error ${res.status}` }
   return { success: true }
@@ -69,8 +60,7 @@ export function getQuotationPdfUrl(id) {
 }
 
 export async function sendQuotationEmailMock(id, email) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/quotations/${id}/send-email`, {
+  const res = await apiFetch(`/quotations/${id}/send-email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(email ? { email } : {}),

@@ -1,5 +1,6 @@
 import {
   Box,
+  Badge,
   IconButton,
   Avatar,
   Typography,
@@ -13,17 +14,38 @@ import {
   Person as PersonIcon,
   DarkMode as DarkModeIcon,
   LightMode as LightModeIcon,
+  Notifications as NotificationsIcon,
 } from '@mui/icons-material'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getUnreadNotificationCount } from '../api/notifications'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
+import { SIDEBAR_WIDTH } from '../config/layout'
 
 const Header = ({ onMenuClick }) => {
-  const { user, logout } = useAuth()
+  const { user, logout, canViewPath } = useAuth()
   const { mode, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const [anchorEl, setAnchorEl] = useState(null)
+  const [unread, setUnread] = useState(0)
+
+  const refreshUnread = useCallback(async () => {
+    if (!user?.id || !canViewPath('/notificaciones')) return
+    const r = await getUnreadNotificationCount()
+    if (r.success) setUnread(r.count || 0)
+  }, [user?.id, canViewPath])
+
+  useEffect(() => {
+    refreshUnread()
+    const t = setInterval(refreshUnread, 45000)
+    const onFocus = () => refreshUnread()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [refreshUnread])
 
   const displayName =
     user?.firstName || user?.lastName
@@ -60,7 +82,7 @@ const Header = ({ onMenuClick }) => {
         padding: '0 32px',
         position: 'fixed',
         top: 0,
-        left: { xs: 0, md: '260px' },
+        left: { xs: 0, md: SIDEBAR_WIDTH },
         right: 0,
         zIndex: 1000,
         borderBottom: '1px solid',
@@ -78,6 +100,18 @@ const Header = ({ onMenuClick }) => {
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        {canViewPath('/notificaciones') ? (
+          <IconButton
+            onClick={() => navigate('/notificaciones')}
+            aria-label="Notificaciones"
+            color="inherit"
+            size="small"
+          >
+            <Badge badgeContent={unread} color="error" max={99} invisible={unread === 0}>
+              <NotificationsIcon />
+            </Badge>
+          </IconButton>
+        ) : null}
         <IconButton onClick={toggleTheme} aria-label={mode === 'dark' ? 'Modo claro' : 'Modo oscuro'} color="inherit" size="small">
           {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
         </IconButton>

@@ -1,0 +1,16 @@
+import { apiFetch } from './http'
+
+/**
+ * @param {{ page?: number, limit?: number, userId?: string }} params
+ */
+export async function listActivityLogs(params = {}) {
+  const sp = new URLSearchParams()
+  if (params.page != null) sp.set('page', String(params.page))
+  if (params.limit != null) sp.set('limit', String(params.limit))
+  if (params.userId?.trim()) sp.set('userId', params.userId.trim())
+  const res = await apiFetch(`/activity-logs?${sp.toString()}`)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  if (!body.success || !body.data) return { success: false, error: body.message || 'Error al cargar historial' }
+  return { success: true, data: body.data }
+}

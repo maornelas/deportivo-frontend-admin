@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { SIDEBAR_WIDTH } from '../config/layout'
+
 import {
   Box,
   Typography,
@@ -26,13 +28,7 @@ import {
   Grid,
   Tooltip,
 } from '@mui/material'
-import {
-  Search as SearchIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Download as DownloadIcon,
-} from '@mui/icons-material'
+import { Search as SearchIcon, Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
@@ -42,8 +38,6 @@ import {
   createExpense,
   updateExpense,
   deleteExpense,
-  getExpenseReportSummary,
-  downloadExpenseReportCsv,
 } from '../api/expenses'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
@@ -109,12 +103,6 @@ const Gastos = () => {
 
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
-
-  const [reportStart, setReportStart] = useState('')
-  const [reportEnd, setReportEnd] = useState('')
-  const [reportLoading, setReportLoading] = useState(false)
-  const [reportError, setReportError] = useState('')
-  const [reportData, setReportData] = useState(null)
 
   const computedTotal = useMemo(() => sumLineItems(items), [items])
 
@@ -295,41 +283,19 @@ const Gastos = () => {
     fetchList()
   }
 
-  const loadReport = async () => {
-    if (!reportStart || !reportEnd) {
-      setReportError('Selecciona fecha inicio y fin.')
-      return
-    }
-    setReportLoading(true)
-    setReportError('')
-    const r = await getExpenseReportSummary({ startDate: reportStart, endDate: reportEnd })
-    setReportLoading(false)
-    if (!r.success) {
-      setReportError(r.error || 'Error en reporte')
-      setReportData(null)
-      return
-    }
-    setReportData(r.data)
-  }
-
-  const handleDownloadCsv = async (format) => {
-    if (!reportStart || !reportEnd) {
-      setReportError('Selecciona fechas para exportar.')
-      return
-    }
-    const r = await downloadExpenseReportCsv({ startDate: reportStart, endDate: reportEnd }, format)
-    if (!r.success) setReportError(r.error || 'Error al descargar')
-  }
-
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ minHeight: '100vh' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
-          marginLeft: { xs: 0, md: '260px' },
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
           marginTop: { xs: 0, md: '70px' },
-          width: { xs: '100%', md: 'calc(100% - 260px)' },
-          padding: { xs: '16px', sm: '24px', md: '32px' },
+          pt: { xs: '16px', sm: '24px', md: '32px' },
+          pr: { xs: '16px', sm: '24px', md: '32px' },
+          pb: { xs: '16px', sm: '24px', md: '32px' },
+          pl: { xs: '16px', sm: '24px', md: `${SIDEBAR_WIDTH + 32}px` },
           backgroundColor: '#fafafa',
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}
@@ -504,79 +470,6 @@ const Gastos = () => {
             rowsPerPageOptions={[LIMIT]}
             labelRowsPerPage="Por página"
           />
-        </Paper>
-
-        <Paper elevation={2} sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Reportes por período
-          </Typography>
-          <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
-            <Grid item xs={6} sm={3}>
-              <TextField
-                fullWidth
-                size="small"
-                type="date"
-                label="Inicio"
-                InputLabelProps={{ shrink: true }}
-                value={reportStart}
-                onChange={(e) => setReportStart(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={6} sm={3}>
-              <TextField
-                fullWidth
-                size="small"
-                type="date"
-                label="Fin"
-                InputLabelProps={{ shrink: true }}
-                value={reportEnd}
-                onChange={(e) => setReportEnd(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Button variant="contained" onClick={loadReport} disabled={reportLoading} sx={{ mr: 1 }}>
-                {reportLoading ? <CircularProgress size={22} /> : 'Ver resumen'}
-              </Button>
-              <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => handleDownloadCsv('summary_csv')} sx={{ mr: 1 }}>
-                CSV por categoría
-              </Button>
-              <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => handleDownloadCsv('csv')}>
-                CSV detalle líneas
-              </Button>
-            </Grid>
-          </Grid>
-          {reportError && (
-            <Alert severity="warning" sx={{ mb: 1 }}>
-              {reportError}
-            </Alert>
-          )}
-          {reportData && (
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                Total del período: {formatCurrency(reportData.grandTotal)}
-              </Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Categoría</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                      <TableCell align="right"># Gastos</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {(reportData.byCategory || []).map((r) => (
-                      <TableRow key={r.category}>
-                        <TableCell>{r.category}</TableCell>
-                        <TableCell align="right">{formatCurrency(r.totalAmount)}</TableCell>
-                        <TableCell align="right">{r.expenseCount}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          )}
         </Paper>
 
         <Dialog open={formOpen} onClose={() => !formLoading && setFormOpen(false)} maxWidth="md" fullWidth>

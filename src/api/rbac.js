@@ -1,12 +1,7 @@
-const getBaseUrl = () => {
-  const url = import.meta.env.VITE_API_URL
-  if (url) return url.replace(/\/$/, '')
-  return 'http://localhost:3000/api/v1'
-}
+import { apiFetch } from './http'
 
 export async function getPermissionsCatalog() {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/rbac/permissions`)
+  const res = await apiFetch('/rbac/permissions')
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { success: false, error: body.message || `Error ${res.status}` }
   if (!body.success) return { success: false, error: body.message || 'Error' }
@@ -14,8 +9,7 @@ export async function getPermissionsCatalog() {
 }
 
 export async function getRoles() {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/rbac/roles`)
+  const res = await apiFetch('/rbac/roles')
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { success: false, error: body.message || `Error ${res.status}` }
   if (!body.success) return { success: false, error: body.message || 'Error' }
@@ -23,8 +17,7 @@ export async function getRoles() {
 }
 
 export async function getRoleById(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/rbac/roles/${encodeURIComponent(id)}`)
+  const res = await apiFetch(`/rbac/roles/${encodeURIComponent(id)}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { success: false, error: body.message || `Error ${res.status}` }
   if (!body.success) return { success: false, error: body.message || 'Error' }
@@ -32,8 +25,7 @@ export async function getRoleById(id) {
 }
 
 export async function createRole({ name, description, slug }) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/rbac/roles`, {
+  const res = await apiFetch('/rbac/roles', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, description, slug }),
@@ -45,8 +37,7 @@ export async function createRole({ name, description, slug }) {
 }
 
 export async function updateRole(id, { name, description }) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/rbac/roles/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/rbac/roles/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, description }),
@@ -58,8 +49,7 @@ export async function updateRole(id, { name, description }) {
 }
 
 export async function deleteRole(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/rbac/roles/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/rbac/roles/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
   const body = await res.json().catch(() => ({}))
@@ -69,8 +59,7 @@ export async function deleteRole(id) {
 }
 
 export async function setRolePermissions(id, grants) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/rbac/roles/${encodeURIComponent(id)}/permissions`, {
+  const res = await apiFetch(`/rbac/roles/${encodeURIComponent(id)}/permissions`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ grants }),

@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { SIDEBAR_WIDTH } from '../config/layout'
+
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Box,
@@ -628,17 +630,18 @@ export default function CotizacionEditor() {
   }
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ minHeight: '100vh' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
-          marginLeft: { xs: 0, md: '260px' },
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
           marginTop: { xs: 0, md: '70px' },
-          width: { xs: '100%', md: 'calc(100% - 260px)' },
-          px: { xs: 2, sm: 3, md: 4 },
+          pl: { xs: 2, sm: 3, md: `${SIDEBAR_WIDTH + 32}px` },
+          pr: { xs: 2, sm: 3, md: 4 },
           pt: { xs: 2, sm: 3, md: 4 },
           pb: { xs: 2, sm: 3, md: 4 },
-          boxSizing: 'border-box',
           minHeight: { xs: '100vh', lg: 'calc(100vh - 70px)' },
           /* lg+: sin scroll de página; scroll solo en columna izquierda y lista del carrito */
           height: { xs: 'auto', lg: 'calc(100vh - 70px)' },

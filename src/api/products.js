@@ -1,8 +1,4 @@
-const getBaseUrl = () => {
-  const url = import.meta.env.VITE_API_URL
-  if (url) return url.replace(/\/$/, '')
-  return 'http://localhost:3000/api/v1'
-}
+import { apiFetch } from './http'
 
 /**
  * Obtiene la lista de marcas (todas o solo activas).
@@ -10,9 +6,8 @@ const getBaseUrl = () => {
  * @returns {Promise<{ success: boolean, data?: object[], error?: string }>}
  */
 export async function getBrands(opts = {}) {
-  const baseUrl = getBaseUrl()
   const activeOnly = opts.activeOnly !== false
-  const res = await fetch(`${baseUrl}/brand/get?activeOnly=${activeOnly}`)
+  const res = await apiFetch(`/brand/get?activeOnly=${activeOnly}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -29,9 +24,8 @@ export async function getBrands(opts = {}) {
  * @returns {Promise<{ success: boolean, data?: { id: string, model: string }[], error?: string }>}
  */
 export async function getCarModelsByBrand(brandId) {
-  const baseUrl = getBaseUrl()
   if (!brandId?.trim()) return { success: true, data: [] }
-  const res = await fetch(`${baseUrl}/car-models?brandId=${encodeURIComponent(brandId.trim())}`)
+  const res = await apiFetch(`/car-models?brandId=${encodeURIComponent(brandId.trim())}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -48,9 +42,8 @@ export async function getCarModelsByBrand(brandId) {
  * @returns {Promise<{ success: boolean, data?: object[], error?: string }>}
  */
 export async function getCategories(opts = {}) {
-  const baseUrl = getBaseUrl()
   const activeOnly = opts.activeOnly !== false
-  const res = await fetch(`${baseUrl}/categories/get?activeOnly=${activeOnly}`)
+  const res = await apiFetch(`/categories/get?activeOnly=${activeOnly}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -67,8 +60,7 @@ export async function getCategories(opts = {}) {
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function createProduct(payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/products`, {
+  const res = await apiFetch('/products', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -89,14 +81,13 @@ export async function createProduct(payload) {
  * @param {File[]} files - Hasta 10 archivos
  */
 export async function createProductWithImages(payload, files) {
-  const baseUrl = getBaseUrl()
   const formData = new FormData()
   formData.append('product', JSON.stringify(payload))
   const list = Array.isArray(files) ? files.slice(0, 10) : []
   for (let i = 0; i < list.length; i++) {
     formData.append('images', list[i])
   }
-  const res = await fetch(`${baseUrl}/products/with-images`, {
+  const res = await apiFetch('/products/with-images', {
     method: 'POST',
     body: formData,
   })
@@ -122,7 +113,6 @@ export async function createProductWithImages(payload, files) {
  * @returns {Promise<{ success: boolean, data?: { products, total, page, limit, totalPages }, error?: string }>}
  */
 export async function searchProducts(params = {}) {
-  const baseUrl = getBaseUrl()
   const searchParams = new URLSearchParams()
   if (params.categoryId) searchParams.set('categoryId', params.categoryId)
   if (params.brandId) searchParams.set('brandId', params.brandId)
@@ -135,8 +125,7 @@ export async function searchProducts(params = {}) {
   if (params.sortBy) searchParams.set('sortBy', params.sortBy)
   if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder)
 
-  const url = `${baseUrl}/products?${searchParams.toString()}`
-  const res = await fetch(url)
+  const res = await apiFetch(`/products?${searchParams.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -153,8 +142,7 @@ export async function searchProducts(params = {}) {
  * @returns {Promise<{ success: boolean, data?: object & { images?: { id, imageUrl, isPrimary, sortOrder }[] }, error?: string }>}
  */
 export async function getProductById(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/products/get/${id}`)
+  const res = await apiFetch(`/products/get/${id}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -172,8 +160,7 @@ export async function getProductById(id) {
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function updateProduct(id, payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/products/update/${id}`, {
+  const res = await apiFetch(`/products/update/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -194,8 +181,7 @@ export async function updateProduct(id, payload) {
  * @returns {Promise<{ success: boolean, error?: string }>}
  */
 export async function deleteProduct(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/products/delete/${id}`, { method: 'DELETE' })
+  const res = await apiFetch(`/products/delete/${id}`, { method: 'DELETE' })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -213,12 +199,11 @@ export async function deleteProduct(id) {
  * @returns {Promise<{ success: boolean, error?: string }>}
  */
 export async function uploadProductImages(productId, files) {
-  const baseUrl = getBaseUrl()
   const formData = new FormData()
   for (let i = 0; i < files.length; i++) {
     formData.append('images', files[i])
   }
-  const res = await fetch(`${baseUrl}/products/${productId}/images`, {
+  const res = await apiFetch(`/products/${productId}/images`, {
     method: 'POST',
     body: formData,
   })
@@ -236,8 +221,7 @@ export async function uploadProductImages(productId, files) {
  * Elimina una imagen del producto (product_images).
  */
 export async function deleteProductImage(productId, imageId) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/products/${productId}/images/${imageId}`, {
+  const res = await apiFetch(`/products/${productId}/images/${imageId}`, {
     method: 'DELETE',
   })
   const body = await res.json().catch(() => ({}))

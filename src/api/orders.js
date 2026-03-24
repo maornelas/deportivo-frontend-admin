@@ -1,8 +1,4 @@
-const getBaseUrl = () => {
-  const url = import.meta.env.VITE_API_URL
-  if (url) return url.replace(/\/$/, '')
-  return 'http://localhost:3000/api/v1'
-}
+import { apiFetch, getBaseUrl } from './http'
 
 /**
  * Buscar órdenes con filtros y paginación.
@@ -10,7 +6,6 @@ const getBaseUrl = () => {
  * @returns {Promise<{ success: boolean, data?: { orders, total, page, limit, totalPages }, error?: string }>}
  */
 export async function searchOrders(params = {}) {
-  const baseUrl = getBaseUrl()
   const searchParams = new URLSearchParams()
   if (params.userId) searchParams.set('userId', params.userId)
   if (params.page != null) searchParams.set('page', String(params.page))
@@ -27,8 +22,7 @@ export async function searchOrders(params = {}) {
   if (params.sortBy) searchParams.set('sortBy', params.sortBy)
   if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder)
 
-  const url = `${baseUrl}/order?${searchParams.toString()}`
-  const res = await fetch(url)
+  const res = await apiFetch(`/order?${searchParams.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -45,12 +39,10 @@ export async function searchOrders(params = {}) {
  * @returns {Promise<{ success: boolean, data?: { totalOrders, soldOrders }, error?: string }>}
  */
 export async function getOrderStats(params) {
-  const baseUrl = getBaseUrl()
   const searchParams = new URLSearchParams()
   if (params.startDate) searchParams.set('startDate', params.startDate)
   if (params.endDate) searchParams.set('endDate', params.endDate)
-  const url = `${baseUrl}/order/stats?${searchParams.toString()}`
-  const res = await fetch(url)
+  const res = await apiFetch(`/order/stats?${searchParams.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -67,12 +59,10 @@ export async function getOrderStats(params) {
  * @returns {Promise<{ success: boolean, data?: Array<{ date: string, totalAmount: number, orderCount: number }>, error?: string }>}
  */
 export async function getOrderDailySales(params) {
-  const baseUrl = getBaseUrl()
   const searchParams = new URLSearchParams()
   if (params.startDate) searchParams.set('startDate', params.startDate)
   if (params.endDate) searchParams.set('endDate', params.endDate)
-  const url = `${baseUrl}/order/stats-daily?${searchParams.toString()}`
-  const res = await fetch(url)
+  const res = await apiFetch(`/order/stats-daily?${searchParams.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -89,12 +79,10 @@ export async function getOrderDailySales(params) {
  * @returns {Promise<{ success: boolean, data?: Array<{ date, totalAmount, orderCount }>, error?: string }>}
  */
 export async function getOrderDailyCancelled(params) {
-  const baseUrl = getBaseUrl()
   const searchParams = new URLSearchParams()
   if (params.startDate) searchParams.set('startDate', params.startDate)
   if (params.endDate) searchParams.set('endDate', params.endDate)
-  const url = `${baseUrl}/order/stats-daily-cancelled?${searchParams.toString()}`
-  const res = await fetch(url)
+  const res = await apiFetch(`/order/stats-daily-cancelled?${searchParams.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -111,12 +99,10 @@ export async function getOrderDailyCancelled(params) {
  * @returns {Promise<{ success: boolean, data?: OrderCountByStatus, error?: string }>}
  */
 export async function getOrderStatsByStatus(params) {
-  const baseUrl = getBaseUrl()
   const searchParams = new URLSearchParams()
   if (params.startDate) searchParams.set('startDate', params.startDate)
   if (params.endDate) searchParams.set('endDate', params.endDate)
-  const url = `${baseUrl}/order/stats-by-status?${searchParams.toString()}`
-  const res = await fetch(url)
+  const res = await apiFetch(`/order/stats-by-status?${searchParams.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -133,12 +119,10 @@ export async function getOrderStatsByStatus(params) {
  * @returns {Promise<{ success: boolean, data?: OrderAmountByStatus, error?: string }>}
  */
 export async function getOrderStatsAmountByStatus(params) {
-  const baseUrl = getBaseUrl()
   const searchParams = new URLSearchParams()
   if (params.startDate) searchParams.set('startDate', params.startDate)
   if (params.endDate) searchParams.set('endDate', params.endDate)
-  const url = `${baseUrl}/order/stats-amount-by-status?${searchParams.toString()}`
-  const res = await fetch(url)
+  const res = await apiFetch(`/order/stats-amount-by-status?${searchParams.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -156,8 +140,7 @@ export async function getOrderStatsAmountByStatus(params) {
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function updateOrder(id, payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/order/update/${id}`, {
+  const res = await apiFetch(`/order/update/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -178,8 +161,7 @@ export async function updateOrder(id, payload) {
  * @param {'online'|'advisor'} salesChannel
  */
 export async function updateOrderSalesChannel(id, salesChannel) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/order/sales-channel/${id}`, {
+  const res = await apiFetch(`/order/sales-channel/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ salesChannel }),
@@ -200,8 +182,7 @@ export async function updateOrderSalesChannel(id, salesChannel) {
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function getOrderById(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/order/get/${id}`)
+  const res = await apiFetch(`/order/get/${id}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -210,4 +191,17 @@ export async function getOrderById(id) {
     return { success: false, error: body.message || 'Orden no encontrada' }
   }
   return { success: true, data: body.data }
+}
+
+/**
+ * URL del endpoint que redirige a la nota de venta (PDF en S3).
+ * Abrir en nueva pestaña. Opcional: nombre del vendedor en el encabezado del PDF.
+ */
+export function getOrderSaleNotePdfUrl(orderId, { seller, refresh = true } = {}) {
+  const baseUrl = getBaseUrl()
+  const params = new URLSearchParams()
+  if (seller && String(seller).trim()) params.set('seller', String(seller).trim())
+  if (refresh) params.set('refresh', '1')
+  const q = params.toString() ? `?${params.toString()}` : ''
+  return `${baseUrl}/order/pdf/${orderId}${q}`
 }

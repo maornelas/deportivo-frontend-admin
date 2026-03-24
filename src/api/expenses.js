@@ -1,8 +1,4 @@
-const getBaseUrl = () => {
-  const url = import.meta.env.VITE_API_URL
-  if (url) return url.replace(/\/$/, '')
-  return 'http://localhost:3000/api/v1'
-}
+import { apiFetch } from './http'
 
 /**
  * @param {object} params
@@ -18,7 +14,6 @@ const getBaseUrl = () => {
  * @param {'ASC'|'DESC'} [params.sortOrder]
  */
 export async function listExpenses(params = {}) {
-  const baseUrl = getBaseUrl()
   const sp = new URLSearchParams()
   if (params.page != null) sp.set('page', String(params.page))
   if (params.limit != null) sp.set('limit', String(params.limit))
@@ -31,7 +26,7 @@ export async function listExpenses(params = {}) {
   if (params.sortBy) sp.set('sortBy', params.sortBy)
   if (params.sortOrder) sp.set('sortOrder', params.sortOrder)
 
-  const res = await fetch(`${baseUrl}/expenses?${sp.toString()}`)
+  const res = await apiFetch(`/expenses?${sp.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -43,8 +38,7 @@ export async function listExpenses(params = {}) {
 }
 
 export async function getExpenseById(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/expenses/${encodeURIComponent(id)}`)
+  const res = await apiFetch(`/expenses/${encodeURIComponent(id)}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -59,8 +53,7 @@ export async function getExpenseById(id) {
  * @param {object} payload - { expenseDate, totalAmount, category, description?, items: { concept, amount, quantity }[] }
  */
 export async function createExpense(payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/expenses`, {
+  const res = await apiFetch('/expenses', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -76,8 +69,7 @@ export async function createExpense(payload) {
 }
 
 export async function updateExpense(id, payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/expenses/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/expenses/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -93,8 +85,7 @@ export async function updateExpense(id, payload) {
 }
 
 export async function deleteExpense(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/expenses/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  const res = await apiFetch(`/expenses/${encodeURIComponent(id)}`, { method: 'DELETE' })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -110,12 +101,11 @@ export async function deleteExpense(id) {
  * @param {{ startDate: string, endDate: string }} range
  */
 export async function getExpenseReportSummary(range) {
-  const baseUrl = getBaseUrl()
   const sp = new URLSearchParams({
     startDate: range.startDate,
     endDate: range.endDate,
   })
-  const res = await fetch(`${baseUrl}/expenses/report?${sp.toString()}`)
+  const res = await apiFetch(`/expenses/report?${sp.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -131,13 +121,12 @@ export async function getExpenseReportSummary(range) {
  * @param {'csv'|'summary_csv'} format
  */
 export async function downloadExpenseReportCsv(range, format) {
-  const baseUrl = getBaseUrl()
   const sp = new URLSearchParams({
     startDate: range.startDate,
     endDate: range.endDate,
     format,
   })
-  const res = await fetch(`${baseUrl}/expenses/report?${sp.toString()}`)
+  const res = await apiFetch(`/expenses/report?${sp.toString()}`)
   if (!res.ok) {
     const t = await res.text()
     return { success: false, error: t || `Error ${res.status}` }

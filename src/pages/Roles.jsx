@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { SIDEBAR_WIDTH } from '../config/layout'
+
 import {
   Box,
   Typography,
@@ -29,6 +31,9 @@ import {
   ShoppingCart as ComprasIcon,
   MoneyOff as GastosIcon,
   RequestQuote as CotizacionIcon,
+  History as HistoryIcon,
+  Notifications as NotificationsIcon,
+  Assessment as ReporteriaIcon,
   People as PeopleIcon,
   Group as GroupIcon,
   MenuBook as CatalogosIcon,
@@ -48,6 +53,9 @@ const SECTIONS = [
   { key: 'ventas', label: 'Ventas', moduleCode: 'module.ventas', Icon: VentasIcon },
   { key: 'compras', label: 'Compras', moduleCode: 'module.compras', Icon: ComprasIcon },
   { key: 'gastos', label: 'Gastos', moduleCode: 'module.gastos', Icon: GastosIcon },
+  { key: 'historial', label: 'Historial', moduleCode: 'module.historial', Icon: HistoryIcon },
+  { key: 'notificaciones', label: 'Notificaciones', moduleCode: 'module.notificaciones', Icon: NotificationsIcon },
+  { key: 'reporteria', label: 'Reportería', moduleCode: 'module.reporteria', Icon: ReporteriaIcon },
   { key: 'clientes', label: 'Clientes', moduleCode: 'module.clientes', Icon: PeopleIcon },
   { key: 'usuarios', label: 'Usuarios', moduleCode: 'module.usuarios', Icon: GroupIcon },
   { key: 'catalogos', label: 'Catálogos', moduleCode: 'module.catalogos', Icon: CatalogosIcon },
@@ -200,14 +208,18 @@ export default function Roles() {
   }
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ minHeight: '100vh' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
-          marginLeft: { xs: 0, md: '260px' },
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
           marginTop: { xs: 0, md: '70px' },
-          width: { xs: '100%', md: 'calc(100% - 260px)' },
-          padding: { xs: 2, sm: 3, md: 4 },
+          pt: { xs: 2, sm: 3, md: 4 },
+          pr: { xs: 2, sm: 3, md: 4 },
+          pb: { xs: 2, sm: 3, md: 4 },
+          pl: { xs: 2, sm: 3, md: `${SIDEBAR_WIDTH + 32}px` },
           backgroundColor: '#fafafa',
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { SIDEBAR_WIDTH } from '../config/layout'
 import {
   Box,
   List,
@@ -18,6 +19,9 @@ import {
   ShoppingCart as ComprasIcon,
   MoneyOff as GastosIcon,
   RequestQuote as CotizacionIcon,
+  History as HistoryIcon,
+  Notifications as NotificationsIcon,
+  Assessment as ReporteriaIcon,
   People as PeopleIcon,
   Group as GroupIcon,
   MenuBook as CatalogosIcon,
@@ -31,6 +35,9 @@ const menuItems = [
   { text: 'Ventas', icon: <VentasIcon />, path: '/ventas' },
   { text: 'Compras', icon: <ComprasIcon />, path: '/compras' },
   { text: 'Gastos', icon: <GastosIcon />, path: '/gastos' },
+  { text: 'Historial', icon: <HistoryIcon />, path: '/historial' },
+  { text: 'Notificaciones', icon: <NotificationsIcon />, path: '/notificaciones' },
+  { text: 'Reportería', icon: <ReporteriaIcon />, path: '/reporteria' },
   { type: 'divider' },
   { text: 'Clientes', icon: <PeopleIcon />, path: '/clientes' },
   { text: 'Usuarios', icon: <GroupIcon />, path: '/usuarios' },
@@ -65,7 +72,6 @@ const Sidebar = ({ isOpen = true, onClose }) => {
 
   return (
     <>
-      {/* Overlay para móvil */}
       {isOpen && (
         <Box
           onClick={onClose}
@@ -83,71 +89,94 @@ const Sidebar = ({ isOpen = true, onClose }) => {
       )}
       <Box
         sx={{
-          width: '260px',
+          width: SIDEBAR_WIDTH,
           height: '100vh',
           backgroundColor: '#424242',
           display: 'flex',
           flexDirection: 'column',
           position: 'fixed',
-          left: { xs: isOpen ? 0 : '-260px', md: 0 },
+          left: { xs: isOpen ? 0 : `-${SIDEBAR_WIDTH}px`, md: 0 },
           top: 0,
           zIndex: 1300,
           transition: 'left 0.3s ease',
+          boxSizing: 'border-box',
         }}
       >
-      <Box
-        sx={{
-          padding: '24px 20px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-        }}
-      >
+        <Box
+          sx={{
+            px: 1.25,
+            py: 1.5,
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
+        >
         <Typography
-          variant="h5"
+          variant="subtitle1"
           sx={{
             color: 'white',
-            fontWeight: 'bold',
-            letterSpacing: '1px',
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            fontSize: '0.8rem',
+            lineHeight: 1.25,
+            textAlign: 'center',
           }}
         >
           EL DEPORTIVO
         </Typography>
       </Box>
 
-      <List sx={{ flex: 1, paddingTop: '8px' }}>
+      <List dense sx={{ flex: 1, py: 0.5, px: 0 }}>
         {visibleMenu.map((item, index) => {
           if (item.type === 'divider') {
-            return <Divider key={`sidebar-divider-${index}`} sx={{ borderColor: 'rgba(255, 255, 255, 0.2)', margin: '12px 16px' }} />
+            return (
+              <Divider
+                key={`sidebar-divider-${index}`}
+                sx={{ borderColor: 'rgba(255, 255, 255, 0.15)', my: 0.75, mx: 1 }}
+              />
+            )
           }
           const isActive =
             location.pathname === item.path ||
             (item.path !== '/dashboard' && location.pathname.startsWith(`${item.path}/`))
           return (
-            <ListItem key={item.text} disablePadding>
+            <ListItem key={item.text} disablePadding sx={{ px: 0.5 }}>
               <ListItemButton
                 onClick={() => {
                   navigate(item.path)
                   if (onClose) onClose()
                 }}
                 sx={{
-                  padding: '12px 20px',
-                  margin: '4px 12px',
-                  borderRadius: '8px',
+                  py: 0.65,
+                  px: 1,
+                  mx: 0,
+                  borderRadius: 1,
+                  minHeight: 40,
                   backgroundColor: isActive ? '#7b1fa2' : 'transparent',
                   '&:hover': {
-                    backgroundColor: isActive ? '#7b1fa2' : 'rgba(255, 255, 255, 0.1)',
+                    backgroundColor: isActive ? '#7b1fa2' : 'rgba(255, 255, 255, 0.08)',
                   },
                 }}
               >
-                <ListItemIcon sx={{ color: isActive ? 'white' : 'rgba(255, 255, 255, 0.7)', minWidth: '40px' }}>
+                <ListItemIcon
+                  sx={{
+                    color: isActive ? 'white' : 'rgba(255, 255, 255, 0.72)',
+                    minWidth: 32,
+                    '& svg': { fontSize: 20 },
+                  }}
+                >
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
                   primary={item.text}
-                  sx={{
-                    '& .MuiListItemText-primary': {
-                      color: isActive ? 'white' : 'rgba(255, 255, 255, 0.7)',
-                      fontSize: '14px',
+                  primaryTypographyProps={{
+                    noWrap: true,
+                    title: item.text,
+                    sx: {
+                      color: isActive ? 'white' : 'rgba(255, 255, 255, 0.72)',
+                      fontSize: '0.8125rem',
                       fontWeight: isActive ? 600 : 400,
+                      lineHeight: 1.2,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
                     },
                   }}
                 />

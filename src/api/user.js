@@ -1,8 +1,4 @@
-const getBaseUrl = () => {
-  const url = import.meta.env.VITE_API_URL
-  if (url) return url.replace(/\/$/, '')
-  return 'http://localhost:3000/api/v1'
-}
+import { apiFetch } from './http'
 
 /**
  * Obtiene la lista de usuarios.
@@ -10,14 +6,12 @@ const getBaseUrl = () => {
  * @returns {Promise<{ success: boolean, data?: object[], error?: string }>}
  */
 export async function getUsers(params = {}) {
-  const baseUrl = getBaseUrl()
   const searchParams = new URLSearchParams()
   if (params.activeOnly !== false) searchParams.set('activeOnly', 'true')
   else searchParams.set('activeOnly', 'false')
   if (params.role) searchParams.set('role', params.role)
   if (params.excludeRole) searchParams.set('excludeRole', params.excludeRole)
-  const url = `${baseUrl}/user/get?${searchParams.toString()}`
-  const res = await fetch(url)
+  const res = await apiFetch(`/user/get?${searchParams.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -34,8 +28,7 @@ export async function getUsers(params = {}) {
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function createUser(payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/user/create`, {
+  const res = await apiFetch('/user/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -56,10 +49,9 @@ export async function createUser(payload) {
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function getUserById(id) {
-  const baseUrl = getBaseUrl()
   let res
   try {
-    res = await fetch(`${baseUrl}/user/get/${id}`)
+    res = await apiFetch(`/user/get/${id}`)
   } catch (err) {
     const msg = err?.message || 'Error de red'
     return {
@@ -84,8 +76,7 @@ export async function getUserById(id) {
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function updateUser(id, payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/user/update/${id}`, {
+  const res = await apiFetch(`/user/update/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -106,8 +97,7 @@ export async function updateUser(id, payload) {
  * @returns {Promise<{ success: boolean, error?: string }>}
  */
 export async function deleteUser(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/user/delete/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/user/delete/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
   const body = await res.json().catch(() => ({}))

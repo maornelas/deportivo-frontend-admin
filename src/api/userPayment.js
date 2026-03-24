@@ -1,8 +1,4 @@
-const getBaseUrl = () => {
-  const url = import.meta.env.VITE_API_URL
-  if (url) return url.replace(/\/$/, '')
-  return 'http://localhost:3000/api/v1'
-}
+import { apiFetch } from './http'
 
 /**
  * Obtiene los métodos de pago de un usuario por su ID.
@@ -11,8 +7,7 @@ const getBaseUrl = () => {
  */
 export async function getPaymentsByUser(userId) {
   if (!userId) return { success: false, error: 'userId requerido' }
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/user-payment/get-by-user/${userId}`)
+  const res = await apiFetch(`/user-payment/get-by-user/${userId}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
@@ -30,8 +25,7 @@ export async function getPaymentsByUser(userId) {
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
 export async function createPayment(payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/user-payment/create`, {
+  const res = await apiFetch('/user-payment/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

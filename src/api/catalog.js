@@ -1,16 +1,10 @@
+import { apiFetch } from './http'
 import { getBrands, getCarModelsByBrand } from './products'
-
-const getBaseUrl = () => {
-  const url = import.meta.env.VITE_API_URL
-  if (url) return url.replace(/\/$/, '')
-  return 'http://localhost:3000/api/v1'
-}
 
 export { getBrands, getCarModelsByBrand }
 
 export async function createBrand(payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/brand/create`, {
+  const res = await apiFetch('/brand/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -22,8 +16,7 @@ export async function createBrand(payload) {
 }
 
 export async function updateBrand(id, payload) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/brand/update/${id}`, {
+  const res = await apiFetch(`/brand/update/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -35,8 +28,7 @@ export async function updateBrand(id, payload) {
 }
 
 export async function deleteBrand(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/brand/delete/${id}`, { method: 'DELETE' })
+  const res = await apiFetch(`/brand/delete/${id}`, { method: 'DELETE' })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { success: false, error: body.message || body.error || `Error ${res.status}` }
   if (!body.success) return { success: false, error: body.message || 'Error al eliminar marca' }
@@ -44,8 +36,7 @@ export async function deleteBrand(id) {
 }
 
 export async function createCarModel(brandId, model) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/car-models/create`, {
+  const res = await apiFetch('/car-models/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ brandId, model }),
@@ -57,8 +48,7 @@ export async function createCarModel(brandId, model) {
 }
 
 export async function updateCarModel(id, model) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/car-models/update/${id}`, {
+  const res = await apiFetch(`/car-models/update/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model }),
@@ -70,8 +60,7 @@ export async function updateCarModel(id, model) {
 }
 
 export async function deleteCarModel(id) {
-  const baseUrl = getBaseUrl()
-  const res = await fetch(`${baseUrl}/car-models/delete/${id}`, { method: 'DELETE' })
+  const res = await apiFetch(`/car-models/delete/${id}`, { method: 'DELETE' })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { success: false, error: body.message || body.error || `Error ${res.status}` }
   if (!body.success) return { success: false, error: body.message || 'Error al eliminar modelo' }

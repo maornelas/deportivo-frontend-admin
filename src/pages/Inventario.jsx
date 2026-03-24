@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { SIDEBAR_WIDTH } from '../config/layout'
+
 import {
   Box,
   Typography,
@@ -636,14 +638,18 @@ const Inventario = () => {
   const canAddMoreImages = imageFiles.length < MAX_FOTOS
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ minHeight: '100vh' }}>
       <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
       <Box
         sx={{
-          marginLeft: { xs: 0, md: '260px' },
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
           marginTop: { xs: 0, md: '70px' },
-          width: { xs: '100%', md: 'calc(100% - 260px)' },
-          padding: { xs: '16px', sm: '24px', md: '32px' },
+          pt: { xs: '16px', sm: '24px', md: '32px' },
+          pr: { xs: '16px', sm: '24px', md: '32px' },
+          pb: { xs: '16px', sm: '24px', md: '32px' },
+          pl: { xs: '16px', sm: '24px', md: `${SIDEBAR_WIDTH + 32}px` },
           backgroundColor: '#fafafa',
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}

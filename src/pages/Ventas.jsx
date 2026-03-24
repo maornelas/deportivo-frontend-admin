@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import { SIDEBAR_WIDTH } from '../config/layout'
+
 import {
   Box,
   Typography,
@@ -27,11 +29,11 @@ import {
   ToggleButtonGroup,
   Chip,
 } from '@mui/material'
-import { Search as SearchIcon } from '@mui/icons-material'
+import { Search as SearchIcon, PictureAsPdf as PdfIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
-import { searchOrders, getOrderById, updateOrder, updateOrderSalesChannel } from '../api/orders'
+import { searchOrders, getOrderById, updateOrder, updateOrderSalesChannel, getOrderSaleNotePdfUrl } from '../api/orders'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
@@ -96,7 +98,7 @@ function getSalesChannelSubtitle(salesChannel) {
 }
 
 const Ventas = () => {
-  const { canDoAction } = useAuth()
+  const { canDoAction, user } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -182,7 +184,12 @@ const Ventas = () => {
       setDetailError(result.error || 'Error al actualizar estado')
       return
     }
-    setDetailOrder((prev) => (prev ? { ...prev, status: newStatus } : null))
+    const refreshed = await getOrderById(detailOrder.id)
+    if (refreshed.success && refreshed.data) {
+      setDetailOrder(refreshed.data)
+    } else {
+      setDetailOrder((prev) => (prev ? { ...prev, status: newStatus } : null))
+    }
   }
 
   const handleChannelFilterChange = (_, value) => {
@@ -211,9 +218,9 @@ const Ventas = () => {
   }
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ minHeight: '100vh' }}>
       <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
-      <Box sx={{ marginLeft: { xs: 0, md: '260px' }, marginTop: { xs: 0, md: '70px' }, width: { xs: '100%', md: 'calc(100% - 260px)' }, padding: { xs: '16px', sm: '24px', md: '32px' }, minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' } }}>
+      <Box sx={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', marginTop: { xs: 0, md: '70px' }, pt: { xs: '16px', sm: '24px', md: '32px' }, pr: { xs: '16px', sm: '24px', md: '32px' }, pb: { xs: '16px', sm: '24px', md: '32px' }, pl: { xs: '16px', sm: '24px', md: `${SIDEBAR_WIDTH + 32}px` }, minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' } }}>
         <Header onMenuClick={handleMenuClick} />
         <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', marginBottom: 2, fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
           Ventas
@@ -308,6 +315,22 @@ const Ventas = () => {
             {detailOrder && !detailLoading && (
               <Box sx={{ pt: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<PdfIcon />}
+                    disabled={!(detailOrder.items && detailOrder.items.length)}
+                    onClick={() => {
+                      const seller = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
+                      window.open(
+                        getOrderSaleNotePdfUrl(detailOrder.id, { seller: seller || undefined }),
+                        '_blank',
+                        'noopener,noreferrer',
+                      )
+                    }}
+                  >
+                    Nota de venta (PDF)
+                  </Button>
                   <FormControl size="small" sx={{ minWidth: 200 }}>
                     <InputLabel>Canal de venta</InputLabel>
                     <Select

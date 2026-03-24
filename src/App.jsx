@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard'
 import Inventario from './pages/Inventario'
 import Ventas from './pages/Ventas'
 import Compras from './pages/Compras'
+import CompraDetalle from './pages/CompraDetalle'
+import CompraRegistrar from './pages/CompraRegistrar'
 import Gastos from './pages/Gastos'
 import Cotizaciones from './pages/Cotizaciones'
 import CotizacionEditor from './pages/CotizacionEditor'
@@ -14,6 +16,9 @@ import Usuarios from './pages/Usuarios'
 import Catalogos from './pages/Catalogos'
 import Perfil from './pages/Perfil'
 import Roles from './pages/Roles'
+import Historial from './pages/Historial'
+import Notificaciones from './pages/Notificaciones'
+import Reporteria from './pages/Reporteria'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading, user, canViewPath } = useAuth()
@@ -56,6 +61,22 @@ function App() {
         }
       />
       <Route
+        path="/compras/nueva"
+        element={
+          <ProtectedRoute>
+            <CompraRegistrar />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/compras/:id"
+        element={
+          <ProtectedRoute>
+            <CompraDetalle />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/compras"
         element={
           <ProtectedRoute>
@@ -68,6 +89,30 @@ function App() {
         element={
           <ProtectedRoute>
             <Gastos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/historial"
+        element={
+          <ProtectedRoute>
+            <Historial />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notificaciones"
+        element={
+          <ProtectedRoute>
+            <Notificaciones />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reporteria"
+        element={
+          <ProtectedRoute>
+            <Reporteria />
           </ProtectedRoute>
         }
       />
