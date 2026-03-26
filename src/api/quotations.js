@@ -36,6 +36,17 @@ export async function createQuotation(payload) {
   return { success: true, data: body.data }
 }
 
+/**
+ * Marca la cotización como vendida y crea una orden en Ventas con canal Asesor (mismas piezas y montos).
+ */
+export async function convertQuotationToAdvisorSale(id) {
+  const res = await apiFetch(`/quotations/${id}/convert-to-advisor-sale`, { method: 'POST' })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  if (!body.success || !body.data) return { success: false, error: body.message || 'Error al registrar la venta' }
+  return { success: true, data: body.data }
+}
+
 export async function updateQuotation(id, payload) {
   const res = await apiFetch(`/quotations/${id}`, {
     method: 'PUT',

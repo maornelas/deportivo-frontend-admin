@@ -1,7 +1,7 @@
 import { apiFetch } from './http'
 
 /**
- * @param {{ kind: 'monthly' | 'by_channel' | 'by_advisor', startDate: string, endDate: string }} params
+ * @param {{ kind: 'monthly' | 'by_channel' | 'by_advisor' | 'ventas_detalle', startDate: string, endDate: string }} params
  */
 export async function getSalesReport(params) {
   const sp = new URLSearchParams({

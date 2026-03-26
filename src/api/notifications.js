@@ -4,10 +4,20 @@ export async function listNotifications(params = {}) {
   const sp = new URLSearchParams()
   if (params.page != null) sp.set('page', String(params.page))
   if (params.limit != null) sp.set('limit', String(params.limit))
+  if (params.search?.trim()) sp.set('search', params.search.trim())
+  if (params.unreadOnly) sp.set('unreadOnly', '1')
   const res = await apiFetch(`/notifications?${sp.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { success: false, error: body.message || body.error || `Error ${res.status}` }
   if (!body.success || !body.data) return { success: false, error: body.message || 'Error al cargar notificaciones' }
+  return { success: true, data: body.data }
+}
+
+export async function getNotification(id) {
+  const res = await apiFetch(`/notifications/${encodeURIComponent(id)}`)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  if (!body.success || !body.data) return { success: false, error: body.message || 'No encontrada' }
   return { success: true, data: body.data }
 }
 

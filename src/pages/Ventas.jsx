@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { SIDEBAR_WIDTH } from '../config/layout'
 
 import {
@@ -98,6 +99,7 @@ function getSalesChannelSubtitle(salesChannel) {
 }
 
 const Ventas = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
   const { canDoAction, user } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -138,6 +140,17 @@ const Ventas = () => {
   }, [page, limit, startDate, endDate, searchApplied, channelFilter])
 
   useEffect(() => { fetchOrders() }, [fetchOrders])
+
+  useEffect(() => {
+    const canal = (searchParams.get('canal') || '').toLowerCase()
+    if (canal === 'asesor' || canal === 'advisor') {
+      setChannelFilter('advisor')
+      setPage(0)
+      const next = new URLSearchParams(searchParams)
+      next.delete('canal')
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   const handlePageChange = (_, newPage) => setPage(newPage)
   const handleApplyFilters = () => { setSearchApplied(search); setPage(0) }

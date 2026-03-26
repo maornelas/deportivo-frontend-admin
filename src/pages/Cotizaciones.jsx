@@ -38,6 +38,7 @@ const STATUS = {
   sent: { label: 'Enviada', color: 'info' },
   approved: { label: 'Aprobada', color: 'success' },
   rejected: { label: 'Rechazada', color: 'error' },
+  sold: { label: 'Vendida', color: 'warning' },
 }
 
 const LIMIT = 15
@@ -158,6 +159,7 @@ export default function Cotizaciones() {
                 <MenuItem value="sent">Enviada</MenuItem>
                 <MenuItem value="approved">Aprobada</MenuItem>
                 <MenuItem value="rejected">Rechazada</MenuItem>
+                <MenuItem value="sold">Vendida</MenuItem>
               </Select>
             </FormControl>
             <TextField size="small" label="Cliente" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="Nombre" sx={{ width: 180 }} />

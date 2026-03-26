@@ -44,6 +44,7 @@ import {
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
   ImageNotSupported as NoImageIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
@@ -52,29 +53,39 @@ import {
   createQuotation,
   updateQuotation,
   deleteQuotation,
+  convertQuotationToAdvisorSale,
 } from '../api/quotations'
 import { searchProducts, getBrands, getCarModelsByBrand, getProductById } from '../api/products'
 import { getUsers } from '../api/user'
+import { getAddressesByUser } from '../api/userAddress'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
 
-function lineCalc(unitPrice, qty) {
-  const q = Math.max(1, parseInt(qty, 10) || 1)
-  const sub = Math.round(Number(unitPrice) * q * 100) / 100
-  return { sub, qty: q }
+/** Subtotal de línea con descuento % por pieza (alineado con backend `QuotationItem.fromInput`) */
+function lineDetail(unitPrice, qty, discountPercent) {
+  const q = Math.max(1, parseInt(String(qty), 10) || 1)
+  const gross = Math.round(Number(unitPrice) * q * 100) / 100
+  const pct = Math.min(100, Math.max(0, Number(discountPercent) || 0))
+  const disc = Math.round((gross * pct) / 100 * 100) / 100
+  const sub = Math.round((gross - disc) * 100) / 100
+  return { gross, disc, sub, qty: q }
 }
 
 function totalsFromLines(lines) {
   let gross = 0
+  let disc = 0
   lines.forEach((l) => {
-    const { sub } = lineCalc(l.unitPrice, l.quantity)
-    gross += sub
+    const d = lineDetail(l.unitPrice, l.quantity, l.discountPercent ?? 0)
+    gross += d.gross
+    disc += d.disc
   })
   gross = Math.round(gross * 100) / 100
-  const tax = Math.round(gross * 0.16 * 100) / 100
-  const total = Math.round((gross + tax) * 100) / 100
-  return { gross, disc: 0, net: gross, tax, total }
+  disc = Math.round(disc * 100) / 100
+  const net = Math.round((gross - disc) * 100) / 100
+  const tax = Math.round(net * 0.16 * 100) / 100
+  const total = Math.round((net + tax) * 100) / 100
+  return { gross, disc, net, tax, total }
 }
 
 function formatMoney(n) {
@@ -121,6 +132,21 @@ function mapProductPartsToPdfPartCondition(partType, partCondition) {
   const t = String(partType ?? '').toUpperCase()
   if (t.includes('GEN') || t === 'GENERICO') return 'non_original'
   return 'original'
+}
+
+/** Una línea para cotización / PDF (máx. 500) desde dirección del usuario */
+function formatUserAddressLine(a) {
+  if (!a || typeof a !== 'object') return ''
+  const l1 = String(a.addressLine1 ?? a.address_line1 ?? '').trim()
+  const l2 = String(a.addressLine2 ?? a.address_line2 ?? '').trim()
+  const city = String(a.city ?? '').trim()
+  const state = String(a.state ?? '').trim()
+  const cp = String(a.postalCode ?? a.postal_code ?? '').trim()
+  const country = String(a.country ?? '').trim()
+  const cityState = [city, state].filter(Boolean).join(', ')
+  const parts = [l1, l2, cityState, cp, country].filter(Boolean)
+  const s = parts.join(', ')
+  return s.length > 500 ? `${s.slice(0, 496)}…` : s
 }
 
 function resolvePartConditionForApi(l) {
@@ -190,6 +216,7 @@ export default function CotizacionEditor() {
   const [clientName, setClientName] = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const [clientEmail, setClientEmail] = useState('')
+  const [clientAddress, setClientAddress] = useState('')
   const [notes, setNotes] = useState('')
   const [claimNumber, setClaimNumber] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
@@ -217,6 +244,8 @@ export default function CotizacionEditor() {
   const [pieceSectionTab, setPieceSectionTab] = useState(0)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [markSoldConfirmOpen, setMarkSoldConfirmOpen] = useState(false)
+  const [markSoldLoading, setMarkSoldLoading] = useState(false)
   const [quotationPdfUrl, setQuotationPdfUrl] = useState(null)
   const [imageGallery, setImageGallery] = useState({ open: false, urls: [], index: 0, title: '' })
   const [busyModal, setBusyModal] = useState({ open: false, message: '' })
@@ -282,6 +311,7 @@ export default function CotizacionEditor() {
       setClientName(q.clientName || '')
       setClientPhone(q.clientPhone || '')
       setClientEmail(q.clientEmail || '')
+      setClientAddress(q.clientAddress || '')
       setNotes(q.notes || '')
       setClaimNumber(q.claimNumber || '')
       setSerialNumber(q.serialNumber || '')
@@ -310,6 +340,7 @@ export default function CotizacionEditor() {
             sku: it.sku,
             unitPrice: Number(it.unitPrice),
             quantity: it.quantity,
+            discountPercent: it.discountType === 'percent' ? Math.min(100, Math.max(0, Number(it.discountValue) || 0)) : 0,
             carBrand: it.carBrand || '',
             carModel: it.carModel || '',
             carYears: it.carYears || '',
@@ -379,7 +410,7 @@ export default function CotizacionEditor() {
     unitPrice: Number(l.unitPrice) || 0,
     quantity: Math.max(1, parseInt(l.quantity, 10) || 1),
     discountType: 'percent',
-    discountValue: 0,
+    discountValue: Math.min(100, Math.max(0, Number(l.discountPercent) || 0)),
     carBrand: (l.carBrand || '').trim() || undefined,
     carModel: (l.carModel || '').trim() || undefined,
     carYears: (l.carYears || '').trim() || undefined,
@@ -428,6 +459,7 @@ export default function CotizacionEditor() {
           sku,
           unitPrice: Number(p.price) || 0,
           quantity: inv != null ? capQtyToStock({ isManual: false, stockQuantity: inv }, 1) : 1,
+          discountPercent: 0,
           carBrand: (p.brandName || '').trim(),
           carModel: (p.modelName || '').trim(),
           carYears: (p.carYearRange || '').trim(),
@@ -447,6 +479,12 @@ export default function CotizacionEditor() {
         return { ...l, quantity: capQtyToStock(l, q) }
       }),
     )
+  }
+
+  const setLineDiscountPercent = (key, raw) => {
+    const n = parseFloat(String(raw).replace(',', '.'))
+    const pct = Number.isNaN(n) ? 0 : Math.min(100, Math.max(0, n))
+    setCartLines((prev) => prev.map((l) => (l.key === key ? { ...l, discountPercent: pct } : l)))
   }
 
   const bumpQuantity = (key, delta) => {
@@ -493,6 +531,7 @@ export default function CotizacionEditor() {
         sku,
         unitPrice: Math.round(price * 100) / 100,
         quantity: 1,
+        discountPercent: 0,
         carBrand: brandName,
         carModel: modelName,
         carYears: years,
@@ -527,6 +566,10 @@ export default function CotizacionEditor() {
       showDenied()
       return
     }
+    if (!creating && status === 'sold') {
+      setError('Esta cotización está vendida; no se puede volver a generar.')
+      return
+    }
     if (!clientName.trim()) {
       setError('Indique el nombre del cliente')
       return
@@ -541,6 +584,7 @@ export default function CotizacionEditor() {
       clientName: clientName.trim(),
       clientPhone: clientPhone.trim() || undefined,
       clientEmail: clientEmail.trim() || undefined,
+      clientAddress: clientAddress.trim() || undefined,
       pdfAdvisorName:
         [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.email?.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -549,7 +593,7 @@ export default function CotizacionEditor() {
       vehicleBrand: vehicleBrandNameForApi || undefined,
       vehicleModel: filterModel.trim() || undefined,
       vehicleYear: filterYear.trim() || undefined,
-      status: 'sent',
+      status: creating ? 'sent' : status === 'sold' ? 'sold' : 'sent',
       items: itemsPayload,
     }
     let r = { success: false }
@@ -589,12 +633,21 @@ export default function CotizacionEditor() {
     })
   }
 
-  const pickClient = (u) => {
+  const pickClient = async (u) => {
     if (!u) return
     const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email
     setClientName(name)
     setClientEmail(u.email || '')
     setClientPhone(u.phone || '')
+    if (!u.id) return
+    const r = await getAddressesByUser(u.id)
+    if (!r.success || !r.data?.length) {
+      setClientAddress('')
+      return
+    }
+    const list = r.data
+    const def = list.find((x) => x.isDefault || x.is_default) || list[0]
+    setClientAddress(formatUserAddressLine(def))
   }
 
   const handleDelete = async () => {
@@ -616,6 +669,46 @@ export default function CotizacionEditor() {
     } finally {
       setDeleteLoading(false)
     }
+  }
+
+  const openMarkSoldConfirm = () => {
+    if (!quotationId || status === 'sold') return
+    if (!canDoAction(ACTION.COTIZACIONES_EDITAR)) {
+      showDenied()
+      return
+    }
+    setMarkSoldConfirmOpen(true)
+  }
+
+  const confirmMarkAsSold = async () => {
+    if (!quotationId || status === 'sold') return
+    if (!canDoAction(ACTION.COTIZACIONES_EDITAR)) {
+      showDenied()
+      return
+    }
+    setMarkSoldLoading(true)
+    setError('')
+    let r = { success: false }
+    try {
+      r = await convertQuotationToAdvisorSale(quotationId)
+    } finally {
+      setMarkSoldLoading(false)
+    }
+    if (!r.success) {
+      setError(r.error || 'No se pudo registrar la venta')
+      return
+    }
+    setMarkSoldConfirmOpen(false)
+    if (r.data?.quotation?.status) setStatus(r.data.quotation.status)
+    else setStatus('sold')
+    const ord = r.data?.order
+    const extra = ord?.orderNumber ? ` Orden ${ord.orderNumber}.` : ''
+    setSnackbar({
+      open: true,
+      message: `Venta registrada (canal Asesor).${extra} Redirigiendo a Ventas…`,
+      severity: 'success',
+    })
+    navigate('/ventas?canal=asesor')
   }
 
   const canDownloadPdf = Boolean(quotationPdfUrl) && !busyModal.open
@@ -661,6 +754,18 @@ export default function CotizacionEditor() {
           </Typography>
           {quotationId && (
             <>
+              {!isNew && (
+                <Button
+                  variant="contained"
+                  color="success"
+                  size="small"
+                  startIcon={<CheckCircleIcon />}
+                  disabled={busyModal.open || status === 'sold' || markSoldLoading}
+                  onClick={openMarkSoldConfirm}
+                >
+                  Marcar como vendido
+                </Button>
+              )}
               <Button
                 variant="outlined"
                 startIcon={<PdfIcon />}
@@ -669,7 +774,13 @@ export default function CotizacionEditor() {
                 onClick={() => {
                   if (quotationPdfUrl) window.open(quotationPdfUrl, '_blank', 'noopener,noreferrer')
                 }}
-                title={!quotationPdfUrl ? 'Use «Generar cotización» para crear el PDF' : 'Abrir PDF en nueva pestaña'}
+                title={
+                  !quotationPdfUrl
+                    ? status === 'sold'
+                      ? 'No hay PDF guardado para esta cotización'
+                      : 'Use «Generar cotización» para crear el PDF'
+                    : 'Abrir PDF en nueva pestaña'
+                }
               >
                 Descargar PDF
               </Button>
@@ -775,49 +886,35 @@ export default function CotizacionEditor() {
                     <TextField label="Teléfono" size="small" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} sx={{ width: 150 }} />
                     <TextField label="Email" size="small" type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} sx={{ minWidth: 200 }} />
                   </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, mb: 0.5 }}>
-                    Opcional para el PDF: notas, siniestro y no. de serie
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      mt: 2,
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      gap: 2,
+                      alignItems: 'stretch',
+                    }}
+                  >
+                    <TextField
+                      label="Dirección"
+                      size="small"
+                      value={clientAddress}
+                      onChange={(e) => setClientAddress(e.target.value)}
+                      placeholder="Se llena al elegir cliente o escribe aquí"
+                      fullWidth
+                      sx={{ flex: 1, minWidth: 0 }}
+                      inputProps={{ maxLength: 500 }}
+                    />
                     <TextField
                       label="Notas"
                       size="small"
-                      multiline
-                      minRows={2}
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      sx={{ flex: '1 1 240px', minWidth: 200 }}
-                    />
-                    <TextField
-                      label="Número de siniestro"
-                      size="small"
-                      value={claimNumber}
-                      onChange={(e) => setClaimNumber(e.target.value)}
-                      placeholder="Ej. B82263851"
-                      sx={{ flex: '1 1 200px', minWidth: 180 }}
-                      inputProps={{ maxLength: 120 }}
-                    />
-                    <TextField
-                      label="No. de serie"
-                      size="small"
-                      value={serialNumber}
-                      onChange={(e) => setSerialNumber(e.target.value)}
-                      placeholder="VIN o no. de serie"
-                      sx={{ flex: '1 1 200px', minWidth: 180 }}
-                      inputProps={{ maxLength: 120 }}
+                      placeholder="Notas del asesor (opcional)"
+                      fullWidth
+                      sx={{ flex: 1, minWidth: 0 }}
                     />
                   </Box>
-                  {!isNew && (
-                    <FormControl size="small" sx={{ mt: 2, minWidth: 200 }}>
-                      <InputLabel>Estado</InputLabel>
-                      <Select label="Estado" value={status} onChange={(e) => setStatus(e.target.value)}>
-                        <MenuItem value="draft">Borrador</MenuItem>
-                        <MenuItem value="sent">Enviada</MenuItem>
-                        <MenuItem value="approved">Aprobada</MenuItem>
-                        <MenuItem value="rejected">Rechazada</MenuItem>
-                      </Select>
-                    </FormControl>
-                  )}
                   </Box>
                 </Paper>
 
@@ -869,6 +966,24 @@ export default function CotizacionEditor() {
                         onChange={(e) => setFilterYear(e.target.value)}
                         sx={{ width: 110 }}
                         inputProps={{ maxLength: 32 }}
+                      />
+                      <TextField
+                        label="Número de siniestro"
+                        size="small"
+                        value={claimNumber}
+                        onChange={(e) => setClaimNumber(e.target.value)}
+                        placeholder="Ej. B82263851"
+                        sx={{ flex: '1 1 220px', minWidth: 180 }}
+                        inputProps={{ maxLength: 120 }}
+                      />
+                      <TextField
+                        label="No. de serie (VIN)"
+                        size="small"
+                        value={serialNumber}
+                        onChange={(e) => setSerialNumber(e.target.value)}
+                        placeholder="VIN o no. de serie"
+                        sx={{ flex: '1 1 220px', minWidth: 180 }}
+                        inputProps={{ maxLength: 120 }}
                       />
                     </Box>
                   </Box>
@@ -1134,7 +1249,7 @@ export default function CotizacionEditor() {
                     ) : (
                       <List dense disablePadding>
                         {cartLines.map((l) => {
-                          const { sub, qty } = lineCalc(l.unitPrice, l.quantity)
+                          const { sub, qty } = lineDetail(l.unitPrice, l.quantity, l.discountPercent ?? 0)
                           const invN = !l.isManual ? normalizeInventoryUnits(l.stockQuantity) : null
                           const maxPieces = invN != null ? Math.max(1, invN) : undefined
                           return (
@@ -1229,8 +1344,8 @@ export default function CotizacionEditor() {
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
                                   flexWrap: 'wrap',
-                                  gap: 0.5,
-                                  rowGap: 0.25,
+                                  gap: 0.75,
+                                  rowGap: 0.5,
                                 }}
                               >
                                 <Typography variant="caption" fontWeight={600} sx={{ fontSize: '0.7rem' }}>
@@ -1262,7 +1377,15 @@ export default function CotizacionEditor() {
                                     <AddQtyIcon sx={{ fontSize: 18 }} />
                                   </IconButton>
                                 </Box>
-                                <Typography variant="body2" fontWeight={700} sx={{ ml: 'auto', fontSize: '0.8125rem' }}>
+                                <TextField
+                                  size="small"
+                                  label="Desc. %"
+                                  value={l.discountPercent ?? 0}
+                                  onChange={(e) => setLineDiscountPercent(l.key, e.target.value)}
+                                  inputProps={{ min: 0, max: 100, step: 0.5, style: { fontSize: '0.8rem' } }}
+                                  sx={{ width: 88, '& .MuiInputBase-input': { py: 0.35 } }}
+                                />
+                                <Typography variant="body2" fontWeight={700} sx={{ ml: { xs: 0, sm: 'auto' }, fontSize: '0.8125rem' }}>
                                   {formatMoney(sub)}
                                 </Typography>
                               </Box>
@@ -1276,9 +1399,17 @@ export default function CotizacionEditor() {
                   <Box sx={{ flexShrink: 0 }}>
                     <Divider sx={{ my: 1 }} />
                     <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.3 }}>
-                      Subtotal
+                      Subtotal (piezas)
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 0.35, lineHeight: 1.3 }}>{formatMoney(totals.gross)}</Typography>
+                    {totals.disc > 0 ? (
+                      <>
+                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.3 }}>
+                          Descuentos por pieza
+                        </Typography>
+                        <Typography variant="body1" sx={{ mb: 0.35, lineHeight: 1.3 }}>−{formatMoney(totals.disc)}</Typography>
+                      </>
+                    ) : null}
                     <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.3 }}>
                       IVA (16%)
                     </Typography>
@@ -1293,8 +1424,13 @@ export default function CotizacionEditor() {
                 <Box sx={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
                   <Button
                     variant="contained"
-                    disabled={busyModal.open}
+                    disabled={busyModal.open || (Boolean(quotationId) && status === 'sold')}
                     onClick={generateQuotation}
+                    title={
+                      quotationId && status === 'sold'
+                        ? 'Cotización vendida: use Descargar PDF o Eliminar.'
+                        : undefined
+                    }
                     sx={{
                       width: '50%',
                       minWidth: 140,
@@ -1401,6 +1537,38 @@ export default function CotizacionEditor() {
             {snackbar.message}
           </Alert>
         </Snackbar>
+
+        <Dialog
+          open={markSoldConfirmOpen}
+          onClose={() => {
+            if (!markSoldLoading) setMarkSoldConfirmOpen(false)
+          }}
+          disableEscapeKeyDown={markSoldLoading}
+          PaperProps={{ sx: { position: 'relative', minWidth: 320, maxWidth: 440 } }}
+        >
+          <DialogTitle>Marcar como vendido</DialogTitle>
+          <DialogContent>
+            {markSoldLoading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2, minHeight: 56 }}>
+                <CircularProgress size={32} />
+                <Typography color="text.secondary">Registrando venta en el sistema…</Typography>
+              </Box>
+            ) : (
+              <Typography color="text.secondary" variant="body2">
+                Se creará un registro en <strong>Ventas</strong> con tipo <strong>Asesor</strong> (mismas piezas y
+                montos de esta cotización) y la cotización quedará como <strong>vendida</strong>. ¿Desea continuar?
+              </Typography>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setMarkSoldConfirmOpen(false)} disabled={markSoldLoading}>
+              Cancelar
+            </Button>
+            <Button color="success" variant="contained" onClick={() => void confirmMarkAsSold()} disabled={markSoldLoading}>
+              {markSoldLoading ? 'Procesando…' : 'Confirmar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Dialog
           open={deleteOpen}

@@ -6,6 +6,13 @@ import {
   Typography,
   Menu,
   MenuItem,
+  Popover,
+  List,
+  ListItemButton,
+  ListItemText,
+  Divider,
+  Button,
+  CircularProgress,
 } from '@mui/material'
 import {
   ArrowDropDown as ArrowDropDownIcon,
@@ -18,10 +25,20 @@ import {
 } from '@mui/icons-material'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getUnreadNotificationCount } from '../api/notifications'
+import {
+  getUnreadNotificationCount,
+  listNotifications,
+  markNotificationRead,
+} from '../api/notifications'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { SIDEBAR_WIDTH } from '../config/layout'
+
+function previewSecondary(n) {
+  const msg = (n.message || '').trim()
+  const short = msg.length > 90 ? `${msg.slice(0, 87)}…` : msg
+  return short || n.type || ''
+}
 
 const Header = ({ onMenuClick }) => {
   const { user, logout, canViewPath } = useAuth()
@@ -29,6 +46,10 @@ const Header = ({ onMenuClick }) => {
   const navigate = useNavigate()
   const [anchorEl, setAnchorEl] = useState(null)
   const [unread, setUnread] = useState(0)
+
+  const [notifAnchorEl, setNotifAnchorEl] = useState(null)
+  const [notifPreviewLoading, setNotifPreviewLoading] = useState(false)
+  const [notifPreviewItems, setNotifPreviewItems] = useState([])
 
   const refreshUnread = useCallback(async () => {
     if (!user?.id || !canViewPath('/notificaciones')) return
@@ -71,6 +92,31 @@ const Header = ({ onMenuClick }) => {
     navigate('/login')
   }
 
+  const openNotifPopover = (e) => {
+    setNotifAnchorEl(e.currentTarget)
+    setNotifPreviewLoading(true)
+    setNotifPreviewItems([])
+    void listNotifications({ page: 1, limit: 10, unreadOnly: true }).then((r) => {
+      setNotifPreviewLoading(false)
+      if (r.success) setNotifPreviewItems(r.data.items || [])
+      else setNotifPreviewItems([])
+    })
+  }
+
+  const closeNotifPopover = () => setNotifAnchorEl(null)
+
+  const goAllNotifications = () => {
+    closeNotifPopover()
+    navigate('/notificaciones')
+  }
+
+  const onPickNotification = async (n) => {
+    await markNotificationRead(n.id)
+    void refreshUnread()
+    closeNotifPopover()
+    navigate(`/notificaciones?id=${encodeURIComponent(n.id)}`)
+  }
+
   return (
     <Box
       sx={{
@@ -101,16 +147,92 @@ const Header = ({ onMenuClick }) => {
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         {canViewPath('/notificaciones') ? (
-          <IconButton
-            onClick={() => navigate('/notificaciones')}
-            aria-label="Notificaciones"
-            color="inherit"
-            size="small"
-          >
-            <Badge badgeContent={unread} color="error" max={99} invisible={unread === 0}>
-              <NotificationsIcon />
-            </Badge>
-          </IconButton>
+          <>
+            <IconButton
+              onClick={openNotifPopover}
+              aria-label="Notificaciones"
+              aria-haspopup="true"
+              color="inherit"
+              size="small"
+            >
+              <Badge badgeContent={unread} color="error" max={99} invisible={unread === 0}>
+                <NotificationsIcon />
+              </Badge>
+            </IconButton>
+            <Popover
+              open={Boolean(notifAnchorEl)}
+              anchorEl={notifAnchorEl}
+              onClose={closeNotifPopover}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              slotProps={{
+                paper: {
+                  sx: {
+                    width: { xs: 'min(100vw - 32px, 360px)', sm: 360 },
+                    maxHeight: 440,
+                    mt: 0.5,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  },
+                },
+              }}
+            >
+              <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Notificaciones
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Hasta 10 sin leer
+                </Typography>
+              </Box>
+              <Box sx={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+                {notifPreviewLoading ? (
+                  <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
+                    <CircularProgress size={28} />
+                  </Box>
+                ) : notifPreviewItems.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ px: 2, py: 3 }}>
+                    No hay notificaciones recientes.
+                  </Typography>
+                ) : (
+                  <List dense disablePadding>
+                    {notifPreviewItems.map((n) => (
+                      <ListItemButton
+                        key={n.id}
+                        onClick={() => void onPickNotification(n)}
+                        alignItems="flex-start"
+                        sx={{
+                          bgcolor: 'action.hover',
+                          borderBottom: 1,
+                          borderColor: 'divider',
+                        }}
+                      >
+                        <ListItemText
+                          primary={
+                            <Typography variant="body2" fontWeight={700} component="span">
+                              {n.title}
+                            </Typography>
+                          }
+                          secondary={
+                            <Typography variant="caption" color="text.secondary" component="span" display="block" sx={{ mt: 0.25 }}>
+                              {previewSecondary(n)}
+                            </Typography>
+                          }
+                        />
+                      </ListItemButton>
+                    ))}
+                  </List>
+                )}
+              </Box>
+              <Divider />
+              <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'center' }}>
+                <Button fullWidth variant="outlined" size="small" onClick={goAllNotifications}>
+                  Ver todas
+                </Button>
+              </Box>
+            </Popover>
+          </>
         ) : null}
         <IconButton onClick={toggleTheme} aria-label={mode === 'dark' ? 'Modo claro' : 'Modo oscuro'} color="inherit" size="small">
           {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
