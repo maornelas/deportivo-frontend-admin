@@ -1,10 +1,9 @@
-import { Box, Typography, Paper, CircularProgress } from '@mui/material'
+import { useState } from 'react'
+import { Box, Typography, Paper, CircularProgress, FormGroup, FormControlLabel, Checkbox } from '@mui/material'
 import { BarChart as BarChartIcon } from '@mui/icons-material'
 import {
   LineChart,
   Line,
-  AreaChart,
-  Area,
   BarChart,
   Bar,
   PieChart,
@@ -16,8 +15,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
-  RadialBarChart,
-  RadialBar,
 } from 'recharts'
 
 const SummaryCard = ({ title, value, color, gradientStart }) => {
@@ -31,15 +28,15 @@ const SummaryCard = ({ title, value, color, gradientStart }) => {
       elevation={0}
       sx={{
         width: '100%',
-        padding: { xs: '14px', sm: '16px', md: '18px' },
-        borderRadius: '12px',
+        padding: { xs: '12px 14px', sm: '13px 16px', md: '14px 16px' },
+        borderRadius: '11px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         height: '100%',
-        minHeight: '110px',
+        minHeight: { xs: '88px', sm: '92px' },
         ...(background ? { background } : { backgroundColor: gradientEnd }),
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+        boxShadow: '0 3px 12px rgba(0, 0, 0, 0.09)',
         border: 'none',
       }}
     >
@@ -49,7 +46,7 @@ const SummaryCard = ({ title, value, color, gradientStart }) => {
           sx={{
             color: 'white',
             fontWeight: 700,
-            fontSize: { xs: '32px', sm: '36px', md: '42px' },
+            fontSize: { xs: '24px', sm: '26px', md: '28px' },
             lineHeight: 1.2,
             letterSpacing: '-0.02em',
             marginBottom: '4px',
@@ -60,9 +57,10 @@ const SummaryCard = ({ title, value, color, gradientStart }) => {
         <Typography
           variant="subtitle2"
           sx={{
-            color: 'rgba(255, 255, 255, 0.95)',
-            fontSize: { xs: '12px', sm: '13px', md: '14px' },
+            color: 'rgba(255, 255, 255, 0.92)',
+            fontSize: { xs: '12px', sm: '12.5px', md: '13px' },
             fontWeight: 500,
+            lineHeight: 1.25,
           }}
         >
           {title}
@@ -70,19 +68,19 @@ const SummaryCard = ({ title, value, color, gradientStart }) => {
       </Box>
       <Box
         sx={{
-          width: { xs: '40px', sm: '44px', md: '48px' },
-          height: { xs: '40px', sm: '44px', md: '48px' },
+          width: { xs: '38px', sm: '40px', md: '42px' },
+          height: { xs: '38px', sm: '40px', md: '42px' },
           borderRadius: '50%',
           backgroundColor: 'rgba(255, 255, 255, 1)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          marginLeft: { xs: '10px', sm: '12px' },
-          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)',
+          marginLeft: { xs: '10px', sm: '11px' },
+          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.09)',
         }}
       >
-        <BarChartIcon sx={{ color: color, fontSize: { xs: '22px', sm: '24px', md: '28px' } }} />
+        <BarChartIcon sx={{ color: color, fontSize: { xs: '21px', sm: '22px', md: '24px' } }} />
       </Box>
     </Paper>
   )
@@ -96,12 +94,22 @@ function formatShortDate(isoDate) {
   return `${day}/${month}`
 }
 
-function buildChartDataFromDailySales(dailySales = [], startDate, endDate) {
-  const normalized = dailySales.map((s) => ({
-    date: s.date ?? s.saleDate ?? '',
-    totalAmount: Number(s.totalAmount ?? s.totalamount ?? 0),
-  }))
-  const byDate = new Map(normalized.filter((s) => s.date).map((s) => [s.date.slice(0, 10), s.totalAmount]))
+function mapSeriesToDateMap(series = []) {
+  const m = new Map()
+  for (const s of series) {
+    const raw = s.date ?? s.saleDate ?? ''
+    if (!raw) continue
+    const key = raw.slice(0, 10)
+    m.set(key, Number(s.totalAmount ?? s.totalamount ?? 0))
+  }
+  return m
+}
+
+/** Una fila por día: ventas, gastos y compras (misma escala de fechas). */
+function buildOverviewChartData(dailySales = [], dailyExpenses = [], dailyPurchases = [], startDate, endDate) {
+  const ventasMap = mapSeriesToDateMap(dailySales)
+  const gastosMap = mapSeriesToDateMap(dailyExpenses)
+  const comprasMap = mapSeriesToDateMap(dailyPurchases)
   const result = []
   if (!startDate || !endDate) return result
   const start = new Date(startDate + 'T00:00:00.000Z')
@@ -111,14 +119,47 @@ function buildChartDataFromDailySales(dailySales = [], startDate, endDate) {
     result.push({
       date: dateStr,
       dateLabel: formatShortDate(dateStr),
-      totalAmount: Number(byDate.get(dateStr) ?? 0),
+      ventas: ventasMap.get(dateStr) ?? 0,
+      gastos: gastosMap.get(dateStr) ?? 0,
+      compras: comprasMap.get(dateStr) ?? 0,
     })
   }
   return result
 }
 
-const SalesChart = ({ data = [], loading = false, startDate, endDate }) => {
-  const chartData = buildChartDataFromDailySales(data, startDate, endDate)
+function buildChannelChartData(online = [], advisor = [], startDate, endDate) {
+  const om = mapSeriesToDateMap(online)
+  const am = mapSeriesToDateMap(advisor)
+  const result = []
+  if (!startDate || !endDate) return result
+  const start = new Date(startDate + 'T00:00:00.000Z')
+  const end = new Date(endDate + 'T00:00:00.000Z')
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().slice(0, 10)
+    result.push({
+      date: dateStr,
+      dateLabel: formatShortDate(dateStr),
+      online: om.get(dateStr) ?? 0,
+      advisor: am.get(dateStr) ?? 0,
+    })
+  }
+  return result
+}
+
+const fmtTooltipMoney = (value) => `$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+
+const SalesChart = ({
+  dailySales = [],
+  dailyExpenses = [],
+  dailyPurchases = [],
+  loading = false,
+  startDate,
+  endDate,
+}) => {
+  const chartData = buildOverviewChartData(dailySales, dailyExpenses, dailyPurchases, startDate, endDate)
+  const [showVentas, setShowVentas] = useState(true)
+  const [showGastos, setShowGastos] = useState(true)
+  const [showCompras, setShowCompras] = useState(true)
 
   return (
     <Paper
@@ -135,14 +176,26 @@ const SalesChart = ({ data = [], loading = false, startDate, endDate }) => {
       <Box
         sx={{
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
+          flexDirection: { xs: 'column', lg: 'row' },
           justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          marginBottom: { xs: '16px', sm: '20px', md: '24px' },
-          gap: { xs: 2, sm: 0 },
+          alignItems: { xs: 'flex-start', lg: 'center' },
+          marginBottom: { xs: '12px', sm: '16px', md: '20px' },
+          gap: 2,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box
+          className="drag-handle"
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.5,
+            flex: '1 1 auto',
+            minWidth: 0,
+            cursor: 'grab',
+            pr: { lg: 1 },
+            '&:active': { cursor: 'grabbing' },
+          }}
+        >
           <Typography
             variant="subtitle1"
             sx={{
@@ -151,15 +204,61 @@ const SalesChart = ({ data = [], loading = false, startDate, endDate }) => {
               fontSize: { xs: '14px', sm: '15px', md: '16px' },
             }}
           >
-            Total de ventas
+            Ventas, gastos y compras
           </Typography>
           <Typography
             variant="caption"
             sx={{ color: 'text.secondary', fontSize: '11px', display: { xs: 'none', sm: 'block' } }}
           >
-            Por día en el rango de fechas · Arrastra para mover
+            Evolución diaria en el rango · Activa o desactiva cada serie · Arrastra desde aquí para mover el panel
           </Typography>
         </Box>
+        <FormGroup
+          row
+          sx={{
+            flexWrap: 'wrap',
+            gap: { xs: 0.5, sm: 1 },
+            flexShrink: 0,
+            '& .MuiFormControlLabel-root': { mr: { xs: 1, sm: 2 } },
+          }}
+        >
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={showVentas}
+                onChange={(e) => setShowVentas(e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
+                sx={{ color: '#2196f3', '&.Mui-checked': { color: '#2196f3' } }}
+              />
+            }
+            label={<Typography variant="body2">Ventas</Typography>}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={showGastos}
+                onChange={(e) => setShowGastos(e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
+                sx={{ color: '#ef6c00', '&.Mui-checked': { color: '#ef6c00' } }}
+              />
+            }
+            label={<Typography variant="body2">Gastos</Typography>}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={showCompras}
+                onChange={(e) => setShowCompras(e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
+                sx={{ color: '#9c27c0', '&.Mui-checked': { color: '#9c27c0' } }}
+              />
+            }
+            label={<Typography variant="body2">Compras</Typography>}
+          />
+        </FormGroup>
       </Box>
       <Box
         sx={{
@@ -174,16 +273,10 @@ const SalesChart = ({ data = [], loading = false, startDate, endDate }) => {
         {loading ? (
           <CircularProgress size={40} />
         ) : chartData.length === 0 ? (
-          <Typography color="text.secondary">No hay ventas en el rango seleccionado</Typography>
+          <Typography color="text.secondary">No hay datos en el rango seleccionado</Typography>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2196f3" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#2196f3" stopOpacity={0} />
-                </linearGradient>
-              </defs>
+            <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
               <XAxis
                 dataKey="date"
@@ -207,26 +300,48 @@ const SalesChart = ({ data = [], loading = false, startDate, endDate }) => {
                   padding: '12px',
                   boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
                 }}
-                formatter={(value) => {
-                  const num = Array.isArray(value) ? value[0] : value
-                  return [`$${Number(num).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Total vendido']
-                }}
+                formatter={(value, name) => [fmtTooltipMoney(value), name]}
                 labelFormatter={(label) => label}
                 cursor={{ stroke: '#e0e0e0', strokeWidth: 1 }}
               />
-              <Area
-                type="monotone"
-                dataKey="totalAmount"
-                stroke="#2196f3"
-                fillOpacity={1}
-                fill="url(#colorVentas)"
-                strokeWidth={2.5}
-                dot={{ fill: '#2196f3', r: 4, strokeWidth: 2, stroke: '#fff' }}
-                activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
-                animationDuration={1000}
-                name="Total vendido"
-              />
-            </AreaChart>
+              <Legend wrapperStyle={{ fontSize: '12px', paddingTop: 8 }} />
+              {showVentas && (
+                <Line
+                  type="monotone"
+                  dataKey="ventas"
+                  name="Ventas"
+                  stroke="#2196f3"
+                  strokeWidth={2.5}
+                  dot={{ fill: '#2196f3', r: 3, strokeWidth: 1, stroke: '#fff' }}
+                  activeDot={{ r: 5 }}
+                  animationDuration={800}
+                />
+              )}
+              {showGastos && (
+                <Line
+                  type="monotone"
+                  dataKey="gastos"
+                  name="Gastos"
+                  stroke="#ef6c00"
+                  strokeWidth={2.5}
+                  dot={{ fill: '#ef6c00', r: 3, strokeWidth: 1, stroke: '#fff' }}
+                  activeDot={{ r: 5 }}
+                  animationDuration={800}
+                />
+              )}
+              {showCompras && (
+                <Line
+                  type="monotone"
+                  dataKey="compras"
+                  name="Compras"
+                  stroke="#9c27c0"
+                  strokeWidth={2.5}
+                  dot={{ fill: '#9c27c0', r: 3, strokeWidth: 1, stroke: '#fff' }}
+                  activeDot={{ r: 5 }}
+                  animationDuration={800}
+                />
+              )}
+            </LineChart>
           </ResponsiveContainer>
         )}
       </Box>
@@ -234,8 +349,17 @@ const SalesChart = ({ data = [], loading = false, startDate, endDate }) => {
   )
 }
 
-const CancelledChart = ({ data = [], loading = false, startDate, endDate }) => {
-  const chartData = buildChartDataFromDailySales(data, startDate, endDate)
+/** Ventas diarias por canal: online vs asesor. */
+const ExpensesChart = ({
+  onlineData = [],
+  advisorData = [],
+  loading = false,
+  startDate,
+  endDate,
+}) => {
+  const chartData = buildChannelChartData(onlineData, advisorData, startDate, endDate)
+  const [showOnline, setShowOnline] = useState(true)
+  const [showAdvisor, setShowAdvisor] = useState(true)
 
   return (
     <Paper
@@ -252,14 +376,26 @@ const CancelledChart = ({ data = [], loading = false, startDate, endDate }) => {
       <Box
         sx={{
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
+          flexDirection: { xs: 'column', lg: 'row' },
           justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          marginBottom: { xs: '16px', sm: '20px', md: '24px' },
-          gap: { xs: 2, sm: 0 },
+          alignItems: { xs: 'flex-start', lg: 'center' },
+          marginBottom: { xs: '12px', sm: '16px', md: '20px' },
+          gap: 2,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box
+          className="drag-handle"
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.5,
+            flex: '1 1 auto',
+            minWidth: 0,
+            cursor: 'grab',
+            pr: { lg: 1 },
+            '&:active': { cursor: 'grabbing' },
+          }}
+        >
           <Typography
             variant="subtitle1"
             sx={{
@@ -268,15 +404,44 @@ const CancelledChart = ({ data = [], loading = false, startDate, endDate }) => {
               fontSize: { xs: '14px', sm: '15px', md: '16px' },
             }}
           >
-            Total $ pedidos cancelados
+            Ventas por canal
           </Typography>
           <Typography
             variant="caption"
             sx={{ color: 'text.secondary', fontSize: '11px', display: { xs: 'none', sm: 'block' } }}
           >
-            Por día en el rango · Arrastra para mover
+            Online vs asesor por día · Arrastra desde aquí para mover el panel
           </Typography>
         </Box>
+        <FormGroup
+          row
+          sx={{ flexWrap: 'wrap', gap: { xs: 0.5, sm: 1 }, flexShrink: 0 }}
+        >
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={showOnline}
+                onChange={(e) => setShowOnline(e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
+                sx={{ color: '#7b1fa2', '&.Mui-checked': { color: '#7b1fa2' } }}
+              />
+            }
+            label={<Typography variant="body2">Online</Typography>}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={showAdvisor}
+                onChange={(e) => setShowAdvisor(e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
+                sx={{ color: '#4caf50', '&.Mui-checked': { color: '#4caf50' } }}
+              />
+            }
+            label={<Typography variant="body2">Asesor</Typography>}
+          />
+        </FormGroup>
       </Box>
       <Box
         sx={{
@@ -291,16 +456,10 @@ const CancelledChart = ({ data = [], loading = false, startDate, endDate }) => {
         {loading ? (
           <CircularProgress size={40} />
         ) : chartData.length === 0 ? (
-          <Typography color="text.secondary">No hay pedidos cancelados en el rango</Typography>
+          <Typography color="text.secondary">No hay datos en el rango seleccionado</Typography>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorCancelados" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f44336" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#f44336" stopOpacity={0} />
-                </linearGradient>
-              </defs>
+            <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
               <XAxis
                 dataKey="date"
@@ -312,7 +471,7 @@ const CancelledChart = ({ data = [], loading = false, startDate, endDate }) => {
               <YAxis
                 stroke="#757575"
                 tick={{ fill: '#757575', fontSize: 12 }}
-                tickFormatter={(value) => `-$${Number(value).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
+                tickFormatter={(value) => `$${Number(value).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
                 width={60}
               />
               <Tooltip
@@ -324,26 +483,36 @@ const CancelledChart = ({ data = [], loading = false, startDate, endDate }) => {
                   padding: '12px',
                   boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
                 }}
-                formatter={(value) => {
-                  const num = Array.isArray(value) ? value[0] : value
-                  return [`-$${Number(num).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Total cancelado']
-                }}
+                formatter={(value, name) => [fmtTooltipMoney(value), name]}
                 labelFormatter={(label) => label}
                 cursor={{ stroke: '#e0e0e0', strokeWidth: 1 }}
               />
-              <Area
-                type="monotone"
-                dataKey="totalAmount"
-                stroke="#f44336"
-                fillOpacity={1}
-                fill="url(#colorCancelados)"
-                strokeWidth={2.5}
-                dot={{ fill: '#f44336', r: 4, strokeWidth: 2, stroke: '#fff' }}
-                activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
-                animationDuration={1000}
-                name="Total cancelado"
-              />
-            </AreaChart>
+              <Legend wrapperStyle={{ fontSize: '12px', paddingTop: 8 }} />
+              {showOnline && (
+                <Line
+                  type="monotone"
+                  dataKey="online"
+                  name="Online"
+                  stroke="#7b1fa2"
+                  strokeWidth={2.5}
+                  dot={{ fill: '#7b1fa2', r: 3, strokeWidth: 1, stroke: '#fff' }}
+                  activeDot={{ r: 5 }}
+                  animationDuration={800}
+                />
+              )}
+              {showAdvisor && (
+                <Line
+                  type="monotone"
+                  dataKey="advisor"
+                  name="Asesor"
+                  stroke="#4caf50"
+                  strokeWidth={2.5}
+                  dot={{ fill: '#4caf50', r: 3, strokeWidth: 1, stroke: '#fff' }}
+                  activeDot={{ r: 5 }}
+                  animationDuration={800}
+                />
+              )}
+            </LineChart>
           </ResponsiveContainer>
         )}
       </Box>
@@ -851,11 +1020,11 @@ const MonthlyTrendChart = () => {
   )
 }
 
-export { 
-  SummaryCard, 
-  SalesChart, 
-  CancelledChart,
-  ProductsTable, 
+export {
+  SummaryCard,
+  SalesChart,
+  ExpensesChart,
+  ProductsTable,
   FinanceSummary,
   CategoryBarChart,
   SalesDistributionChart,

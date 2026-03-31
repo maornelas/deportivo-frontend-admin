@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { SIDEBAR_WIDTH } from '../config/layout'
 
-import { Box, Typography, Grid, Paper, TextField, CircularProgress } from '@mui/material'
+import { Box, Typography, Grid, TextField } from '@mui/material'
 import GridLayout from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
@@ -10,11 +10,19 @@ import Header from '../components/Header'
 import {
   SummaryCard,
   SalesChart,
-  CancelledChart,
+  ExpensesChart,
   FinanceSummary,
   CategoryBarChart,
 } from '../components/DashboardWidgets'
-import { getOrderStats, getOrderDailySales, getOrderDailyCancelled, getOrderStatsByStatus, getOrderStatsAmountByStatus } from '../api/orders'
+import {
+  getOrderDailySales,
+  getOrderStatsByStatus,
+  getOrderStatsAmountByStatus,
+} from '../api/orders'
+import { getSalesReport } from '../api/salesReports'
+import { getExpenseReportSummary, listExpenses } from '../api/expenses'
+import { usePurchases } from '../contexts/PurchasesContext'
+import { computePurchaseTotal } from '../compras/shared'
 
 function getDefaultDateRange() {
   const now = new Date()
@@ -27,44 +35,44 @@ function getDefaultDateRange() {
 
 const Dashboard = () => {
   const defaultRange = getDefaultDateRange()
+  const { purchases } = usePurchases()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [layoutWidth, setLayoutWidth] = useState(1200)
   const [startDate, setStartDate] = useState(defaultRange.startDate)
   const [endDate, setEndDate] = useState(defaultRange.endDate)
-  const [metrics, setMetrics] = useState({
-    soldOrders: null,
-    totalOrders: null,
-    cancelledOrders: null,
-    refundedOrders: null,
-    cancelledAmount: null,
-  })
-  const [metricsLoading, setMetricsLoading] = useState(true)
+  const [channelSalesLoading, setChannelSalesLoading] = useState(true)
+  const [onlineSalesTotal, setOnlineSalesTotal] = useState(0)
+  const [advisorSalesTotal, setAdvisorSalesTotal] = useState(0)
   const [dailySales, setDailySales] = useState([])
   const [dailySalesLoading, setDailySalesLoading] = useState(true)
-  const [dailyCancelled, setDailyCancelled] = useState([])
-  const [dailyCancelledLoading, setDailyCancelledLoading] = useState(true)
+  const [dailyChannelOnline, setDailyChannelOnline] = useState([])
+  const [dailyChannelAdvisor, setDailyChannelAdvisor] = useState([])
+  const [channelDailyLoading, setChannelDailyLoading] = useState(true)
+  const [dailyExpenses, setDailyExpenses] = useState([])
+  const [dailyExpensesLoading, setDailyExpensesLoading] = useState(true)
+  const [expenseGrandTotal, setExpenseGrandTotal] = useState(null)
+  const [expenseSummaryLoading, setExpenseSummaryLoading] = useState(true)
   const [orderStatsByStatus, setOrderStatsByStatus] = useState(null)
   const [orderStatsByStatusLoading, setOrderStatsByStatusLoading] = useState(true)
   const [amountByStatus, setAmountByStatus] = useState(null)
   const [amountByStatusLoading, setAmountByStatusLoading] = useState(true)
   const containerRef = useRef(null)
 
-  const fetchMetrics = useCallback(async () => {
+  const fetchChannelSales = useCallback(async () => {
     if (!startDate || !endDate) return
-    setMetricsLoading(true)
-    const result = await getOrderStats({ startDate, endDate })
-    setMetricsLoading(false)
-    if (result.success && result.data) {
-      setMetrics({
-        soldOrders: result.data.soldOrders ?? 0,
-        totalOrders: result.data.totalOrders ?? 0,
-        cancelledOrders: result.data.cancelledOrders ?? 0,
-        refundedOrders: result.data.refundedOrders ?? 0,
-        cancelledAmount: result.data.cancelledAmount ?? 0,
-      })
-    } else {
-      setMetrics({ soldOrders: 0, totalOrders: 0, cancelledOrders: 0, refundedOrders: 0, cancelledAmount: 0 })
+    setChannelSalesLoading(true)
+    const result = await getSalesReport({ kind: 'by_channel', startDate, endDate })
+    setChannelSalesLoading(false)
+    if (!result.success || !result.data?.byChannel) {
+      setOnlineSalesTotal(0)
+      setAdvisorSalesTotal(0)
+      return
     }
+    const rows = result.data.byChannel
+    const online = rows.find((r) => r.salesChannel === 'online')
+    const advisor = rows.find((r) => r.salesChannel === 'advisor')
+    setOnlineSalesTotal(Number(online?.totalAmount ?? 0))
+    setAdvisorSalesTotal(Number(advisor?.totalAmount ?? 0))
   }, [startDate, endDate])
 
   const fetchDailySales = useCallback(async () => {
@@ -79,29 +87,86 @@ const Dashboard = () => {
     }
   }, [startDate, endDate])
 
+  const fetchChannelDailySales = useCallback(async () => {
+    if (!startDate || !endDate) return
+    setChannelDailyLoading(true)
+    const [rOnline, rAdvisor] = await Promise.all([
+      getOrderDailySales({ startDate, endDate, salesChannel: 'online' }),
+      getOrderDailySales({ startDate, endDate, salesChannel: 'advisor' }),
+    ])
+    setChannelDailyLoading(false)
+    setDailyChannelOnline(rOnline.success && Array.isArray(rOnline.data) ? rOnline.data : [])
+    setDailyChannelAdvisor(rAdvisor.success && Array.isArray(rAdvisor.data) ? rAdvisor.data : [])
+  }, [startDate, endDate])
+
+  const fetchExpenseSummary = useCallback(async () => {
+    if (!startDate || !endDate) return
+    setExpenseSummaryLoading(true)
+    const result = await getExpenseReportSummary({ startDate, endDate })
+    setExpenseSummaryLoading(false)
+    if (result.success && result.data) {
+      setExpenseGrandTotal(Number(result.data.grandTotal ?? 0))
+    } else {
+      setExpenseGrandTotal(0)
+    }
+  }, [startDate, endDate])
+
+  const fetchDailyExpenses = useCallback(async () => {
+    if (!startDate || !endDate) return
+    setDailyExpensesLoading(true)
+    const limit = 500
+    let page = 1
+    const byDate = new Map()
+    let totalPages = 1
+    try {
+      for (;;) {
+        const r = await listExpenses({
+          startDate,
+          endDate,
+          page,
+          limit,
+          sortBy: 'date',
+          sortOrder: 'ASC',
+        })
+        if (!r.success || !r.data?.expenses?.length) break
+        totalPages = r.data.totalPages ?? 1
+        for (const e of r.data.expenses) {
+          const d = (e.expenseDate || '').slice(0, 10)
+          if (!d) continue
+          byDate.set(d, (byDate.get(d) || 0) + Number(e.totalAmount ?? 0))
+        }
+        if (page >= totalPages) break
+        page += 1
+        if (page > 200) break
+      }
+    } finally {
+      setDailyExpensesLoading(false)
+    }
+    const series = Array.from(byDate.entries())
+      .map(([date, totalAmount]) => ({ date, totalAmount }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+    setDailyExpenses(series)
+  }, [startDate, endDate])
+
   useEffect(() => {
-    fetchMetrics()
-  }, [fetchMetrics])
+    fetchChannelSales()
+  }, [fetchChannelSales])
 
   useEffect(() => {
     fetchDailySales()
   }, [fetchDailySales])
 
-  const fetchDailyCancelled = useCallback(async () => {
-    if (!startDate || !endDate) return
-    setDailyCancelledLoading(true)
-    const result = await getOrderDailyCancelled({ startDate, endDate })
-    setDailyCancelledLoading(false)
-    if (result.success && Array.isArray(result.data)) {
-      setDailyCancelled(result.data)
-    } else {
-      setDailyCancelled([])
-    }
-  }, [startDate, endDate])
+  useEffect(() => {
+    fetchChannelDailySales()
+  }, [fetchChannelDailySales])
 
   useEffect(() => {
-    fetchDailyCancelled()
-  }, [fetchDailyCancelled])
+    fetchExpenseSummary()
+  }, [fetchExpenseSummary])
+
+  useEffect(() => {
+    fetchDailyExpenses()
+  }, [fetchDailyExpenses])
 
   const fetchOrderStatsByStatus = useCallback(async () => {
     if (!startDate || !endDate) return
@@ -135,10 +200,9 @@ const Dashboard = () => {
     fetchAmountByStatus()
   }, [fetchAmountByStatus])
 
-  // Layout: Total ventas (izq) y Total $ pedidos cancelados (der), luego Estatus pedidos, Ventas por estatus
   const [layout, setLayout] = useState([
     { i: 'sales', x: 0, y: 0, w: 6, h: 4 },
-    { i: 'cancelled', x: 6, y: 0, w: 6, h: 4 },
+    { i: 'expenses', x: 6, y: 0, w: 6, h: 4 },
     { i: 'finance', x: 0, y: 5, w: 6, h: 4 },
     { i: 'category', x: 6, y: 5, w: 6, h: 4 },
   ])
@@ -171,10 +235,47 @@ const Dashboard = () => {
   const totalSoldFormatted =
     totalSoldAmount === null ? '...' : `$${Number(totalSoldAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const cancelledAmountFormatted =
-    metricsLoading
+  const totalGastosFormatted =
+    expenseSummaryLoading || expenseGrandTotal === null
       ? '...'
-      : `-$${Math.abs(Number(metrics.cancelledAmount ?? 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : `$${Number(expenseGrandTotal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const totalComprasAmount = useMemo(() => {
+    if (!startDate || !endDate) return 0
+    const start = new Date(startDate + 'T00:00:00')
+    const end = new Date(endDate + 'T23:59:59.999')
+    return purchases.reduce((sum, p) => {
+      const pd = new Date(p.purchaseDate)
+      if (Number.isNaN(pd.getTime()) || pd < start || pd > end) return sum
+      const t = p.total != null ? Number(p.total) : computePurchaseTotal(p.items)
+      return sum + t
+    }, 0)
+  }, [purchases, startDate, endDate])
+
+  /** Compras agregadas por día (misma forma que ventas/gastos: { date, totalAmount }) */
+  const dailyPurchasesByDate = useMemo(() => {
+    if (!startDate || !endDate) return []
+    const start = new Date(startDate + 'T00:00:00')
+    const end = new Date(endDate + 'T23:59:59.999')
+    const byDate = new Map()
+    for (const p of purchases) {
+      const pd = new Date(p.purchaseDate)
+      if (Number.isNaN(pd.getTime()) || pd < start || pd > end) continue
+      const d = (p.purchaseDate || '').slice(0, 10)
+      const t = p.total != null ? Number(p.total) : computePurchaseTotal(p.items)
+      byDate.set(d, (byDate.get(d) || 0) + t)
+    }
+    return Array.from(byDate.entries())
+      .map(([date, totalAmount]) => ({ date, totalAmount }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [purchases, startDate, endDate])
+
+  const totalComprasFormatted = `$${Number(totalComprasAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const fmtMoney = (n) =>
+    `$${Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const onlineSalesFormatted = channelSalesLoading ? '...' : fmtMoney(onlineSalesTotal)
+  const advisorSalesFormatted = channelSalesLoading ? '...' : fmtMoney(advisorSalesTotal)
 
   return (
     <Box sx={{ minHeight: '100vh' }}>
@@ -236,11 +337,10 @@ const Dashboard = () => {
           </Box>
         </Box>
 
-        {/* Summary Cards - filtradas por el rango de fechas */}
-        <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ marginBottom: { xs: '24px', sm: '28px', md: '32px' } }}>
+        <Grid container spacing={{ xs: 2, sm: 2, md: 2.5 }} sx={{ marginBottom: { xs: '22px', sm: '26px', md: '30px' } }}>
           <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
             <SummaryCard
-              title="Total vendido"
+              title="Total de ventas"
               value={totalSoldFormatted}
               color="#ff9800"
               gradientStart="#ffb74d"
@@ -248,39 +348,38 @@ const Dashboard = () => {
           </Grid>
           <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
             <SummaryCard
-              title="Total $ pedidos cancelados"
-              value={cancelledAmountFormatted}
-              color="#f44336"
-              gradientStart="#ef5350"
+              title="Total de gastos"
+              value={totalGastosFormatted}
+              color="#ef6c00"
+              gradientStart="#ff9800"
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
             <SummaryCard
-              title="Autopartes vendidas"
-              value={metricsLoading ? '...' : String(metrics.soldOrders ?? 0)}
+              title="Total de compras"
+              value={totalComprasFormatted}
               color="#2196f3"
               gradientStart="#64b5f6"
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
             <SummaryCard
-              title="Pedidos cancelados"
-              value={metricsLoading ? '...' : String(metrics.cancelledOrders ?? 0)}
+              title="Ventas Online"
+              value={onlineSalesFormatted}
               color="#7b1fa2"
               gradientStart="#ab47bc"
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
             <SummaryCard
-              title="Pedidos devueltos"
-              value={metricsLoading ? '...' : String(metrics.refundedOrders ?? 0)}
+              title="Ventas por Asesor"
+              value={advisorSalesFormatted}
               color="#4caf50"
               gradientStart="#66bb6a"
             />
           </Grid>
         </Grid>
 
-        {/* Charts and Tables - Draggable */}
         <Box
           ref={containerRef}
           sx={{
@@ -342,43 +441,46 @@ const Dashboard = () => {
               preventCollision={false}
               margin={[16, 16]}
             >
-            <div key="sales">
-              <Box className="drag-handle" sx={{ width: '100%', height: '100%', minHeight: 320 }}>
-                <SalesChart
-                  data={dailySales}
-                  loading={dailySalesLoading}
-                  startDate={startDate}
-                  endDate={endDate}
-                />
-              </Box>
-            </div>
-            <div key="cancelled">
-              <Box className="drag-handle" sx={{ width: '100%', height: '100%', minHeight: 320 }}>
-                <CancelledChart
-                  data={dailyCancelled}
-                  loading={dailyCancelledLoading}
-                  startDate={startDate}
-                  endDate={endDate}
-                />
-              </Box>
-            </div>
-            <div key="finance">
-              <Box className="drag-handle" sx={{ width: '100%', height: '100%' }}>
-                <FinanceSummary
-                  data={orderStatsByStatus}
-                  loading={orderStatsByStatusLoading}
-                />
-              </Box>
-            </div>
-            <div key="category">
-              <Box className="drag-handle" sx={{ width: '100%', height: '100%' }}>
-                <CategoryBarChart
-                  data={amountByStatus}
-                  loading={amountByStatusLoading}
-                />
-              </Box>
-            </div>
-          </GridLayout>
+              <div key="sales">
+                <Box sx={{ width: '100%', height: '100%', minHeight: 320 }}>
+                  <SalesChart
+                    dailySales={dailySales}
+                    dailyExpenses={dailyExpenses}
+                    dailyPurchases={dailyPurchasesByDate}
+                    loading={dailySalesLoading || dailyExpensesLoading}
+                    startDate={startDate}
+                    endDate={endDate}
+                  />
+                </Box>
+              </div>
+              <div key="expenses">
+                <Box sx={{ width: '100%', height: '100%', minHeight: 320 }}>
+                  <ExpensesChart
+                    onlineData={dailyChannelOnline}
+                    advisorData={dailyChannelAdvisor}
+                    loading={channelDailyLoading}
+                    startDate={startDate}
+                    endDate={endDate}
+                  />
+                </Box>
+              </div>
+              <div key="finance">
+                <Box className="drag-handle" sx={{ width: '100%', height: '100%' }}>
+                  <FinanceSummary
+                    data={orderStatsByStatus}
+                    loading={orderStatsByStatusLoading}
+                  />
+                </Box>
+              </div>
+              <div key="category">
+                <Box className="drag-handle" sx={{ width: '100%', height: '100%' }}>
+                  <CategoryBarChart
+                    data={amountByStatus}
+                    loading={amountByStatusLoading}
+                  />
+                </Box>
+              </div>
+            </GridLayout>
           )}
         </Box>
       </Box>
@@ -387,4 +489,3 @@ const Dashboard = () => {
 }
 
 export default Dashboard
-

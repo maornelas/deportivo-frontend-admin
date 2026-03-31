@@ -55,13 +55,16 @@ export async function getOrderStats(params) {
 
 /**
  * Ventas por día en un rango de fechas (órdenes vendidas, no canceladas/reembolsadas).
- * @param {{ startDate: string, endDate: string }} params - Fechas YYYY-MM-DD
+ * @param {{ startDate: string, endDate: string, salesChannel?: 'online'|'advisor' }} params - Fechas YYYY-MM-DD; canal opcional
  * @returns {Promise<{ success: boolean, data?: Array<{ date: string, totalAmount: number, orderCount: number }>, error?: string }>}
  */
 export async function getOrderDailySales(params) {
   const searchParams = new URLSearchParams()
   if (params.startDate) searchParams.set('startDate', params.startDate)
   if (params.endDate) searchParams.set('endDate', params.endDate)
+  if (params.salesChannel === 'online' || params.salesChannel === 'advisor') {
+    searchParams.set('salesChannel', params.salesChannel)
+  }
   const res = await apiFetch(`/order/stats-daily?${searchParams.toString()}`)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
