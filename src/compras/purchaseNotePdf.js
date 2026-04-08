@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf'
-import { PAYMENT_OPTIONS, STATUS_OPTIONS } from './shared'
+import { PAYMENT_OPTIONS, STATUS_OPTIONS, formatLineVehicleLabel } from './shared'
 
 const ACCENT = [66, 66, 66]
 const GREY = [33, 33, 33]
@@ -186,9 +186,36 @@ export function downloadPurchaseNotePdf(purchase, totals, options = {}) {
       [purchase.registeredByFirstName, purchase.registeredByLastName].filter(Boolean).join(' '),
   )
 
-  const vehBrand = dash(purchase.vehicleBrand)
-  const vehModel = dash(purchase.vehicleModel)
-  const vehYear = dash(purchase.vehicleYear)
+  const itemsForVeh = purchase.items || []
+  const linesWithVeh = itemsForVeh.filter((it) => formatLineVehicleLabel(it))
+  let vehBrand
+  let vehModel
+  let vehYear
+  let vehVer
+  if (linesWithVeh.length === 0) {
+    vehBrand = dash(purchase.vehicleBrand)
+    vehModel = dash(purchase.vehicleModel)
+    vehYear = dash(purchase.vehicleYear)
+    vehVer = dash(purchase.vehicleVersion)
+  } else {
+    const fp = (it) =>
+      [it.vehicleBrandId, it.vehicleBrand, it.vehicleModel, it.vehicleYear, it.vehicleVersion]
+        .map((s) => String(s ?? '').trim())
+        .join('|')
+    const uniq = new Set(linesWithVeh.map(fp))
+    if (uniq.size === 1) {
+      const v = linesWithVeh[0]
+      vehBrand = dash(v.vehicleBrand)
+      vehModel = dash(v.vehicleModel)
+      vehYear = dash(v.vehicleYear)
+      vehVer = dash(v.vehicleVersion)
+    } else {
+      vehBrand = 'Varios vehículos'
+      vehModel = '—'
+      vehYear = '—'
+      vehVer = '—'
+    }
+  }
 
   const compraRows = [
     { label: 'Fecha de compra', value: fechaLarga },
@@ -205,6 +232,7 @@ export function downloadPurchaseNotePdf(purchase, totals, options = {}) {
     { label: 'Marca', value: vehBrand },
     { label: 'Modelo', value: vehModel },
     { label: 'Año', value: vehYear },
+    { label: 'Descripción completa', value: vehVer },
   ]
 
   doc.setFillColor(...PAGE_HEADER_BG)
@@ -308,12 +336,18 @@ export function downloadPurchaseNotePdf(purchase, totals, options = {}) {
     const qty = String(Math.max(1, parseInt(it.quantity, 10) || 1))
     const unit = fmtMoney(it.unitPrice)
     const sub = fmtMoney(lineSubtotal(it))
+    const vehLabel = formatLineVehicleLabel(it)
+    const vehLineText = vehLabel ? `Vehículo: ${vehLabel}` : ''
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.2)
     doc.setTextColor(...GREY)
     const hName = doc.splitTextToSize(name, wProd - 6).length * 6.2 * 1.15
-    const rowH = Math.max(12, hName) + 4
+    const hVeh =
+      vehLineText.length > 0
+        ? doc.splitTextToSize(vehLineText, wProd - 6).length * 5.4 * 1.12 + 2
+        : 0
+    const rowH = Math.max(12, hName + hVeh) + 4
 
     if (y + rowH > PAGE_H - FOOTER_BLOCK_H - 100) {
       doc.addPage()
@@ -329,6 +363,15 @@ export function downloadPurchaseNotePdf(purchase, totals, options = {}) {
     doc.setFontSize(6.5)
     const nameLines = doc.splitTextToSize(name, wProd - 6)
     doc.text(nameLines, xProd + 3, y, { baseline: 'top' })
+    let yAfterName = y + nameLines.length * 6.5 * 1.15
+    if (vehLineText) {
+      doc.setFontSize(5.4)
+      doc.setTextColor(...MUTED)
+      const vehLines = doc.splitTextToSize(vehLineText, wProd - 6)
+      doc.text(vehLines, xProd + 3, yAfterName, { baseline: 'top' })
+      doc.setTextColor(...GREY)
+      yAfterName += vehLines.length * 5.4 * 1.12
+    }
     doc.setFontSize(6.2)
     doc.text(sku, xSku + 2, y, { width: wSku - 4, baseline: 'top' })
     doc.text(tipo, xTipo + 1, y, { width: wTipo - 2, align: 'center', baseline: 'top' })

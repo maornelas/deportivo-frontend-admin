@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { SIDEBAR_WIDTH } from '../config/layout'
 
 import {
@@ -7,6 +7,10 @@ import {
   TextField,
   Typography,
   Button,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
   Table,
   TableBody,
   TableCell,
@@ -18,7 +22,7 @@ import {
 } from '@mui/material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
-import { getSalesReport } from '../api/salesReports'
+import { getSalesReport, getVentasAsesorNames } from '../api/salesReports'
 import { useAuth } from '../contexts/AuthContext'
 import { downloadVentasExcel } from '../utils/ventasReportExcel'
 
@@ -40,20 +44,24 @@ function monthBounds(y, m) {
   return { start, end }
 }
 
-function ventasReportTitle(startDateStr, endDateStr) {
+function ventasReportTitle(startDateStr, endDateStr, asesorLabel) {
   if (!startDateStr || !endDateStr) return 'VENTAS'
   const y1 = startDateStr.slice(0, 4)
   const m1 = parseInt(startDateStr.slice(5, 7), 10)
   const y2 = endDateStr.slice(0, 4)
   const m2 = parseInt(endDateStr.slice(5, 7), 10)
+  let base
   if (y1 === y2 && m1 === m2) {
     const d = new Date(parseInt(y1, 10), m1 - 1, 15)
     const mes = d
       .toLocaleDateString('es-MX', { month: 'long' })
       .replace(/^\w/, (c) => c.toUpperCase())
-    return `VENTAS ${mes} del ${y1}`
+    base = `VENTAS ${mes} del ${y1}`
+  } else {
+    base = `VENTAS ${startDateStr} al ${endDateStr}`
   }
-  return `VENTAS ${startDateStr} al ${endDateStr}`
+  const a = (asesorLabel || '').trim()
+  return a ? `${base} · Asesor: ${a}` : base
 }
 
 function statusCellSx(status) {
@@ -70,6 +78,9 @@ export default function Reporteria() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [data, setData] = useState(null)
+  const [advisorNames, setAdvisorNames] = useState([])
+  const [loadingAdvisors, setLoadingAdvisors] = useState(false)
+  const [selectedAdvisor, setSelectedAdvisor] = useState('')
 
   useEffect(() => {
     const now = new Date()
@@ -77,6 +88,30 @@ export default function Reporteria() {
     setStartDate(start)
     setEndDate(end)
   }, [])
+
+  const loadAdvisorNames = useCallback(async () => {
+    if (!startDate || !endDate) {
+      setAdvisorNames([])
+      return
+    }
+    setLoadingAdvisors(true)
+    const r = await getVentasAsesorNames({ startDate, endDate })
+    setLoadingAdvisors(false)
+    if (!r.success || !r.data?.advisorNames) {
+      setAdvisorNames([])
+      return
+    }
+    setAdvisorNames(Array.isArray(r.data.advisorNames) ? r.data.advisorNames : [])
+  }, [startDate, endDate])
+
+  useEffect(() => {
+    loadAdvisorNames()
+  }, [loadAdvisorNames])
+
+  useEffect(() => {
+    if (!selectedAdvisor) return
+    if (!advisorNames.includes(selectedAdvisor)) setSelectedAdvisor('')
+  }, [advisorNames, selectedAdvisor])
 
   const run = async () => {
     if (!startDate || !endDate) {
@@ -86,7 +121,12 @@ export default function Reporteria() {
     setError('')
     setLoading(true)
     setData(null)
-    const r = await getSalesReport({ kind: 'ventas_detalle', startDate, endDate })
+    const r = await getSalesReport({
+      kind: 'ventas_detalle',
+      startDate,
+      endDate,
+      advisorName: selectedAdvisor.trim() || undefined,
+    })
     setLoading(false)
     if (!r.success) {
       setError(r.error || 'Error')
@@ -97,8 +137,9 @@ export default function Reporteria() {
 
   const handleDownloadExcel = async () => {
     if (!data) return
-    const title = ventasReportTitle(startDate, endDate)
-    const filename = `ventas-locales_${startDate}_${endDate}.xlsx`
+    const title = ventasReportTitle(startDate, endDate, selectedAdvisor)
+    const advSlug = selectedAdvisor.trim() ? `_${selectedAdvisor.trim().replace(/\s+/g, '_')}` : ''
+    const filename = `ventas-locales_${startDate}_${endDate}${advSlug}.xlsx`
     await downloadVentasExcel({ title, lines: data.lines || [], filename })
   }
 
@@ -129,9 +170,10 @@ export default function Reporteria() {
         <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', mb: 2 }}>
           Reportería
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 800 }}>
-          Ventas del canal asesor por línea de pedido (excluye canceladas y reembolsadas). UNIDAD usa primero el vehículo
-          por pieza (marca/modelo/años en la línea), luego el del encabezado del pedido y las notas.
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
+          Ventas por línea de pedido, online y asesor (excluye canceladas y reembolsadas). Puedes filtrar por un asesor
+          concreto (nombre tomado de la nota «Asesor: …» del pedido, misma lógica que la columna VENDEDOR). UNIDAD usa
+          primero el vehículo por pieza, luego el del encabezado y las notas. PROVEEDOR es el cliente (facturación).
         </Typography>
 
         <Typography variant="h6" sx={{ color: '#424242', fontWeight: 800, mb: 1.5 }}>
@@ -155,6 +197,25 @@ export default function Reporteria() {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
+          <FormControl size="small" sx={{ minWidth: 240 }}>
+            <InputLabel id="reporteria-asesor-label">Asesor</InputLabel>
+            <Select
+              labelId="reporteria-asesor-label"
+              label="Asesor"
+              value={selectedAdvisor}
+              onChange={(e) => setSelectedAdvisor(e.target.value)}
+              disabled={loadingAdvisors}
+            >
+              <MenuItem value="">
+                <em>Todos</em>
+              </MenuItem>
+              {advisorNames.map((name) => (
+                <MenuItem key={name} value={name}>
+                  {name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <Button variant="contained" onClick={run} disabled={loading}>
             {loading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Consultar'}
           </Button>
@@ -194,13 +255,13 @@ export default function Reporteria() {
               }}
             >
               <Typography variant="body1" sx={{ color: 'inherit', fontWeight: 800, fontSize: '1rem' }}>
-                {ventasReportTitle(startDate, endDate)}
+                {ventasReportTitle(startDate, endDate, selectedAdvisor)}
               </Typography>
             </Box>
             <Table
               size="small"
               sx={{
-                minWidth: 1100,
+                minWidth: 1200,
                 borderCollapse: 'collapse',
                 '& .MuiTableCell-root': { fontSize: '0.7rem', py: 0.4, px: 0.75, lineHeight: 1.25 },
               }}
@@ -211,6 +272,7 @@ export default function Reporteria() {
                     'SINIESTRO',
                     'UNIDAD',
                     'CONCEPTO',
+                    'CANAL DE VENTA',
                     'PROVEEDOR',
                     'MONTO',
                     'MONTO NETO',
@@ -238,7 +300,7 @@ export default function Reporteria() {
               <TableBody>
                 {lines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} align="center" sx={{ py: 3, border: '1px solid #e0e0e0' }}>
+                    <TableCell colSpan={12} align="center" sx={{ py: 3, border: '1px solid #e0e0e0' }}>
                       Sin filas en el rango seleccionado.
                     </TableCell>
                   </TableRow>
@@ -248,6 +310,9 @@ export default function Reporteria() {
                       <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.siniestro || '—'}</TableCell>
                       <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.unidad || '—'}</TableCell>
                       <TableCell sx={{ border: '1px solid #e0e0e0', maxWidth: 280 }}>{row.concepto || '—'}</TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0', whiteSpace: 'nowrap' }}>
+                        {row.canalVenta || '—'}
+                      </TableCell>
                       <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.proveedor || '—'}</TableCell>
                       <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
                         {moneyOrDash(row.monto)}

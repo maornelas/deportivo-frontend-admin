@@ -58,7 +58,46 @@ export function emptyLine() {
     partCondition: 'NUEVO',
     unitPrice: 0,
     quantity: 1,
+    vehicleBrandId: '',
+    vehicleBrand: '',
+    vehicleModel: '',
+    vehicleYear: '',
+    vehicleVersion: '',
   }
+}
+
+/** Texto compacto para mostrar / PDF: marca · modelo · año · versión */
+export function formatLineVehicleLabel(line) {
+  const parts = [line?.vehicleBrand, line?.vehicleModel, line?.vehicleYear, line?.vehicleVersion]
+    .map((s) => safeTrim(s))
+    .filter(Boolean)
+  return parts.length ? parts.join(' · ') : ''
+}
+
+export function vehicleLineFingerprint(line) {
+  return [line?.vehicleBrandId, line?.vehicleBrand, line?.vehicleModel, line?.vehicleYear, line?.vehicleVersion]
+    .map((s) => safeTrim(s))
+    .join('|')
+}
+
+/** Cabecera de compra (un solo vehículo) o vacío si hay varios vehículos en las líneas. */
+export function summarizePurchaseHeaderVehicle(lines = []) {
+  const withV = lines.filter((l) => formatLineVehicleLabel(l))
+  if (withV.length === 0) {
+    return { vehicleBrandId: '', vehicleBrand: '', vehicleModel: '', vehicleYear: '', vehicleVersion: '' }
+  }
+  const fp = vehicleLineFingerprint
+  const first = withV[0]
+  if (withV.every((l) => fp(l) === fp(first))) {
+    return {
+      vehicleBrandId: first.vehicleBrandId || '',
+      vehicleBrand: first.vehicleBrand || '',
+      vehicleModel: first.vehicleModel || '',
+      vehicleYear: first.vehicleYear || '',
+      vehicleVersion: first.vehicleVersion || '',
+    }
+  }
+  return { vehicleBrandId: '', vehicleBrand: '', vehicleModel: '', vehicleYear: '', vehicleVersion: '' }
 }
 
 export function computePurchaseTotal(items) {

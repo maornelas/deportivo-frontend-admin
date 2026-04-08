@@ -17,6 +17,7 @@ import {
   CircularProgress,
   Alert,
   Dialog,
+  DialogTitle,
   DialogContent,
   DialogActions,
   Button,
@@ -26,9 +27,15 @@ import {
   Select,
   MenuItem,
   Grid,
-  Tooltip,
+  Divider,
 } from '@mui/material'
-import { Search as SearchIcon, Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material'
+import {
+  Search as SearchIcon,
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Close as CloseIcon,
+} from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
@@ -42,6 +49,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
+import { showBrowserNotificationIfAllowed } from '../utils/browserPush'
 
 const LIMIT = 15
 
@@ -52,6 +60,12 @@ function formatDate(value) {
   const s = typeof value === 'string' ? value.slice(0, 10) : value
   const d = new Date(s + (typeof value === 'string' && value.length <= 10 ? 'T12:00:00' : ''))
   return isNaN(d.getTime()) ? value : d.toLocaleDateString('es-MX', { dateStyle: 'short' })
+}
+
+function formatExpenseTime(createdAt) {
+  if (!createdAt) return '—'
+  const d = new Date(createdAt)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('es-MX', { timeStyle: 'medium' })
 }
 
 function formatCurrency(value) {
@@ -103,6 +117,8 @@ const Gastos = () => {
 
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+
+  const [detailExpense, setDetailExpense] = useState(null)
 
   const computedTotal = useMemo(() => sumLineItems(items), [items])
 
@@ -261,7 +277,33 @@ const Gastos = () => {
       return
     }
     setFormOpen(false)
+    if (formMode === 'create') {
+      const folio = result.data?.expenseNumber
+      showBrowserNotificationIfAllowed(
+        'Gasto registrado correctamente',
+        folio ? `Folio ${folio}` : '',
+      )
+    }
     fetchList()
+  }
+
+  const closeDetail = () => setDetailExpense(null)
+
+  const openEditFromDetail = () => {
+    const e = detailExpense
+    closeDetail()
+    if (e) openEdit(e)
+  }
+
+  const openDeleteFromDetail = () => {
+    const e = detailExpense
+    closeDetail()
+    if (!e) return
+    if (!canDoAction(ACTION.GASTOS_ELIMINAR)) {
+      showDenied()
+      return
+    }
+    setDeleteTarget(e)
   }
 
   const handleConfirmDelete = async () => {
@@ -302,9 +344,14 @@ const Gastos = () => {
       >
         <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}>
-          <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
-            Gastos
-          </Typography>
+          <Box>
+            <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
+              Gastos
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Doble clic en un gasto para ver el detalle. Editar o eliminar desde el detalle.
+            </Typography>
+          </Box>
           <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
             Nuevo gasto
           </Button>
@@ -402,58 +449,42 @@ const Gastos = () => {
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                  <TableCell>ID gasto</TableCell>
                   <TableCell>Fecha</TableCell>
+                  <TableCell>Hora</TableCell>
                   <TableCell>Categoría</TableCell>
                   <TableCell align="right">Total</TableCell>
                   <TableCell>Descripción</TableCell>
-                  <TableCell align="right" width={120}>
-                    Acciones
-                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                       <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
                 ) : expenses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                       No hay gastos con los filtros actuales.
                     </TableCell>
                   </TableRow>
                 ) : (
                   expenses.map((row) => (
-                    <TableRow key={row.id} hover>
+                    <TableRow
+                      key={row.id}
+                      hover
+                      sx={{ cursor: 'pointer' }}
+                      onDoubleClick={() => setDetailExpense(row)}
+                    >
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: 13 }}>{row.expenseNumber || '—'}</TableCell>
                       <TableCell>{formatDate(row.expenseDate)}</TableCell>
+                      <TableCell sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatExpenseTime(row.createdAt)}</TableCell>
                       <TableCell>{row.category}</TableCell>
                       <TableCell align="right">{formatCurrency(row.totalAmount)}</TableCell>
                       <TableCell sx={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {row.description || '—'}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="Editar">
-                          <IconButton size="small" color="primary" onClick={() => openEdit(row)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Eliminar">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => {
-                              if (!canDoAction(ACTION.GASTOS_ELIMINAR)) {
-                                showDenied()
-                                return
-                              }
-                              setDeleteTarget(row)
-                            }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
                       </TableCell>
                     </TableRow>
                   ))
@@ -590,10 +621,138 @@ const Gastos = () => {
           </DialogActions>
         </Dialog>
 
+        <Dialog open={!!detailExpense} onClose={closeDetail} maxWidth="sm" fullWidth scroll="paper">
+          <DialogTitle
+            sx={{
+              bgcolor: '#7B2CBF',
+              color: '#fff',
+              fontWeight: 600,
+              py: 2,
+              pr: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            Detalle del gasto
+            <IconButton
+              onClick={closeDetail}
+              edge="end"
+              size="small"
+              aria-label="Cerrar"
+              sx={{
+                color: '#fff',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.12)' },
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent dividers>
+            {detailExpense && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    ID gasto
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                    {detailExpense.expenseNumber || '—'}
+                  </Typography>
+                </Box>
+                <Divider />
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  <Box sx={{ flex: '1 1 140px' }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Fecha del gasto
+                    </Typography>
+                    <Typography variant="body2">{formatDate(detailExpense.expenseDate)}</Typography>
+                  </Box>
+                  <Box sx={{ flex: '1 1 140px' }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Hora de registro
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {formatExpenseTime(detailExpense.createdAt)}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Categoría
+                  </Typography>
+                  <Typography variant="body2">{detailExpense.category}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Total
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {formatCurrency(detailExpense.totalAmount)}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Descripción
+                  </Typography>
+                  <Typography variant="body2">{detailExpense.description?.trim() || '—'}</Typography>
+                </Box>
+                <Divider />
+                <Typography variant="subtitle2">Ítems</Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Concepto</TableCell>
+                      <TableCell align="right">Monto u.</TableCell>
+                      <TableCell align="right">Cant.</TableCell>
+                      <TableCell align="right">Subtotal</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {(detailExpense.items || []).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4}>
+                          <Typography variant="body2" color="text.secondary">
+                            Sin ítems
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      (detailExpense.items || []).map((it) => (
+                        <TableRow key={it.id || `${it.concept}-${it.amount}`}>
+                          <TableCell>{it.concept}</TableCell>
+                          <TableCell align="right">{formatCurrency(it.amount)}</TableCell>
+                          <TableCell align="right">{it.quantity ?? 1}</TableCell>
+                          <TableCell align="right">{formatCurrency(it.lineSubtotal)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ px: 2, py: 1.5, flexWrap: 'wrap', gap: 1 }}>
+            <Button onClick={closeDetail}>Cerrar</Button>
+            <Box sx={{ flex: '1 1 auto' }} />
+            {canDoAction(ACTION.GASTOS_EDITAR) && (
+              <Button startIcon={<EditIcon />} variant="outlined" onClick={openEditFromDetail}>
+                Editar
+              </Button>
+            )}
+            {canDoAction(ACTION.GASTOS_ELIMINAR) && (
+              <Button startIcon={<DeleteIcon />} color="error" variant="outlined" onClick={openDeleteFromDetail}>
+                Eliminar
+              </Button>
+            )}
+          </DialogActions>
+        </Dialog>
+
         <Dialog open={!!deleteTarget} onClose={() => !deleteLoading && setDeleteTarget(null)}>
           <DialogContent>
             <Typography>
-              ¿Eliminar el gasto del {deleteTarget ? formatDate(deleteTarget.expenseDate) : ''} — {deleteTarget?.category} (
+              ¿Eliminar el gasto {deleteTarget?.expenseNumber ? `${deleteTarget.expenseNumber} ` : ''}
+              del {deleteTarget ? formatDate(deleteTarget.expenseDate) : ''} — {deleteTarget?.category} (
               {deleteTarget ? formatCurrency(deleteTarget.totalAmount) : ''})?
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>

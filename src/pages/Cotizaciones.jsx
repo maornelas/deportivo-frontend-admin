@@ -49,6 +49,14 @@ function formatDate(v) {
   return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('es-MX', { dateStyle: 'short' })
 }
 
+function formatTime(v) {
+  if (!v) return '-'
+  const d = new Date(v)
+  return isNaN(d.getTime())
+    ? '-'
+    : d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 function formatMoney(n, c = 'MXN') {
   if (n == null) return '-'
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: c }).format(Number(n))
@@ -169,7 +177,7 @@ export default function Cotizaciones() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-              placeholder="ID o número"
+              placeholder="Número de cotización"
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
               sx={{ minWidth: 200 }}
             />
@@ -187,16 +195,17 @@ export default function Cotizaciones() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell><strong>ID / Nº</strong></TableCell>
+                    <TableCell><strong>Nº</strong></TableCell>
                     <TableCell><strong>Cliente</strong></TableCell>
                     <TableCell><strong>Fecha</strong></TableCell>
+                    <TableCell><strong>Hora</strong></TableCell>
                     <TableCell align="right"><strong>Total</strong></TableCell>
                     <TableCell><strong>Estado</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} align="center" sx={{ py: 4 }}>Sin cotizaciones</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} align="center" sx={{ py: 4 }}>Sin cotizaciones</TableCell></TableRow>
                   ) : (
                     rows.map((q) => (
                       <TableRow
@@ -212,11 +221,11 @@ export default function Cotizaciones() {
                         }}
                       >
                         <TableCell>
-                          <Typography variant="body2" fontFamily="monospace" fontSize={12}>{q.id.slice(0, 8)}…</Typography>
-                          <Typography variant="caption" color="text.secondary">{q.quotationNumber}</Typography>
+                          <Typography variant="body2">{q.quotationNumber || '—'}</Typography>
                         </TableCell>
                         <TableCell>{q.clientName || '—'}</TableCell>
                         <TableCell>{formatDate(q.createdAt)}</TableCell>
+                        <TableCell>{formatTime(q.createdAt)}</TableCell>
                         <TableCell align="right">{formatMoney(q.total, q.currency)}</TableCell>
                         <TableCell>
                           <Chip size="small" label={STATUS[q.status]?.label || q.status} color={STATUS[q.status]?.color || 'default'} variant="outlined" />

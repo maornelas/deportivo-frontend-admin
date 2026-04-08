@@ -105,24 +105,33 @@ function mapSeriesToDateMap(series = []) {
   return m
 }
 
+/** Suma días a YYYY-MM-DD usando calendario local (alineado con filtros del dashboard). */
+function addDaysToYmd(ymd, deltaDays) {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + deltaDays)
+  const yy = dt.getFullYear()
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
 /** Una fila por día: ventas, gastos y compras (misma escala de fechas). */
 function buildOverviewChartData(dailySales = [], dailyExpenses = [], dailyPurchases = [], startDate, endDate) {
   const ventasMap = mapSeriesToDateMap(dailySales)
   const gastosMap = mapSeriesToDateMap(dailyExpenses)
   const comprasMap = mapSeriesToDateMap(dailyPurchases)
   const result = []
-  if (!startDate || !endDate) return result
-  const start = new Date(startDate + 'T00:00:00.000Z')
-  const end = new Date(endDate + 'T00:00:00.000Z')
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().slice(0, 10)
+  if (!startDate || !endDate || startDate > endDate) return result
+  let cur = startDate
+  while (cur <= endDate) {
     result.push({
-      date: dateStr,
-      dateLabel: formatShortDate(dateStr),
-      ventas: ventasMap.get(dateStr) ?? 0,
-      gastos: gastosMap.get(dateStr) ?? 0,
-      compras: comprasMap.get(dateStr) ?? 0,
+      date: cur,
+      dateLabel: formatShortDate(cur),
+      ventas: ventasMap.get(cur) ?? 0,
+      gastos: gastosMap.get(cur) ?? 0,
+      compras: comprasMap.get(cur) ?? 0,
     })
+    cur = addDaysToYmd(cur, 1)
   }
   return result
 }
@@ -131,17 +140,16 @@ function buildChannelChartData(online = [], advisor = [], startDate, endDate) {
   const om = mapSeriesToDateMap(online)
   const am = mapSeriesToDateMap(advisor)
   const result = []
-  if (!startDate || !endDate) return result
-  const start = new Date(startDate + 'T00:00:00.000Z')
-  const end = new Date(endDate + 'T00:00:00.000Z')
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().slice(0, 10)
+  if (!startDate || !endDate || startDate > endDate) return result
+  let cur = startDate
+  while (cur <= endDate) {
     result.push({
-      date: dateStr,
-      dateLabel: formatShortDate(dateStr),
-      online: om.get(dateStr) ?? 0,
-      advisor: am.get(dateStr) ?? 0,
+      date: cur,
+      dateLabel: formatShortDate(cur),
+      online: om.get(cur) ?? 0,
+      advisor: am.get(cur) ?? 0,
     })
+    cur = addDaysToYmd(cur, 1)
   }
   return result
 }

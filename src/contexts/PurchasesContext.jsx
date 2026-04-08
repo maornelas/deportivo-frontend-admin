@@ -3,10 +3,43 @@ import { computePurchaseTotal } from '../compras/shared'
 
 const PurchasesContext = createContext(null)
 
+function isCmpFolio(v) {
+  return /^CMP-\d{6}$/.test(String(v || ''))
+}
+
+function buildCmpFolio(n) {
+  return `CMP-${String(n).padStart(6, '0')}`
+}
+
+function maxCmpFrom(list = []) {
+  let max = 0
+  for (const p of list) {
+    const id = String(p?.id || '')
+    if (!isCmpFolio(id)) continue
+    const n = Number(id.slice(4))
+    if (!Number.isNaN(n) && n > max) max = n
+  }
+  return max
+}
+
+function normalizePurchaseIds(list = []) {
+  const sorted = [...list].sort(
+    (a, b) =>
+      new Date(a?.createdAt || a?.purchaseDate || 0).getTime() -
+      new Date(b?.createdAt || b?.purchaseDate || 0).getTime(),
+  )
+  let seq = maxCmpFrom(sorted)
+  return sorted.map((p) => {
+    if (isCmpFolio(p.id)) return p
+    seq += 1
+    return { ...p, id: buildCmpFolio(seq) }
+  })
+}
+
 function buildSeedPurchases() {
   const seed = [
     {
-      id: crypto.randomUUID(),
+      id: 'CMP-000001',
       providerName: 'Proveedor Demo SA de CV',
       purchaseDate: new Date().toISOString(),
       paymentMethod: 'transfer',
@@ -51,12 +84,15 @@ function buildSeedPurchases() {
 }
 
 export function PurchasesProvider({ children }) {
-  const [purchases, setPurchases] = useState(buildSeedPurchases)
+  const [purchases, setPurchases] = useState(() => normalizePurchaseIds(buildSeedPurchases()))
 
   const addPurchase = useCallback((p) => {
     setPurchases((prev) => {
-      if (prev.some((x) => String(x.id) === String(p.id))) return prev
-      return [p, ...prev]
+      const normalizedPrev = normalizePurchaseIds(prev)
+      const nextNum = maxCmpFrom(normalizedPrev) + 1
+      const folio = isCmpFolio(p?.id) ? String(p.id) : buildCmpFolio(nextNum)
+      if (normalizedPrev.some((x) => String(x.id) === folio)) return normalizedPrev
+      return [{ ...p, id: folio }, ...normalizedPrev]
     })
   }, [])
 

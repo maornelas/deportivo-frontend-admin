@@ -26,3 +26,14 @@ export async function listActivityLogs(params = {}) {
   if (!body.success || !body.data) return { success: false, error: body.message || 'Error al cargar historial' }
   return { success: true, data: body.data }
 }
+
+/**
+ * @param {string} id UUID del registro
+ */
+export async function getActivityLog(id) {
+  const res = await apiFetch(`/activity-logs/${encodeURIComponent(id)}`)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  if (!body.success || !body.data) return { success: false, error: body.message || 'Error al cargar detalle' }
+  return { success: true, data: body.data }
+}

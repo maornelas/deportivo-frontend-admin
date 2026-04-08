@@ -17,10 +17,16 @@ import {
   TextField,
   Button,
   Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  Divider,
+  IconButton,
 } from '@mui/material'
+import { Close as CloseIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
-import { listActivityLogs } from '../api/activityLogs'
+import { getActivityLog, listActivityLogs } from '../api/activityLogs'
 import { useAuth } from '../contexts/AuthContext'
 import { activityMethodLabel, activityModuleLabel } from '../utils/activityLogDisplay'
 
@@ -34,6 +40,40 @@ function fmtTimeOnly(v) {
   if (!v) return '—'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('es-MX', { timeStyle: 'medium' })
+}
+
+function fmtDateTime(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'medium' })
+}
+
+function formatMetadata(meta) {
+  if (meta == null) return '—'
+  if (typeof meta === 'object') {
+    try {
+      return JSON.stringify(meta, null, 2)
+    } catch {
+      return String(meta)
+    }
+  }
+  return String(meta)
+}
+
+function pickRequestPayload(metadata) {
+  if (!metadata || typeof metadata !== 'object') return null
+  return Object.prototype.hasOwnProperty.call(metadata, 'requestPayload')
+    ? metadata.requestPayload
+    : null
+}
+
+function pickResponseStatusCode(metadata) {
+  if (!metadata || typeof metadata !== 'object') return null
+  return Object.prototype.hasOwnProperty.call(metadata, 'statusCode')
+    ? metadata.statusCode
+    : null
 }
 
 export default function Historial() {
@@ -55,6 +95,11 @@ export default function Historial() {
   const [appliedRole, setAppliedRole] = useState('')
   const [appliedStartDate, setAppliedStartDate] = useState('')
   const [appliedEndDate, setAppliedEndDate] = useState('')
+
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState('')
+  const [detail, setDetail] = useState(null)
 
   const applyFilters = () => {
     setAppliedUserSearch(filterUserSearch.trim())
@@ -91,9 +136,33 @@ export default function Historial() {
     load()
   }, [load])
 
+  const closeDetail = () => {
+    if (detailLoading) return
+    setDetailOpen(false)
+    setDetailError('')
+    setDetail(null)
+  }
+
+  const openDetailForRow = async (rowId) => {
+    setDetailOpen(true)
+    setDetail(null)
+    setDetailError('')
+    setDetailLoading(true)
+    const r = await getActivityLog(rowId)
+    setDetailLoading(false)
+    if (!r.success) {
+      setDetailError(r.error || 'No se pudo cargar el detalle')
+      return
+    }
+    setDetail(r.data)
+  }
+
   if (!canViewPath('/historial')) {
     return null
   }
+
+  const dialogRequestPayload = detail ? pickRequestPayload(detail.metadata) : null
+  const dialogStatusCode = detail ? pickResponseStatusCode(detail.metadata) : null
 
   return (
     <Box sx={{ minHeight: '100vh' }}>
@@ -118,7 +187,8 @@ export default function Historial() {
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
           Registro de acciones de escritura en la API (POST, PUT, PATCH, DELETE) con contexto del usuario del panel cuando
-          la petición incluye las cabeceras de administrador.
+          la petición incluye las cabeceras de administrador. Doble clic en una fila para ver el detalle de la acción y el
+          contexto del usuario.
         </Typography>
 
         <Paper sx={{ p: 2, mb: 2 }}>
@@ -198,7 +268,12 @@ export default function Historial() {
                 </TableRow>
               ) : (
                 rows.map((r) => (
-                  <TableRow key={r.id} hover>
+                  <TableRow
+                    key={r.id}
+                    hover
+                    sx={{ cursor: 'pointer' }}
+                    onDoubleClick={() => openDetailForRow(r.id)}
+                  >
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{fmtDateOnly(r.createdAt)}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtTimeOnly(r.createdAt)}
@@ -246,6 +321,162 @@ export default function Historial() {
             labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
           />
         </TableContainer>
+
+        <Dialog open={detailOpen} onClose={closeDetail} maxWidth="md" fullWidth scroll="paper">
+          <DialogTitle
+            sx={{
+              bgcolor: '#7B2CBF',
+              color: '#fff',
+              fontWeight: 600,
+              py: 2,
+              pr: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            Detalle de la acción
+            <IconButton
+              onClick={closeDetail}
+              disabled={detailLoading}
+              aria-label="Cerrar"
+              edge="end"
+              size="small"
+              sx={{
+                color: '#fff',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.12)' },
+                '&.Mui-disabled': { color: 'rgba(255,255,255,0.5)' },
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent dividers>
+            {detailLoading && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress size={36} />
+              </Box>
+            )}
+            {!detailLoading && detailError && <Alert severity="error">{detailError}</Alert>}
+            {!detailLoading && !detailError && detail && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Método HTTP
+                  </Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    <Chip
+                      label={activityMethodLabel(detail.httpMethod)}
+                      size="small"
+                      color={detail.httpMethod === 'DELETE' ? 'error' : detail.httpMethod === 'POST' ? 'success' : 'primary'}
+                      variant="outlined"
+                    />
+                    <Typography component="span" variant="body2" sx={{ ml: 1, fontFamily: 'monospace', fontWeight: 600 }}>
+                      {detail.httpMethod}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Divider />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Ruta
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 13 }}>
+                    {detail.path}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Módulo: {activityModuleLabel(detail.path)}
+                  </Typography>
+                </Box>
+                <Divider />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Contexto del usuario (panel)
+                  </Typography>
+                  <Box sx={{ mt: 1, display: 'grid', gap: 0.75 }}>
+                    <Typography variant="body2">
+                      <strong>Nombre:</strong> {detail.userDisplayName?.trim() || '—'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Email:</strong> {detail.userEmail?.trim() || '—'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+                      <strong>ID usuario:</strong> {detail.userId || '—'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Rol:</strong> {detail.roleLabel || '—'}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Divider />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Resumen
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    {detail.actionSummary || '—'}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Payload enviado
+                  </Typography>
+                  <Box
+                    component="pre"
+                    sx={{
+                      mt: 0.5,
+                      p: 1.5,
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      fontSize: 12,
+                      overflow: 'auto',
+                      maxHeight: 240,
+                      fontFamily: 'monospace',
+                    }}
+                  >
+                    {formatMetadata(dialogRequestPayload)}
+                  </Box>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Código de estado HTTP (respuesta)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace' }}>
+                    {dialogStatusCode != null ? String(dialogStatusCode) : '—'}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  <Box sx={{ flex: '1 1 200px' }}>
+                    <Typography variant="caption" color="text.secondary">
+                      IP
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {detail.ip || '—'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: '1 1 200px' }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Fecha y hora
+                    </Typography>
+                    <Typography variant="body2">{fmtDateTime(detail.createdAt)}</Typography>
+                  </Box>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    User-Agent
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-word', fontSize: 12 }}>
+                    {detail.userAgent?.trim() || '—'}
+                  </Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                  ID registro: {detail.id}
+                </Typography>
+              </Box>
+            )}
+          </DialogContent>
+        </Dialog>
       </Box>
     </Box>
   )

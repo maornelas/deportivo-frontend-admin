@@ -8,6 +8,10 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   FormControl,
   IconButton,
@@ -24,6 +28,7 @@ import {
   ArrowBack as BackIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
+  Edit as EditIcon,
   Remove as RemoveQtyIcon,
   ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material'
@@ -36,6 +41,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { usePurchases } from '../contexts/PurchasesContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
+import {
+  formatLineVehicleLabel,
+  summarizePurchaseHeaderVehicle,
+  vehicleLineFingerprint,
+} from '../compras/shared'
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
@@ -99,7 +109,7 @@ const sectionHeaderSx = {
 export default function CompraRegistrar() {
   const navigate = useNavigate()
   const { canDoAction, user } = useAuth()
-  const { addPurchase } = usePurchases()
+  const { addPurchase, purchases } = usePurchases()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -113,10 +123,7 @@ export default function CompraRegistrar() {
   const [receiptFileName, setReceiptFileName] = useState('')
 
   const [brands, setBrands] = useState([])
-  const [carModels, setCarModels] = useState([])
-  const [filterBrandId, setFilterBrandId] = useState('')
-  const [filterModel, setFilterModel] = useState('')
-  const [filterYear, setFilterYear] = useState('')
+  const [draftCarModels, setDraftCarModels] = useState([])
 
   const [lines, setLines] = useState([])
 
@@ -125,10 +132,22 @@ export default function CompraRegistrar() {
   const [draftPartType, setDraftPartType] = useState('ORIGINAL')
   const [draftPartCondition, setDraftPartCondition] = useState('NUEVO')
   const [draftUnitPrice, setDraftUnitPrice] = useState('')
+  const [draftBrandId, setDraftBrandId] = useState('')
+  const [draftModel, setDraftModel] = useState('')
+  const [draftYear, setDraftYear] = useState('')
+  const [draftVersion, setDraftVersion] = useState('')
 
-  const vehicleBrandName = useMemo(
-    () => (brands.find((b) => b.id === filterBrandId)?.name || '').trim(),
-    [brands, filterBrandId],
+  /** Editar vehículo de una línea ya en el resumen */
+  const [vehicleDialogKey, setVehicleDialogKey] = useState(null)
+  const [dlgBrandId, setDlgBrandId] = useState('')
+  const [dlgModel, setDlgModel] = useState('')
+  const [dlgYear, setDlgYear] = useState('')
+  const [dlgVersion, setDlgVersion] = useState('')
+  const [dlgCarModels, setDlgCarModels] = useState([])
+
+  const draftVehicleBrandName = useMemo(
+    () => (brands.find((b) => b.id === draftBrandId)?.name || '').trim(),
+    [brands, draftBrandId],
   )
 
   const totals = useMemo(() => {
@@ -145,9 +164,12 @@ export default function CompraRegistrar() {
   )
 
   const summaryVehicle = useMemo(() => {
-    const parts = [vehicleBrandName, filterModel?.trim(), filterYear?.trim()].filter(Boolean)
-    return parts.length ? parts.join(' - ') : ''
-  }, [vehicleBrandName, filterModel, filterYear])
+    const withV = lines.filter((l) => formatLineVehicleLabel(l))
+    if (withV.length === 0) return ''
+    const uniq = new Set(withV.map((l) => vehicleLineFingerprint(l)))
+    if (uniq.size === 1) return formatLineVehicleLabel(withV[0])
+    return 'Varios vehículos'
+  }, [lines])
 
   useEffect(() => {
     getBrands({ activeOnly: true }).then((r) => {
@@ -156,18 +178,54 @@ export default function CompraRegistrar() {
   }, [])
 
   useEffect(() => {
-    if (!filterBrandId) {
-      setCarModels([])
-      setFilterModel('')
+    if (!draftBrandId) {
+      setDraftCarModels([])
       return
     }
-    getCarModelsByBrand(filterBrandId).then((r) => {
-      if (r.success) setCarModels(r.data || [])
+    getCarModelsByBrand(draftBrandId).then((r) => {
+      if (r.success) setDraftCarModels(r.data || [])
     })
-  }, [filterBrandId])
+  }, [draftBrandId])
+
+  useEffect(() => {
+    if (!dlgBrandId) {
+      setDlgCarModels([])
+      return
+    }
+    getCarModelsByBrand(dlgBrandId).then((r) => {
+      if (r.success) setDlgCarModels(r.data || [])
+    })
+  }, [dlgBrandId])
 
   const updateLine = (key, patch) => setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
   const removeLine = (key) => setLines((prev) => prev.filter((l) => l.key !== key))
+
+  const openVehicleDialog = (key) => {
+    const l = lines.find((x) => x.key === key)
+    if (!l) return
+    setVehicleDialogKey(key)
+    setDlgBrandId(l.vehicleBrandId || '')
+    setDlgModel(l.vehicleModel || '')
+    setDlgYear(l.vehicleYear || '')
+    setDlgVersion(l.vehicleVersion || '')
+  }
+
+  const closeVehicleDialog = () => {
+    setVehicleDialogKey(null)
+  }
+
+  const saveVehicleDialog = () => {
+    if (!vehicleDialogKey) return
+    const name = (brands.find((b) => b.id === dlgBrandId)?.name || '').trim()
+    updateLine(vehicleDialogKey, {
+      vehicleBrandId: dlgBrandId || '',
+      vehicleBrand: name,
+      vehicleModel: dlgModel?.trim() || '',
+      vehicleYear: dlgYear?.trim() || '',
+      vehicleVersion: dlgVersion?.trim() || '',
+    })
+    closeVehicleDialog()
+  }
 
   const bumpQuantity = (key, delta) => {
     setLines((prev) =>
@@ -204,6 +262,11 @@ export default function CompraRegistrar() {
       partCondition: draftPartCondition,
       unitPrice: price,
       quantity: 1,
+      vehicleBrandId: draftBrandId || '',
+      vehicleBrand: draftVehicleBrandName || '',
+      vehicleModel: draftModel?.trim() || '',
+      vehicleYear: draftYear?.trim() || '',
+      vehicleVersion: draftVersion?.trim() || '',
     }
     setLines((prev) => [...prev, row])
     setDraftName('')
@@ -236,7 +299,14 @@ export default function CompraRegistrar() {
     setSaving(true)
     try {
       const cleanLines = lines.filter((l) => safeTrim(l.productName))
-      const id = crypto.randomUUID()
+      const maxCmp = purchases.reduce((max, p) => {
+        const id = String(p?.id || '')
+        if (!/^CMP-\d{6}$/.test(id)) return max
+        const n = Number(id.slice(4))
+        return !Number.isNaN(n) && n > max ? n : max
+      }, 0)
+      const id = `CMP-${String(maxCmp + 1).padStart(6, '0')}`
+      const headerVeh = summarizePurchaseHeaderVehicle(cleanLines)
       const payload = {
         id,
         providerName: editorProvider.trim(),
@@ -248,10 +318,11 @@ export default function CompraRegistrar() {
         receiptFileName: receiptFileName || '',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        vehicleBrandId: filterBrandId || '',
-        vehicleBrand: vehicleBrandName || '',
-        vehicleModel: filterModel || '',
-        vehicleYear: filterYear || '',
+        vehicleBrandId: headerVeh.vehicleBrandId,
+        vehicleBrand: headerVeh.vehicleBrand,
+        vehicleModel: headerVeh.vehicleModel,
+        vehicleYear: headerVeh.vehicleYear,
+        vehicleVersion: headerVeh.vehicleVersion,
         items: cleanLines.map((l) => ({
           key: l.key,
           productId: null,
@@ -261,6 +332,11 @@ export default function CompraRegistrar() {
           partCondition: l.partCondition,
           unitPrice: Number(l.unitPrice || 0),
           quantity: Math.max(1, parseInt(l.quantity, 10) || 1),
+          vehicleBrandId: l.vehicleBrandId || '',
+          vehicleBrand: l.vehicleBrand || '',
+          vehicleModel: l.vehicleModel || '',
+          vehicleYear: l.vehicleYear || '',
+          vehicleVersion: l.vehicleVersion || '',
         })),
       }
       payload.total = totals.total
@@ -429,22 +505,19 @@ export default function CompraRegistrar() {
             <Paper sx={{ mb: 2, overflow: 'hidden' }} elevation={2}>
               <Box sx={sectionHeaderSx}>
                 <Typography variant="subtitle1" fontWeight={700} letterSpacing={0.3}>
-                  Datos del Vehículo
+                  Piezas a comprar
                 </Typography>
               </Box>
               <Box sx={{ p: 2 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Opcional. Asocia la compra a una unidad (misma idea que en cotización).
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end' }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end', mb: 2 }}>
                   <FormControl size="small" sx={{ minWidth: 180 }}>
                     <InputLabel>Marca</InputLabel>
                     <Select
                       label="Marca"
-                      value={filterBrandId}
+                      value={draftBrandId}
                       onChange={(e) => {
-                        setFilterBrandId(e.target.value)
-                        setFilterModel('')
+                        setDraftBrandId(e.target.value)
+                        setDraftModel('')
                       }}
                     >
                       <MenuItem value="">Sin especificar</MenuItem>
@@ -455,11 +528,11 @@ export default function CompraRegistrar() {
                       ))}
                     </Select>
                   </FormControl>
-                  <FormControl size="small" sx={{ minWidth: 200 }} disabled={!filterBrandId}>
+                  <FormControl size="small" sx={{ minWidth: 200 }} disabled={!draftBrandId}>
                     <InputLabel>Modelo</InputLabel>
-                    <Select label="Modelo" value={filterModel} onChange={(e) => setFilterModel(e.target.value)}>
+                    <Select label="Modelo" value={draftModel} onChange={(e) => setDraftModel(e.target.value)}>
                       <MenuItem value="">Sin especificar</MenuItem>
-                      {carModels.map((m) => (
+                      {draftCarModels.map((m) => (
                         <MenuItem key={m.id} value={m.model}>
                           {m.model}
                         </MenuItem>
@@ -470,24 +543,24 @@ export default function CompraRegistrar() {
                     label="Año"
                     size="small"
                     placeholder="2024"
-                    value={filterYear}
-                    onChange={(e) => setFilterYear(e.target.value)}
+                    value={draftYear}
+                    onChange={(e) => setDraftYear(e.target.value)}
                     sx={{ width: 110 }}
                     inputProps={{ maxLength: 32 }}
                   />
                 </Box>
-              </Box>
-            </Paper>
-
-            <Paper sx={{ mb: 2, overflow: 'hidden' }} elevation={2}>
-              <Box sx={sectionHeaderSx}>
-                <Typography variant="subtitle1" fontWeight={700} letterSpacing={0.3}>
-                  Piezas a comprar
-                </Typography>
-              </Box>
-              <Box sx={{ p: 2 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Completa los datos y pulsa <strong>Agregar pieza</strong>; la pieza aparecerá en el resumen a la derecha.
+                <TextField
+                  fullWidth
+                  label="Descripción completa"
+                  size="small"
+                  placeholder="Detalle del vehículo o aplicación (opcional)"
+                  value={draftVersion}
+                  onChange={(e) => setDraftVersion(e.target.value)}
+                  sx={{ mb: 2 }}
+                  inputProps={{ maxLength: 500 }}
+                />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontWeight: 600 }}>
+                  Pieza y precio
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end' }}>
                   <TextField
@@ -629,11 +702,20 @@ export default function CompraRegistrar() {
                               mb: 0.75,
                               py: 0.75,
                               px: 1,
-                              pr: 4.5,
+                              pr: 7,
                               border: '1px solid',
                               borderColor: 'divider',
                             }}
                           >
+                            <IconButton
+                              size="small"
+                              onClick={() => openVehicleDialog(l.key)}
+                              aria-label="Editar vehículo de la línea"
+                              sx={{ position: 'absolute', top: 2, right: 30, p: 0.35 }}
+                              color="primary"
+                            >
+                              <EditIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
                             <IconButton
                               size="small"
                               onClick={() => removeLine(l.key)}
@@ -646,6 +728,16 @@ export default function CompraRegistrar() {
                             <Typography variant="body2" fontWeight={600} sx={{ lineHeight: 1.25, fontSize: '0.8125rem', pr: 2 }}>
                               {l.productName}
                             </Typography>
+                            {formatLineVehicleLabel(l) ? (
+                              <Typography
+                                variant="caption"
+                                color="primary"
+                                display="block"
+                                sx={{ mt: 0.125, mb: 0.2, lineHeight: 1.25, fontSize: '0.68rem', fontWeight: 600 }}
+                              >
+                                Vehículo: {formatLineVehicleLabel(l)}
+                              </Typography>
+                            ) : null}
                             <Typography
                               variant="caption"
                               color="text.secondary"
@@ -753,6 +845,66 @@ export default function CompraRegistrar() {
           </Box>
         </Box>
         </Box>
+        <Dialog open={vehicleDialogKey != null} onClose={closeVehicleDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>Vehículo de esta línea</DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, pt: 1, alignItems: 'flex-end' }}>
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <InputLabel>Marca</InputLabel>
+                <Select
+                  label="Marca"
+                  value={dlgBrandId}
+                  onChange={(e) => {
+                    setDlgBrandId(e.target.value)
+                    setDlgModel('')
+                  }}
+                >
+                  <MenuItem value="">Sin especificar</MenuItem>
+                  {brands.map((b) => (
+                    <MenuItem key={b.id} value={b.id}>
+                      {b.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 200 }} disabled={!dlgBrandId}>
+                <InputLabel>Modelo</InputLabel>
+                <Select label="Modelo" value={dlgModel} onChange={(e) => setDlgModel(e.target.value)}>
+                  <MenuItem value="">Sin especificar</MenuItem>
+                  {dlgCarModels.map((m) => (
+                    <MenuItem key={m.id} value={m.model}>
+                      {m.model}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                label="Año"
+                size="small"
+                value={dlgYear}
+                onChange={(e) => setDlgYear(e.target.value)}
+                sx={{ width: 110 }}
+                inputProps={{ maxLength: 32 }}
+              />
+            </Box>
+            <TextField
+              fullWidth
+              label="Descripción completa"
+              size="small"
+              placeholder="Detalle del vehículo o aplicación (opcional)"
+              value={dlgVersion}
+              onChange={(e) => setDlgVersion(e.target.value)}
+              sx={{ mt: 2 }}
+              inputProps={{ maxLength: 500 }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeVehicleDialog}>Cancelar</Button>
+            <Button variant="contained" onClick={saveVehicleDialog}>
+              Guardar
+            </Button>
+          </DialogActions>
+        </Dialog>
         {permissionDeniedSnackbar}
       </Box>
     </Box>

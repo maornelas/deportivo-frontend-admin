@@ -24,12 +24,20 @@ import { getExpenseReportSummary, listExpenses } from '../api/expenses'
 import { usePurchases } from '../contexts/PurchasesContext'
 import { computePurchaseTotal } from '../compras/shared'
 
+/** YYYY-MM-DD en calendario local (misma semántica que <input type="date">). */
+function formatYMDLocal(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function getDefaultDateRange() {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth(), 1)
   return {
-    startDate: start.toISOString().slice(0, 10),
-    endDate: now.toISOString().slice(0, 10),
+    startDate: formatYMDLocal(start),
+    endDate: formatYMDLocal(now),
   }
 }
 
@@ -167,6 +175,16 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDailyExpenses()
   }, [fetchDailyExpenses])
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      fetchExpenseSummary()
+      fetchDailyExpenses()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [fetchExpenseSummary, fetchDailyExpenses])
 
   const fetchOrderStatsByStatus = useCallback(async () => {
     if (!startDate || !endDate) return

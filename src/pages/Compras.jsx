@@ -31,6 +31,13 @@ import { usePermissionDenied } from '../hooks/usePermissionDenied'
 import { usePushNotification } from '../hooks/usePushNotification'
 import { STATUS_OPTIONS, formatDateValue, formatMoney, getStatusChip, safeTrim } from '../compras/shared'
 
+function formatTimeValue(v) {
+  if (!v) return '-'
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return '-'
+  return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
 const Compras = () => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -182,6 +189,7 @@ const Compras = () => {
                 <TableCell><strong>ID</strong></TableCell>
                 <TableCell><strong>Proveedor</strong></TableCell>
                 <TableCell><strong>Fecha</strong></TableCell>
+                <TableCell><strong>Hora</strong></TableCell>
                 <TableCell align="right"><strong>Total</strong></TableCell>
                 <TableCell><strong>Estado</strong></TableCell>
                 <TableCell><strong>Pago</strong></TableCell>
@@ -190,7 +198,7 @@ const Compras = () => {
             <TableBody>
               {pagedPurchases.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                     Sin resultados con los filtros seleccionados.
                   </TableCell>
                 </TableRow>
@@ -207,12 +215,11 @@ const Compras = () => {
                       aria-label={`Ver detalles de compra ${String(p.id).slice(0, 8)}`}
                     >
                       <TableCell>
-                        <Typography variant="body2" fontFamily="monospace" fontSize={12}>
-                          {String(p.id).slice(0, 8)}…
-                        </Typography>
+                        <Typography variant="body2">{String(p.id || '-')}</Typography>
                       </TableCell>
                       <TableCell>{p.providerName || '-'}</TableCell>
                       <TableCell>{formatDateValue(p.purchaseDate) || '-'}</TableCell>
+                      <TableCell>{formatTimeValue(p.createdAt || p.purchaseDate)}</TableCell>
                       <TableCell align="right">{formatMoney(p.total, p.currency)}</TableCell>
                       <TableCell>
                         <Chip size="small" label={chip.label} color={chip.color} variant="outlined" />

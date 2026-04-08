@@ -4,6 +4,7 @@ const HEADERS = [
   'SINIESTRO',
   'UNIDAD',
   'CONCEPTO',
+  'CANAL DE VENTA',
   'PROVEEDOR',
   'MONTO',
   'MONTO NETO',
@@ -47,7 +48,7 @@ export async function downloadVentasExcel({ title, lines, filename }) {
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet('Ventas', { views: [{ showGridLines: true }] })
 
-  ws.mergeCells('A1:K1')
+  ws.mergeCells('A1:L1')
   const titleCell = ws.getCell('A1')
   titleCell.value = title
   titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } }
@@ -70,7 +71,7 @@ export async function downloadVentasExcel({ title, lines, filename }) {
   let r = 3
   if (!lines.length) {
     const row = ws.getRow(r)
-    ws.mergeCells(`A${r}:K${r}`)
+    ws.mergeCells(`A${r}:L${r}`)
     const c = row.getCell(1)
     c.value = 'Sin filas en el rango seleccionado.'
     c.alignment = { horizontal: 'center' }
@@ -83,6 +84,7 @@ export async function downloadVentasExcel({ title, lines, filename }) {
         line.siniestro || '—',
         line.unidad || '—',
         line.concepto || '—',
+        line.canalVenta || '—',
         line.proveedor || '—',
         moneyNumber(line.monto),
         moneyNumber(line.montoNeto),
@@ -96,7 +98,7 @@ export async function downloadVentasExcel({ title, lines, filename }) {
         const col = i + 1
         const cell = row.getCell(col)
         cell.border = BORDER_GRID
-        if (i >= 4 && i <= 8) {
+        if (i >= 5 && i <= 9) {
           if (val != null) {
             cell.value = val
             cell.numFmt = moneyFmt
@@ -105,7 +107,7 @@ export async function downloadVentasExcel({ title, lines, filename }) {
             cell.value = '—'
             cell.alignment = { horizontal: 'right' }
           }
-        } else if (i === 10) {
+        } else if (i === 11) {
           cell.value = val
           cell.fill = statusFill(line.status)
           cell.font = statusFont(line.status)
@@ -114,7 +116,7 @@ export async function downloadVentasExcel({ title, lines, filename }) {
           cell.value = val
           cell.alignment = { vertical: 'middle', wrapText: i === 2 }
         }
-        if (i === 8 && val != null) {
+        if (i === 9 && val != null) {
           cell.font = { bold: true, color: { argb: 'FF2E7D32' } }
         }
       })
@@ -126,7 +128,8 @@ export async function downloadVentasExcel({ title, lines, filename }) {
     { width: 14 },
     { width: 28 },
     { width: 42 },
-    { width: 18 },
+    { width: 16 },
+    { width: 26 },
     { width: 14 },
     { width: 14 },
     { width: 14 },
