@@ -46,6 +46,8 @@ import {
   updateExpense,
   deleteExpense,
 } from '../api/expenses'
+import { getUsers } from '../api/user'
+import { getRoles } from '../api/rbac'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
@@ -53,7 +55,47 @@ import { showBrowserNotificationIfAllowed } from '../utils/browserPush'
 
 const LIMIT = 15
 
-const CATEGORY_HINTS = ['gasolina', 'nómina', 'mantenimiento', 'servicios', 'renta', 'suministros']
+/** Mismo orden y texto que el backend (`expense-categories.ts`). */
+const EXPENSE_CATEGORIES = [
+  'SUELDO',
+  'ALMUERZOS',
+  'PAQUETERIAS',
+  'REPARACIONES',
+  'INTERNET',
+  'TONY',
+  'MENSUALIDAD',
+  'GASOLINAS',
+  'COMPRA DE MERCANCÍAS',
+  'VIRGEN DE DOLORES',
+  'MATERIAL DE EMPAQUE',
+  'MATERIAL DE LIMPIEZA',
+  'EQUIPOS TELEFÓNICOS',
+  'SERVICIO CHEVROLET',
+  'GASTOS VARIOS',
+]
+
+function categoryOptionsForSelect(currentValue) {
+  const v = (currentValue || '').trim()
+  if (v && !EXPENSE_CATEGORIES.includes(v)) return [v, ...EXPENSE_CATEGORIES]
+  return EXPENSE_CATEGORIES
+}
+
+function isEmpleadoRbacRole(role) {
+  if (!role) return false
+  const slug = String(role.slug || '')
+    .toLowerCase()
+    .trim()
+  const name = String(role.name || '')
+    .toLowerCase()
+    .trim()
+  return slug === 'empleado' || name === 'empleado'
+}
+
+function formatUserLabel(u) {
+  if (!u) return ''
+  const n = [u.firstName, u.lastName].filter(Boolean).join(' ').trim()
+  return n || u.email || ''
+}
 
 function formatDate(value) {
   if (!value) return '-'
@@ -82,10 +124,14 @@ function sumLineItems(items) {
   return round2(items.reduce((acc, it) => acc + Number(it.amount || 0) * Number(it.quantity || 0), 0))
 }
 
-const emptyItem = () => ({ concept: '', amount: '', quantity: 1 })
+const emptyItem = () => ({
+  amount: '',
+  quantity: 1,
+  netLineSubtotal: '',
+})
 
 const Gastos = () => {
-  const { canDoAction } = useAuth()
+  const { canDoAction, user } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -112,7 +158,12 @@ const Gastos = () => {
   const [formError, setFormError] = useState('')
   const [expenseDate, setExpenseDate] = useState('')
   const [formCategory, setFormCategory] = useState('')
-  const [description, setDescription] = useState('')
+  const [selectedSueldoUserId, setSelectedSueldoUserId] = useState('')
+  const [empleadoUsers, setEmpleadoUsers] = useState([])
+  const [empleadosLoading, setEmpleadosLoading] = useState(false)
+  const [empleadosListMessage, setEmpleadosListMessage] = useState('')
+  /** Al editar un SUELDO: texto guardado en la primera línea para preseleccionar empleado cuando cargue la lista. */
+  const [pendingSueldoLabelForEdit, setPendingSueldoLabelForEdit] = useState('')
   const [items, setItems] = useState([emptyItem()])
 
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -158,6 +209,71 @@ const Gastos = () => {
     fetchList()
   }, [fetchList])
 
+  useEffect(() => {
+    if (!formOpen || formCategory.trim() !== 'SUELDO') {
+      setEmpleadoUsers([])
+      setEmpleadosListMessage('')
+      setEmpleadosLoading(false)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      setEmpleadosLoading(true)
+      setEmpleadosListMessage('')
+      const rr = await getRoles()
+      if (cancelled) return
+      if (!rr.success) {
+        setEmpleadosLoading(false)
+        setEmpleadoUsers([])
+        setEmpleadosListMessage(rr.error || 'No se pudieron cargar los roles')
+        setPendingSueldoLabelForEdit('')
+        return
+      }
+      const empleadoRole = (rr.data || []).find(isEmpleadoRbacRole)
+      if (!empleadoRole) {
+        setEmpleadosLoading(false)
+        setEmpleadoUsers([])
+        setEmpleadosListMessage(
+          'No existe un rol «Empleado» en Roles y permisos. Crea uno con nombre o slug «empleado» y asígnalo a los usuarios.',
+        )
+        setPendingSueldoLabelForEdit('')
+        return
+      }
+      const ru = await getUsers({ activeOnly: true, excludeRole: 'customer' })
+      if (cancelled) return
+      setEmpleadosLoading(false)
+      if (!ru.success) {
+        setEmpleadoUsers([])
+        setEmpleadosListMessage(ru.error || 'No se pudieron cargar usuarios')
+        setPendingSueldoLabelForEdit('')
+        return
+      }
+      const list = (ru.data || []).filter(
+        (u) => u.adminRoleId === empleadoRole.id && u.isActive !== false,
+      )
+      setEmpleadoUsers(list)
+      if (list.length === 0) {
+        setEmpleadosListMessage('No hay usuarios activos con el rol Empleado.')
+        setPendingSueldoLabelForEdit('')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [formOpen, formCategory])
+
+  useEffect(() => {
+    if (!pendingSueldoLabelForEdit.trim() || selectedSueldoUserId) {
+      return
+    }
+    if (!empleadoUsers.length) return
+    const found = empleadoUsers.find(
+      (u) => formatUserLabel(u).toLowerCase() === pendingSueldoLabelForEdit.toLowerCase(),
+    )
+    if (found) setSelectedSueldoUserId(found.id)
+    setPendingSueldoLabelForEdit('')
+  }, [empleadoUsers, pendingSueldoLabelForEdit, selectedSueldoUserId])
+
   const handleApplyFilters = () => {
     setSearchApplied(search)
     setPage(0)
@@ -172,7 +288,10 @@ const Gastos = () => {
     setEditingId(null)
     setExpenseDate(new Date().toISOString().slice(0, 10))
     setFormCategory('')
-    setDescription('')
+    setSelectedSueldoUserId('')
+    setPendingSueldoLabelForEdit('')
+    setEmpleadoUsers([])
+    setEmpleadosListMessage('')
     setItems([emptyItem()])
     setFormError('')
     setFormOpen(true)
@@ -197,14 +316,24 @@ const Gastos = () => {
     const e = r.data
     setExpenseDate((e.expenseDate || '').slice(0, 10))
     setFormCategory(e.category || '')
-    setDescription(e.description || '')
+    setSelectedSueldoUserId('')
+    setPendingSueldoLabelForEdit(
+      (e.category || '').trim() === 'SUELDO'
+        ? String((e.items || [])[0]?.employeeOrUnit || '').trim()
+        : '',
+    )
+    setEmpleadosListMessage('')
     setItems(
       (e.items || []).length
-        ? e.items.map((i) => ({
-            concept: i.concept || '',
-            amount: i.amount,
-            quantity: i.quantity ?? 1,
-          }))
+        ? e.items.map((i) => {
+            const line = Number(i.lineSubtotal ?? 0)
+            const net = i.netLineSubtotal != null ? Number(i.netLineSubtotal) : line
+            return {
+              amount: i.amount,
+              quantity: i.quantity ?? 1,
+              netLineSubtotal: Math.abs(net - line) > 0.005 ? String(net) : '',
+            }
+          })
         : [emptyItem()],
     )
   }
@@ -220,19 +349,44 @@ const Gastos = () => {
   }
 
   const buildPayload = () => {
+    const cat = formCategory.trim()
+    let sueldoEmployeeOrUnit = ''
+    if (cat === 'SUELDO') {
+      if (!selectedSueldoUserId.trim()) {
+        return { error: 'Selecciona el empleado para el gasto de categoría SUELDO.' }
+      }
+      const u = empleadoUsers.find((x) => x.id === selectedSueldoUserId)
+      sueldoEmployeeOrUnit = formatUserLabel(u)
+      if (!sueldoEmployeeOrUnit) {
+        return { error: 'El empleado seleccionado ya no está disponible. Vuelve a abrir el formulario o elige otro.' }
+      }
+    }
     const cleanItems = items
-      .filter((i) => String(i.concept || '').trim())
-      .map((i) => ({
-        concept: String(i.concept).trim(),
-        amount: round2(parseFloat(i.amount) || 0),
-        quantity: Math.max(1, parseInt(String(i.quantity), 10) || 1),
-      }))
+      .filter((i) => String(i.amount || '').trim() !== '' && parseFloat(i.amount) > 0)
+      .map((i) => {
+        const amount = round2(parseFloat(i.amount) || 0)
+        const quantity = Math.max(1, parseInt(String(i.quantity), 10) || 1)
+        const line = round2(amount * quantity)
+        const netStr = String(i.netLineSubtotal ?? '').trim()
+        const netParsed = netStr !== '' ? round2(parseFloat(netStr)) : line
+        const base = { amount, quantity }
+        if (netStr !== '' && Math.abs(netParsed - line) > 0.005) {
+          base.netLineSubtotal = netParsed
+        }
+        if (sueldoEmployeeOrUnit) {
+          base.employeeOrUnit = sueldoEmployeeOrUnit
+        }
+        return base
+      })
     if (!cleanItems.length) {
-      return { error: 'Agrega al menos un ítem con concepto.' }
+      return { error: 'Agrega al menos una línea con monto.' }
     }
     const totalAmount = sumLineItems(cleanItems)
-    if (!formCategory.trim()) {
-      return { error: 'La categoría es obligatoria.' }
+    if (!cat) {
+      return { error: 'Selecciona una categoría.' }
+    }
+    if (formMode === 'create' && !EXPENSE_CATEGORIES.includes(cat)) {
+      return { error: 'Categoría no válida.' }
     }
     if (!expenseDate) {
       return { error: 'La fecha es obligatoria.' }
@@ -241,8 +395,7 @@ const Gastos = () => {
       payload: {
         expenseDate,
         totalAmount,
-        category: formCategory.trim(),
-        description: description.trim() || undefined,
+        category: cat,
         items: cleanItems,
       },
     }
@@ -349,7 +502,8 @@ const Gastos = () => {
               Gastos
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Doble clic en un gasto para ver el detalle. Editar o eliminar desde el detalle.
+              Elige la categoría del gasto y las líneas de monto. El registro queda a nombre del usuario conectado; el
+              proveedor se guarda como DEPORTIVO. Doble clic para ver el detalle.
             </Typography>
           </Box>
           <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
@@ -366,7 +520,7 @@ const Gastos = () => {
               <TextField
                 fullWidth
                 size="small"
-                label="Buscar (categoría o descripción)"
+                label="Buscar (categoría, concepto, empleado, proveedor)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
@@ -382,7 +536,23 @@ const Gastos = () => {
               />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <TextField fullWidth size="small" label="Categoría exacta" value={category} onChange={(e) => setCategory(e.target.value)} />
+              <FormControl fullWidth size="small">
+                <InputLabel>Categoría</InputLabel>
+                <Select
+                  label="Categoría"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>Todas</em>
+                  </MenuItem>
+                  {EXPENSE_CATEGORIES.map((c) => (
+                    <MenuItem key={c} value={c}>
+                      {c}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={6} sm={3} md={2}>
               <TextField
@@ -454,19 +624,18 @@ const Gastos = () => {
                   <TableCell>Hora</TableCell>
                   <TableCell>Categoría</TableCell>
                   <TableCell align="right">Total</TableCell>
-                  <TableCell>Descripción</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                       <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
                 ) : expenses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                    <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                       No hay gastos con los filtros actuales.
                     </TableCell>
                   </TableRow>
@@ -483,9 +652,6 @@ const Gastos = () => {
                       <TableCell sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatExpenseTime(row.createdAt)}</TableCell>
                       <TableCell>{row.category}</TableCell>
                       <TableCell align="right">{formatCurrency(row.totalAmount)}</TableCell>
-                      <TableCell sx={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {row.description || '—'}
-                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -503,7 +669,7 @@ const Gastos = () => {
           />
         </Paper>
 
-        <Dialog open={formOpen} onClose={() => !formLoading && setFormOpen(false)} maxWidth="md" fullWidth>
+        <Dialog open={formOpen} onClose={() => !formLoading && setFormOpen(false)} maxWidth="lg" fullWidth>
           <ModalHeader title={formMode === 'create' ? 'Nuevo gasto' : 'Editar gasto'} onClose={() => !formLoading && setFormOpen(false)} />
           <DialogContent dividers>
             {formLoading && formMode === 'edit' && !expenseDate ? (
@@ -530,45 +696,81 @@ const Gastos = () => {
                     />
                   </Grid>
                   <Grid item xs={12} sm={8}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Categoría"
-                      value={formCategory}
-                      onChange={(e) => setFormCategory(e.target.value)}
-                      placeholder="ej. gasolina, nómina…"
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      Sugerencias: {CATEGORY_HINTS.join(', ')}
+                    <FormControl fullWidth size="small" required>
+                      <InputLabel>Categoría</InputLabel>
+                      <Select
+                        label="Categoría"
+                        value={formCategory}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setFormCategory(v)
+                          if (v.trim() !== 'SUELDO') {
+                            setSelectedSueldoUserId('')
+                            setPendingSueldoLabelForEdit('')
+                          }
+                        }}
+                        displayEmpty
+                      >
+                        <MenuItem value="">
+                          <em>Seleccionar categoría</em>
+                        </MenuItem>
+                        {categoryOptionsForSelect(formCategory).map((c) => (
+                          <MenuItem key={c} value={c}>
+                            {c}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                      Se usa en reportes y en cada línea como concepto. Proveedor: DEPORTIVO (automático).
                     </Typography>
                   </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Descripción (opcional)"
-                      multiline
-                      minRows={2}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                    />
-                  </Grid>
+                  {formCategory.trim() === 'SUELDO' && (
+                    <Grid item xs={12}>
+                      {empleadosListMessage ? (
+                        <Alert severity={empleadoUsers.length ? 'info' : 'warning'} sx={{ mb: 1.5 }}>
+                          {empleadosListMessage}
+                        </Alert>
+                      ) : null}
+                      <FormControl fullWidth size="small" required>
+                        <InputLabel id="gastos-sueldo-empleado-label">Empleado</InputLabel>
+                        <Select
+                          labelId="gastos-sueldo-empleado-label"
+                          label="Empleado"
+                          value={selectedSueldoUserId}
+                          onChange={(e) => setSelectedSueldoUserId(e.target.value)}
+                          disabled={empleadosLoading || empleadoUsers.length === 0}
+                        >
+                          <MenuItem value="">
+                            <em>{empleadosLoading ? 'Cargando…' : 'Seleccionar empleado'}</em>
+                          </MenuItem>
+                          {empleadoUsers.map((u) => (
+                            <MenuItem key={u.id} value={u.id}>
+                              {formatUserLabel(u)}
+                              {u.email ? ` · ${u.email}` : ''}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                        Lista de usuarios activos con rol RBAC «Empleado» (nombre o slug <strong>empleado</strong> en Roles y
+                        permisos). Se guarda en cada línea del gasto como empleado / unidad.
+                      </Typography>
+                    </Grid>
+                  )}
                 </Grid>
-                <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-                  Ítems (el total debe coincidir con la suma de monto × cantidad)
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5, mb: 1 }}>
+                  Registrado como:{' '}
+                  <strong>
+                    {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || '—'}
+                  </strong>
+                </Typography>
+                <Typography variant="subtitle2" sx={{ mt: 1, mb: 1 }}>
+                  Líneas de monto (misma categoría en todas las líneas de este gasto)
                 </Typography>
                 {items.map((it, idx) => (
-                  <Grid container spacing={1} key={idx} sx={{ mb: 1 }} alignItems="center">
-                    <Grid item xs={12} sm={5}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        label="Concepto"
-                        value={it.concept}
-                        onChange={(e) => updateItem(idx, 'concept', e.target.value)}
-                      />
-                    </Grid>
-                    <Grid item xs={5} sm={2}>
+                  <Grid container spacing={1} key={idx} sx={{ mb: 1.5 }} alignItems="flex-start">
+                    <Grid item xs={6} sm={4} md={3}>
                       <TextField
                         fullWidth
                         size="small"
@@ -579,24 +781,40 @@ const Gastos = () => {
                         onChange={(e) => updateItem(idx, 'amount', e.target.value)}
                       />
                     </Grid>
-                    <Grid item xs={4} sm={2}>
+                    <Grid item xs={6} sm={3} md={1}>
                       <TextField
                         fullWidth
                         size="small"
-                        label="Cantidad"
+                        label="Cant."
                         type="number"
                         inputProps={{ min: 1 }}
                         value={it.quantity}
                         onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                       />
                     </Grid>
-                    <Grid item xs={3} sm={2}>
-                      <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
-                        Subtotal: {formatCurrency((parseFloat(it.amount) || 0) * (parseInt(it.quantity, 10) || 0))}
+                    <Grid item xs={12} sm={4} md={3}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Monto neto (línea)"
+                        type="number"
+                        inputProps={{ step: '0.01', min: 0 }}
+                        value={it.netLineSubtotal}
+                        onChange={(e) => updateItem(idx, 'netLineSubtotal', e.target.value)}
+                        placeholder="opcional"
+                        helperText="Si vacío = monto × cantidad"
+                      />
+                    </Grid>
+                    <Grid item xs={6} sm={4} md={2}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Subtotal
+                      </Typography>
+                      <Typography variant="body2" sx={{ pt: 0.5, fontWeight: 600 }}>
+                        {formatCurrency((parseFloat(it.amount) || 0) * (parseInt(it.quantity, 10) || 0))}
                       </Typography>
                     </Grid>
-                    <Grid item xs={12} sm={1}>
-                      <Button size="small" disabled={items.length <= 1} onClick={() => removeItemRow(idx)}>
+                    <Grid item xs={12} sm={4} md={1}>
+                      <Button size="small" disabled={items.length <= 1} onClick={() => removeItemRow(idx)} sx={{ mt: 1 }}>
                         Quitar
                       </Button>
                     </Grid>
@@ -621,7 +839,7 @@ const Gastos = () => {
           </DialogActions>
         </Dialog>
 
-        <Dialog open={!!detailExpense} onClose={closeDetail} maxWidth="sm" fullWidth scroll="paper">
+        <Dialog open={!!detailExpense} onClose={closeDetail} maxWidth="md" fullWidth scroll="paper">
           <DialogTitle
             sx={{
               bgcolor: '#7B2CBF',
@@ -691,27 +909,40 @@ const Gastos = () => {
                     {formatCurrency(detailExpense.totalAmount)}
                   </Typography>
                 </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Descripción
-                  </Typography>
-                  <Typography variant="body2">{detailExpense.description?.trim() || '—'}</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Registrado por
+                    </Typography>
+                    <Typography variant="body2">
+                      {(detailExpense.items && detailExpense.items[0]?.employeeOrUnit) || '—'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Proveedor
+                    </Typography>
+                    <Typography variant="body2">DEPORTIVO</Typography>
+                  </Box>
                 </Box>
                 <Divider />
                 <Typography variant="subtitle2">Ítems</Typography>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
+                      <TableCell>Empleado</TableCell>
                       <TableCell>Concepto</TableCell>
+                      <TableCell>Proveedor</TableCell>
                       <TableCell align="right">Monto u.</TableCell>
                       <TableCell align="right">Cant.</TableCell>
-                      <TableCell align="right">Subtotal</TableCell>
+                      <TableCell align="right">Monto</TableCell>
+                      <TableCell align="right">Monto neto</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {(detailExpense.items || []).length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4}>
+                        <TableCell colSpan={7}>
                           <Typography variant="body2" color="text.secondary">
                             Sin ítems
                           </Typography>
@@ -720,10 +951,15 @@ const Gastos = () => {
                     ) : (
                       (detailExpense.items || []).map((it) => (
                         <TableRow key={it.id || `${it.concept}-${it.amount}`}>
+                          <TableCell>{it.employeeOrUnit || '—'}</TableCell>
                           <TableCell>{it.concept}</TableCell>
+                          <TableCell>{it.supplier || '—'}</TableCell>
                           <TableCell align="right">{formatCurrency(it.amount)}</TableCell>
                           <TableCell align="right">{it.quantity ?? 1}</TableCell>
                           <TableCell align="right">{formatCurrency(it.lineSubtotal)}</TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(it.netLineSubtotal ?? it.lineSubtotal)}
+                          </TableCell>
                         </TableRow>
                       ))
                     )}

@@ -117,7 +117,8 @@ export async function downloadVentasExcel({ title, lines, filename }) {
           cell.alignment = { vertical: 'middle', wrapText: i === 2 }
         }
         if (i === 9 && val != null) {
-          cell.font = { bold: true, color: { argb: 'FF2E7D32' } }
+          const neg = val < 0
+          cell.font = { bold: true, color: { argb: neg ? 'FFC62828' : 'FF2E7D32' } }
         }
       })
       r += 1

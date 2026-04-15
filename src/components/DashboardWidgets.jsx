@@ -176,6 +176,11 @@ const SalesChart = ({
         padding: { xs: '16px', sm: '20px', md: '24px' },
         borderRadius: '12px',
         width: '100%',
+        height: '100%',
+        minHeight: 0,
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
         overflow: 'hidden',
         backgroundColor: 'transparent',
         border: '1px solid rgba(0, 0, 0, 0.08)',
@@ -189,6 +194,7 @@ const SalesChart = ({
           alignItems: { xs: 'flex-start', lg: 'center' },
           marginBottom: { xs: '12px', sm: '16px', md: '20px' },
           gap: 2,
+          flexShrink: 0,
         }}
       >
         <Box
@@ -271,20 +277,25 @@ const SalesChart = ({
       <Box
         sx={{
           width: '100%',
-          height: { xs: '250px', sm: '280px', md: '320px', lg: '350px' },
-          minHeight: '250px',
+          flex: 1,
+          minHeight: 200,
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'stretch',
           justifyContent: 'center',
         }}
       >
         {loading ? (
-          <CircularProgress size={40} />
+          <CircularProgress size={40} sx={{ alignSelf: 'center' }} />
         ) : chartData.length === 0 ? (
-          <Typography color="text.secondary">No hay datos en el rango seleccionado</Typography>
+          <Typography color="text.secondary" sx={{ alignSelf: 'center' }}>
+            No hay datos en el rango seleccionado
+          </Typography>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+            <LineChart
+              data={chartData}
+              margin={{ top: 8, right: 12, left: 4, bottom: 48 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
               <XAxis
                 dataKey="date"
@@ -312,7 +323,11 @@ const SalesChart = ({
                 labelFormatter={(label) => label}
                 cursor={{ stroke: '#e0e0e0', strokeWidth: 1 }}
               />
-              <Legend wrapperStyle={{ fontSize: '12px', paddingTop: 8 }} />
+              <Legend
+                wrapperStyle={{ fontSize: '12px', paddingTop: 4 }}
+                verticalAlign="bottom"
+                height={36}
+              />
               {showVentas && (
                 <Line
                   type="monotone"
@@ -376,6 +391,11 @@ const ExpensesChart = ({
         padding: { xs: '16px', sm: '20px', md: '24px' },
         borderRadius: '12px',
         width: '100%',
+        height: '100%',
+        minHeight: 0,
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
         overflow: 'hidden',
         backgroundColor: 'transparent',
         border: '1px solid rgba(0, 0, 0, 0.08)',
@@ -389,6 +409,7 @@ const ExpensesChart = ({
           alignItems: { xs: 'flex-start', lg: 'center' },
           marginBottom: { xs: '12px', sm: '16px', md: '20px' },
           gap: 2,
+          flexShrink: 0,
         }}
       >
         <Box
@@ -454,20 +475,25 @@ const ExpensesChart = ({
       <Box
         sx={{
           width: '100%',
-          height: { xs: '250px', sm: '280px', md: '320px', lg: '350px' },
-          minHeight: '250px',
+          flex: 1,
+          minHeight: 200,
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'stretch',
           justifyContent: 'center',
         }}
       >
         {loading ? (
-          <CircularProgress size={40} />
+          <CircularProgress size={40} sx={{ alignSelf: 'center' }} />
         ) : chartData.length === 0 ? (
-          <Typography color="text.secondary">No hay datos en el rango seleccionado</Typography>
+          <Typography color="text.secondary" sx={{ alignSelf: 'center' }}>
+            No hay datos en el rango seleccionado
+          </Typography>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+            <LineChart
+              data={chartData}
+              margin={{ top: 8, right: 12, left: 4, bottom: 48 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
               <XAxis
                 dataKey="date"
@@ -495,7 +521,11 @@ const ExpensesChart = ({
                 labelFormatter={(label) => label}
                 cursor={{ stroke: '#e0e0e0', strokeWidth: 1 }}
               />
-              <Legend wrapperStyle={{ fontSize: '12px', paddingTop: 8 }} />
+              <Legend
+                wrapperStyle={{ fontSize: '12px', paddingTop: 4 }}
+                verticalAlign="bottom"
+                height={36}
+              />
               {showOnline && (
                 <Line
                   type="monotone"
@@ -655,42 +685,25 @@ const ProductsTable = () => {
   )
 }
 
-const STATUS_LABELS = {
-  pending: 'Pendiente',
-  confirmed: 'Confirmado',
-  processing: 'Procesando',
-  shipped: 'Enviado',
-  delivered: 'Entregado',
-  cancelled: 'Cancelado',
-  refunded: 'Reembolsado',
+function formatCurrency(value) {
+  return `$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-const STATUS_COLORS = [
-  '#2196f3',
-  '#7b1fa2',
-  '#4caf50',
-  '#ff9800',
-  '#009688',
-  '#f44336',
-  '#9e9e9e',
-]
-
-const FinanceSummary = ({ data = null, loading = false }) => {
-  const statusOrder = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']
-  const getCount = (obj, key) => {
-    if (!obj || typeof obj !== 'object') return 0
-    const v = obj[key] ?? obj[key.charAt(0).toUpperCase() + key.slice(1)]
-    return Number(v ?? 0)
-  }
+/** Totales por canal en el rango: ventas online, por asesor y proporción (ventas por canal). */
+const ChannelSalesSummary = ({
+  onlineTotal = 0,
+  advisorTotal = 0,
+  loading = false,
+}) => {
+  const online = Number(onlineTotal) || 0
+  const advisor = Number(advisorTotal) || 0
+  const total = online + advisor
   const chartData =
-    data && typeof data === 'object'
-      ? statusOrder
-          .filter((key) => getCount(data, key) > 0)
-          .map((key) => ({
-            name: STATUS_LABELS[key] || key,
-            value: getCount(data, key),
-            fill: STATUS_COLORS[statusOrder.indexOf(key) % STATUS_COLORS.length],
-          }))
+    total > 0
+      ? [
+          { name: 'Ventas Online', value: online, fill: '#7b1fa2' },
+          { name: 'Ventas por Asesor', value: advisor, fill: '#4caf50' },
+        ]
       : []
 
   return (
@@ -700,165 +713,123 @@ const FinanceSummary = ({ data = null, loading = false }) => {
         padding: { xs: '16px', sm: '20px', md: '24px' },
         borderRadius: '12px',
         height: '100%',
+        minHeight: 0,
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
         backgroundColor: 'transparent',
         border: '1px solid rgba(0, 0, 0, 0.08)',
       }}
     >
-      <Typography
-        variant="subtitle1"
-        sx={{
-          color: 'text.primary',
-          fontWeight: 600,
-          marginBottom: { xs: '16px', sm: '20px', md: '24px' },
-          fontSize: { xs: '14px', sm: '15px', md: '16px' },
-        }}
-      >
-        Estatus de pedidos
-      </Typography>
       <Box
+        className="drag-handle"
         sx={{
-          width: '100%',
-          height: { xs: '250px', sm: '280px', md: '300px' },
-          minHeight: '250px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          cursor: 'grab',
+          '&:active': { cursor: 'grabbing' },
+          marginBottom: { xs: '12px', sm: '16px' },
+          flexShrink: 0,
         }}
       >
-        {loading ? (
-          <CircularProgress size={40} />
-        ) : chartData.length === 0 ? (
-          <Typography color="text.secondary">No hay pedidos en el rango seleccionado</Typography>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={chartData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-                animationDuration={1000}
-              >
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
+        <Typography
+          variant="subtitle1"
+          sx={{
+            color: 'text.primary',
+            fontWeight: 600,
+            fontSize: { xs: '14px', sm: '15px', md: '16px' },
+          }}
+        >
+          Ventas por canal
+        </Typography>
       </Box>
-    </Paper>
-  )
-}
-
-// Gráfica de barras: total $ por estatus (usa datos de amountByStatus)
-const STATUS_ORDER = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']
-const STATUS_COLORS_BAR = ['#2196f3', '#7b1fa2', '#4caf50', '#ff9800', '#009688', '#f44336', '#9e9e9e']
-
-function formatCurrency(value) {
-  return `$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-const CategoryBarChart = ({ data = null, loading = false }) => {
-  const getAmount = (obj, key) => {
-    if (!obj || typeof obj !== 'object') return 0
-    const v = obj[key] ?? obj[key.charAt(0).toUpperCase() + key.slice(1)]
-    return Number(v ?? 0)
-  }
-  const chartData =
-    data && typeof data === 'object'
-      ? STATUS_ORDER.map((key) => ({
-          name: STATUS_LABELS[key] || key,
-          amount: getAmount(data, key),
-          color: STATUS_COLORS_BAR[STATUS_ORDER.indexOf(key) % STATUS_COLORS_BAR.length],
-        }))
-      : []
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        padding: { xs: '16px', sm: '20px', md: '24px' },
-        borderRadius: '12px',
-        width: '100%',
-        backgroundColor: 'transparent',
-        border: '1px solid rgba(0, 0, 0, 0.08)',
-      }}
-    >
-      <Typography
-        variant="subtitle1"
-        sx={{
-          color: 'text.primary',
-          fontWeight: 600,
-          marginBottom: { xs: '16px', sm: '20px', md: '24px' },
-          fontSize: { xs: '14px', sm: '15px', md: '16px' },
-        }}
-      >
-        Ventas por estatus
-      </Typography>
       <Box
         sx={{
-          width: '100%',
-          height: { xs: '250px', sm: '280px', md: '320px' },
-          minHeight: '250px',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          flexDirection: { xs: 'column', md: 'row' },
+          alignItems: 'stretch',
+          gap: { xs: 2, md: 3 },
+          flex: 1,
+          minHeight: 0,
         }}
       >
-        {loading ? (
-          <CircularProgress size={40} />
-        ) : chartData.length === 0 ? (
-          <Typography color="text.secondary">No hay datos en el rango seleccionado</Typography>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
-              <XAxis
-                dataKey="name"
-                stroke="#757575"
-                tick={{ fill: '#757575', fontSize: 11 }}
-                interval={0}
-              />
-              <YAxis
-                stroke="#757575"
-                tick={{ fill: '#757575', fontSize: 12 }}
-                tickFormatter={(value) => formatCurrency(value)}
-                width={70}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                }}
-                formatter={(value) => {
-                  const num = Array.isArray(value) ? value[0] : value
-                  return [formatCurrency(num), 'Total']
-                }}
-                cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
-              />
-              <Bar dataKey="amount" radius={[8, 8, 0, 0]} animationDuration={1000}>
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+        <Box
+          sx={{
+            flex: '1 1 50%',
+            minHeight: { xs: 180, sm: 200 },
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {loading ? (
+            <CircularProgress size={40} />
+          ) : chartData.length === 0 ? (
+            <Typography color="text.secondary">No hay ventas por canal en el rango</Typography>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) =>
+                    `${name.includes('Online') ? 'Online' : 'Asesor'}: ${(percent * 100).toFixed(0)}%`
+                  }
+                  outerRadius={95}
+                  fill="#8884d8"
+                  dataKey="value"
+                  animationDuration={1000}
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value) => formatCurrency(value)}
+                  contentStyle={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </Box>
+        <Box
+          sx={{
+            flex: '1 1 50%',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: 2,
+            pr: { md: 1 },
+          }}
+        >
+          <Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+              Ventas Online
+            </Typography>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#7b1fa2' }}>
+              {loading ? '…' : formatCurrency(online)}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+              Ventas por Asesor
+            </Typography>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
+              {loading ? '…' : formatCurrency(advisor)}
+            </Typography>
+          </Box>
+          {!loading && total > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              Total canal: {formatCurrency(total)}
+            </Typography>
+          )}
+        </Box>
       </Box>
     </Paper>
   )
@@ -1033,8 +1004,7 @@ export {
   SalesChart,
   ExpensesChart,
   ProductsTable,
-  FinanceSummary,
-  CategoryBarChart,
+  ChannelSalesSummary,
   SalesDistributionChart,
   MonthlyTrendChart,
 }

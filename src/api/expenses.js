@@ -117,6 +117,27 @@ export async function getExpenseReportSummary(range) {
 }
 
 /**
+ * Reporte detallado agrupado por categoría (reportería GASTOS).
+ * @param {{ startDate: string, endDate: string }} range
+ */
+export async function getExpenseGastosReport(range) {
+  const sp = new URLSearchParams({
+    startDate: range.startDate,
+    endDate: range.endDate,
+    format: 'gastos',
+  })
+  const res = await apiFetch(`/expenses/report?${sp.toString()}`)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success || !body.data) {
+    return { success: false, error: body.message || 'Error en reporte de gastos' }
+  }
+  return { success: true, data: body.data }
+}
+
+/**
  * Descarga CSV (detalle o resumen por categoría).
  * @param {'csv'|'summary_csv'} format
  */

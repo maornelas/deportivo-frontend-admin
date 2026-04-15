@@ -19,10 +19,13 @@ import {
   TableRow,
   CircularProgress,
   Alert,
+  Tab,
+  Tabs,
 } from '@mui/material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
-import { getSalesReport, getVentasAsesorNames } from '../api/salesReports'
+import { getSalesReport, getVentasAsesorNames, getIncomeStatement } from '../api/salesReports'
+import { getExpenseGastosReport, downloadExpenseReportCsv } from '../api/expenses'
 import { useAuth } from '../contexts/AuthContext'
 import { downloadVentasExcel } from '../utils/ventasReportExcel'
 
@@ -44,24 +47,63 @@ function monthBounds(y, m) {
   return { start, end }
 }
 
-function ventasReportTitle(startDateStr, endDateStr, asesorLabel) {
-  if (!startDateStr || !endDateStr) return 'VENTAS'
+function gastosReportTitle(startDateStr, endDateStr) {
+  if (!startDateStr || !endDateStr) return 'GASTOS'
   const y1 = startDateStr.slice(0, 4)
   const m1 = parseInt(startDateStr.slice(5, 7), 10)
   const y2 = endDateStr.slice(0, 4)
   const m2 = parseInt(endDateStr.slice(5, 7), 10)
-  let base
   if (y1 === y2 && m1 === m2) {
     const d = new Date(parseInt(y1, 10), m1 - 1, 15)
     const mes = d
       .toLocaleDateString('es-MX', { month: 'long' })
       .replace(/^\w/, (c) => c.toUpperCase())
-    base = `VENTAS ${mes} del ${y1}`
-  } else {
-    base = `VENTAS ${startDateStr} al ${endDateStr}`
+    return `GASTOS ${mes} ${y1}`
   }
-  const a = (asesorLabel || '').trim()
-  return a ? `${base} · Asesor: ${a}` : base
+  return `GASTOS ${startDateStr} al ${endDateStr}`
+}
+
+function ventasReportTitle(startDateStr, endDateStr, scope) {
+  if (!startDateStr || !endDateStr) return 'VENTAS'
+  const y1 = startDateStr.slice(0, 4)
+  const m1 = parseInt(startDateStr.slice(5, 7), 10)
+  const y2 = endDateStr.slice(0, 4)
+  const m2 = parseInt(endDateStr.slice(5, 7), 10)
+  const scopeLabel = scope === 'foraneo' ? 'FORÁNEAS' : 'LOCALES'
+  if (y1 === y2 && m1 === m2) {
+    const d = new Date(parseInt(y1, 10), m1 - 1, 15)
+    const mes = d
+      .toLocaleDateString('es-MX', { month: 'long' })
+      .replace(/^\w/, (c) => c.toUpperCase())
+    return `VENTAS ${scopeLabel} ${mes} del ${y1}`
+  }
+  return `VENTAS ${scopeLabel} ${startDateStr} al ${endDateStr}`
+}
+
+/** Título tipo plantilla: COMISIONES MANY MARZO DEL 2026 */
+function comisionesReportTitle(startDateStr, endDateStr, asesorNombre) {
+  if (!startDateStr || !endDateStr) return 'COMISIONES'
+  const nombre = (asesorNombre || '').trim().toUpperCase() || 'ASESOR'
+  const y1 = startDateStr.slice(0, 4)
+  const m1 = parseInt(startDateStr.slice(5, 7), 10)
+  const y2 = endDateStr.slice(0, 4)
+  const m2 = parseInt(endDateStr.slice(5, 7), 10)
+  if (y1 === y2 && m1 === m2) {
+    const d = new Date(parseInt(y1, 10), m1 - 1, 15)
+    const mes = d
+      .toLocaleDateString('es-MX', { month: 'long' })
+      .replace(/^\w/, (c) => c.toUpperCase())
+    return `COMISIONES ${nombre} ${mes} DEL ${y1}`
+  }
+  return `COMISIONES ${nombre} ${startDateStr} AL ${endDateStr}`
+}
+
+function utilidadCellSx(utilidad) {
+  if (utilidad == null || utilidad === '') return { color: 'inherit', fontWeight: 400 }
+  const u = Number(utilidad)
+  if (Number.isNaN(u)) return { color: 'inherit', fontWeight: 400 }
+  if (u >= 0) return { color: '#2e7d32', fontWeight: 600 }
+  return { color: '#c62828', fontWeight: 600 }
 }
 
 function statusCellSx(status) {
@@ -73,14 +115,23 @@ function statusCellSx(status) {
 export default function Reporteria() {
   const { canViewPath } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [reportTab, setReportTab] = useState('ventas_locales')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [ventasLoading, setVentasLoading] = useState(false)
   const [error, setError] = useState('')
-  const [data, setData] = useState(null)
+  const [ventasLocalesData, setVentasLocalesData] = useState(null)
+  const [ventasForaneasData, setVentasForaneasData] = useState(null)
+  const [comisionesData, setComisionesData] = useState(null)
+  const [incomeLoading, setIncomeLoading] = useState(false)
+  const [incomeError, setIncomeError] = useState('')
+  const [incomeData, setIncomeData] = useState(null)
   const [advisorNames, setAdvisorNames] = useState([])
   const [loadingAdvisors, setLoadingAdvisors] = useState(false)
   const [selectedAdvisor, setSelectedAdvisor] = useState('')
+  const [gastosLoading, setGastosLoading] = useState(false)
+  const [gastosError, setGastosError] = useState('')
+  const [gastosData, setGastosData] = useState(null)
 
   useEffect(() => {
     const now = new Date()
@@ -113,41 +164,129 @@ export default function Reporteria() {
     if (!advisorNames.includes(selectedAdvisor)) setSelectedAdvisor('')
   }, [advisorNames, selectedAdvisor])
 
-  const run = async () => {
+  const isVentasLocales = reportTab === 'ventas_locales'
+  const isVentasForaneas = reportTab === 'ventas_foraneas'
+  const isComisiones = reportTab === 'comisiones'
+  const isVentasTab = isVentasLocales || isVentasForaneas
+  const showsVentasTable = isVentasTab || isComisiones
+  const ventasScope = isVentasForaneas ? 'foraneo' : 'local'
+  const currentVentasData = isComisiones
+    ? comisionesData
+    : isVentasForaneas
+      ? ventasForaneasData
+      : ventasLocalesData
+
+  const runVentas = async () => {
     if (!startDate || !endDate) {
       setError('Selecciona fecha inicio y fin.')
       return
     }
     setError('')
-    setLoading(true)
-    setData(null)
+    setVentasLoading(true)
+    if (isVentasLocales) setVentasLocalesData(null)
+    else setVentasForaneasData(null)
     const r = await getSalesReport({
       kind: 'ventas_detalle',
       startDate,
       endDate,
-      advisorName: selectedAdvisor.trim() || undefined,
+      salesChannel: ventasScope === 'foraneo' ? 'foraneo' : 'local',
     })
-    setLoading(false)
+    setVentasLoading(false)
     if (!r.success) {
       setError(r.error || 'Error')
       return
     }
-    setData(r.data)
+    if (isVentasLocales) setVentasLocalesData(r.data)
+    else setVentasForaneasData(r.data)
+  }
+
+  const runComisiones = async () => {
+    if (!startDate || !endDate) {
+      setError('Selecciona fecha inicio y fin.')
+      return
+    }
+    if (!selectedAdvisor.trim()) {
+      setError('Selecciona un asesor para generar el reporte de comisiones.')
+      return
+    }
+    setError('')
+    setVentasLoading(true)
+    setComisionesData(null)
+    const r = await getSalesReport({
+      kind: 'ventas_detalle',
+      startDate,
+      endDate,
+      salesChannel: 'local',
+      advisorName: selectedAdvisor.trim(),
+    })
+    setVentasLoading(false)
+    if (!r.success) {
+      setError(r.error || 'Error')
+      return
+    }
+    setComisionesData(r.data)
+  }
+
+  const runIncome = async () => {
+    if (!startDate || !endDate) {
+      setIncomeError('Selecciona fecha inicio y fin.')
+      return
+    }
+    setIncomeError('')
+    setIncomeLoading(true)
+    setIncomeData(null)
+    const r = await getIncomeStatement({ startDate, endDate })
+    setIncomeLoading(false)
+    if (!r.success) {
+      setIncomeError(r.error || 'Error')
+      return
+    }
+    setIncomeData(r.data)
+  }
+
+  const runGastos = async () => {
+    if (!startDate || !endDate) {
+      setGastosError('Selecciona fecha inicio y fin.')
+      return
+    }
+    setGastosError('')
+    setGastosLoading(true)
+    setGastosData(null)
+    const r = await getExpenseGastosReport({ startDate, endDate })
+    setGastosLoading(false)
+    if (!r.success) {
+      setGastosError(r.error || 'Error')
+      return
+    }
+    setGastosData(r.data)
+  }
+
+  const handleDownloadGastosCsv = async () => {
+    if (!startDate || !endDate) return
+    const r = await downloadExpenseReportCsv({ startDate, endDate }, 'csv')
+    if (!r.success) setGastosError(r.error || 'Error al descargar CSV')
   }
 
   const handleDownloadExcel = async () => {
-    if (!data) return
-    const title = ventasReportTitle(startDate, endDate, selectedAdvisor)
-    const advSlug = selectedAdvisor.trim() ? `_${selectedAdvisor.trim().replace(/\s+/g, '_')}` : ''
-    const filename = `ventas-locales_${startDate}_${endDate}${advSlug}.xlsx`
-    await downloadVentasExcel({ title, lines: data.lines || [], filename })
+    if (!currentVentasData) return
+    if (isComisiones) {
+      const advSlug = `_${selectedAdvisor.trim().replace(/\s+/g, '_')}`
+      const title = comisionesReportTitle(startDate, endDate, selectedAdvisor)
+      const filename = `comisiones${advSlug}_${startDate}_${endDate}.xlsx`
+      await downloadVentasExcel({ title, lines: currentVentasData.lines || [], filename })
+      return
+    }
+    const title = ventasReportTitle(startDate, endDate, ventasScope)
+    const slug = ventasScope === 'foraneo' ? 'ventas-foraneas' : 'ventas-locales'
+    const filename = `${slug}_${startDate}_${endDate}.xlsx`
+    await downloadVentasExcel({ title, lines: currentVentasData.lines || [], filename })
   }
 
   if (!canViewPath('/reporteria')) {
     return null
   }
 
-  const lines = data?.lines || []
+  const lines = currentVentasData?.lines || []
 
   return (
     <Box sx={{ minHeight: '100vh' }}>
@@ -170,15 +309,49 @@ export default function Reporteria() {
         <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', mb: 2 }}>
           Reportería
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-          Ventas por línea de pedido, online y asesor (excluye canceladas y reembolsadas). Puedes filtrar por un asesor
-          concreto (nombre tomado de la nota «Asesor: …» del pedido, misma lógica que la columna VENDEDOR). UNIDAD usa
-          primero el vehículo por pieza, luego el del encabezado y las notas. PROVEEDOR es el cliente (facturación).
-        </Typography>
 
-        <Typography variant="h6" sx={{ color: '#424242', fontWeight: 800, mb: 1.5 }}>
-          VENTAS
-        </Typography>
+        <Tabs
+          value={reportTab}
+          onChange={(_, v) => setReportTab(v)}
+          sx={{ mb: 2, borderBottom: 1, borderColor: 'divider', flexWrap: 'wrap', '& .MuiTab-root': { minHeight: 44 } }}
+        >
+          <Tab label="Ventas locales" value="ventas_locales" />
+          <Tab label="Ventas foráneas" value="ventas_foraneas" />
+          <Tab label="Comisiones" value="comisiones" />
+          <Tab label="Gastos" value="gastos" />
+          <Tab label="Estado de resultados" value="income" />
+        </Tabs>
+
+        {isVentasLocales && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
+            Pedidos con canal asesor (ventas locales). Excluye canceladas y reembolsadas. Misma lógica de columnas que el
+            detalle general (UNIDAD, PROVEEDOR, montos, utilidad, VENDEDOR desde la nota «Asesor: …»).
+          </Typography>
+        )}
+        {isVentasForaneas && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
+            Pedidos con canal online (ventas foráneas). Excluye canceladas y reembolsadas. Sin filtro por asesor.
+          </Typography>
+        )}
+        {isComisiones && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
+            Misma tabla que ventas locales, filtrada por un asesor (nombre igual que la columna VENDEDOR / nota «Asesor: …»).
+            Solo canal asesor. Útil para comisiones por vendedor; la utilidad por línea resalta en verde o rojo.
+          </Typography>
+        )}
+        {reportTab === 'gastos' && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
+            Gastos del módulo Gastos: líneas con monto y monto neto; el concepto coincide con la categoría del registro;
+            empleado = quien guardó en admin; proveedor DEPORTIVO. Agrupado por categoría.             Sin columna de siniestro.
+          </Typography>
+        )}
+        {reportTab === 'income' && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
+            Utilidad bruta = total de venta (neto de líneas, todos los canales) − total de compra. Utilidad neta = bruta −
+            gastos diversos (gastos activos con categoría distinta de SUELDO) − bonos − comisiones. Los sueldos se listan
+            aparte. Compras, bonos y comisiones aparecen en $0.00 hasta conectar esos datos en el sistema.
+          </Typography>
+        )}
 
         <Paper sx={{ p: 2, mb: 2, display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
           <TextField
@@ -197,45 +370,75 @@ export default function Reporteria() {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
-          <FormControl size="small" sx={{ minWidth: 240 }}>
-            <InputLabel id="reporteria-asesor-label">Asesor</InputLabel>
-            <Select
-              labelId="reporteria-asesor-label"
-              label="Asesor"
-              value={selectedAdvisor}
-              onChange={(e) => setSelectedAdvisor(e.target.value)}
-              disabled={loadingAdvisors}
-            >
-              <MenuItem value="">
-                <em>Todos</em>
-              </MenuItem>
-              {advisorNames.map((name) => (
-                <MenuItem key={name} value={name}>
-                  {name}
+          {isComisiones && (
+            <FormControl size="small" sx={{ minWidth: 280 }}>
+              <InputLabel id="reporteria-comisiones-asesor">Asesor</InputLabel>
+              <Select
+                labelId="reporteria-comisiones-asesor"
+                label="Asesor"
+                value={selectedAdvisor}
+                onChange={(e) => setSelectedAdvisor(e.target.value)}
+                disabled={loadingAdvisors}
+              >
+                <MenuItem value="">
+                  <em>Seleccionar asesor…</em>
                 </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Button variant="contained" onClick={run} disabled={loading}>
-            {loading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Consultar'}
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={handleDownloadExcel}
-            disabled={!data}
-            sx={{ ml: 'auto' }}
-          >
-            Descargar
-          </Button>
+                {advisorNames.map((name) => (
+                  <MenuItem key={name} value={name}>
+                    {name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+          {(isVentasTab || isComisiones) && (
+            <Button
+              variant="contained"
+              onClick={isComisiones ? runComisiones : runVentas}
+              disabled={ventasLoading}
+            >
+              {ventasLoading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Consultar'}
+            </Button>
+          )}
+          {(isVentasTab || isComisiones) && (
+            <Button variant="outlined" onClick={handleDownloadExcel} disabled={!currentVentasData} sx={{ ml: 'auto' }}>
+              Descargar
+            </Button>
+          )}
+          {reportTab === 'income' && (
+            <Button variant="contained" onClick={runIncome} disabled={incomeLoading}>
+              {incomeLoading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Consultar'}
+            </Button>
+          )}
+          {reportTab === 'gastos' && (
+            <Button variant="contained" onClick={runGastos} disabled={gastosLoading}>
+              {gastosLoading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Consultar'}
+            </Button>
+          )}
+          {reportTab === 'gastos' && (
+            <Button variant="outlined" onClick={handleDownloadGastosCsv} sx={{ ml: 'auto' }}>
+              Descargar CSV
+            </Button>
+          )}
         </Paper>
 
-        {error && (
+        {(isVentasTab || isComisiones) && error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
             {error}
           </Alert>
         )}
+        {reportTab === 'income' && incomeError && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setIncomeError('')}>
+            {incomeError}
+          </Alert>
+        )}
+        {reportTab === 'gastos' && gastosError && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setGastosError('')}>
+            {gastosError}
+          </Alert>
+        )}
 
-        {data && (
+        {showsVentasTable && currentVentasData && (
           <TableContainer
             component={Paper}
             sx={{
@@ -255,7 +458,9 @@ export default function Reporteria() {
               }}
             >
               <Typography variant="body1" sx={{ color: 'inherit', fontWeight: 800, fontSize: '1rem' }}>
-                {ventasReportTitle(startDate, endDate, selectedAdvisor)}
+                {isComisiones
+                  ? comisionesReportTitle(startDate, endDate, selectedAdvisor)
+                  : ventasReportTitle(startDate, endDate, ventasScope)}
               </Typography>
             </Box>
             <Table
@@ -330,8 +535,7 @@ export default function Reporteria() {
                         align="right"
                         sx={{
                           border: '1px solid #e0e0e0',
-                          color: row.utilidad != null && !Number.isNaN(Number(row.utilidad)) ? '#2e7d32' : 'inherit',
-                          fontWeight: row.utilidad != null ? 600 : 400,
+                          ...utilidadCellSx(row.utilidad),
                         }}
                       >
                         {moneyOrDash(row.utilidad)}
@@ -343,6 +547,242 @@ export default function Reporteria() {
                     </TableRow>
                   ))
                 )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {reportTab === 'income' && (
+          <TableContainer
+            component={Paper}
+            sx={{
+              maxWidth: 640,
+              border: '2px solid #000',
+              borderRadius: 0,
+              mb: 3,
+              boxShadow: 1,
+            }}
+          >
+            <Box sx={{ px: 2, pt: 2, pb: 1 }}>
+              <Typography sx={{ color: '#6a1b9a', fontWeight: 800, fontSize: '1.1rem' }}>
+                Estado de resultados
+              </Typography>
+              {incomeLoading && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  Calculando…
+                </Typography>
+              )}
+            </Box>
+            <Table
+              size="small"
+              sx={{
+                borderCollapse: 'collapse',
+                '& .MuiTableCell-root': { py: 0.75, px: 1.25 },
+              }}
+            >
+              <TableBody>
+                {[
+                  ['GASTOS DIVERSOS', incomeData?.gastosDiversos],
+                  ['SUELDOS', incomeData?.sueldos],
+                  ['TOTAL DE COMPRA', incomeData?.totalCompra],
+                  ['TOTAL DE BONOS', incomeData?.totalBonos],
+                  ['TOTAL DE COMISIONES', incomeData?.totalComisiones],
+                  ['TOTAL DE VENTA', incomeData?.totalVenta],
+                ].map(([label, val]) => (
+                  <TableRow key={label}>
+                    <TableCell
+                      sx={{
+                        border: '1px solid #000',
+                        fontWeight: 800,
+                        textTransform: 'uppercase',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      {label}
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        border: '1px solid #000',
+                        fontSize: '0.85rem',
+                        color: incomeData != null && !incomeLoading ? 'text.primary' : 'text.secondary',
+                      }}
+                    >
+                      {incomeData != null && !incomeLoading ? money(val) : '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow>
+                  <TableCell
+                    sx={{
+                      border: '1px solid #000',
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      fontSize: '0.8rem',
+                    }}
+                  >
+                    UTILIDAD BRUTA
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      border: '1px solid #000',
+                      fontWeight: 700,
+                      color:
+                        incomeData != null && !incomeLoading ? '#2e7d32' : 'text.secondary',
+                    }}
+                  >
+                    {incomeData != null && !incomeLoading ? money(incomeData.utilidadBruta) : '—'}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell
+                    sx={{
+                      border: '1px solid #000',
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      fontSize: '0.8rem',
+                    }}
+                  >
+                    UTILIDAD NETA
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      border: '1px solid #000',
+                      fontWeight: 700,
+                      color:
+                        incomeData != null && !incomeLoading ? '#2e7d32' : 'text.secondary',
+                    }}
+                  >
+                    {incomeData != null && !incomeLoading ? money(incomeData.utilidadNeta) : '—'}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {reportTab === 'gastos' && gastosData && (
+          <TableContainer
+            component={Paper}
+            sx={{
+              overflowX: 'auto',
+              border: '1px solid #bdbdbd',
+              borderRadius: 0,
+              mb: 3,
+            }}
+          >
+            <Box
+              sx={{
+                bgcolor: '#6a1b9a',
+                color: '#fff',
+                px: 2,
+                py: 1,
+                fontWeight: 800,
+                textAlign: 'center',
+              }}
+            >
+              <Typography variant="body1" sx={{ color: 'inherit', fontWeight: 800, fontSize: '1rem' }}>
+                {gastosReportTitle(startDate, endDate)}
+              </Typography>
+            </Box>
+            <Table
+              size="small"
+              sx={{
+                minWidth: 900,
+                borderCollapse: 'collapse',
+                '& .MuiTableCell-root': { fontSize: '0.75rem', py: 0.5, px: 0.75, lineHeight: 1.25 },
+              }}
+            >
+              <TableHead>
+                <TableRow>
+                  {['Fecha', 'Folio', 'Empleado', 'Concepto', 'Proveedor', 'Monto', 'Monto neto'].map((h) => (
+                    <TableCell
+                      key={h}
+                      sx={{
+                        bgcolor: '#ffeb3b',
+                        color: '#000',
+                        fontWeight: 800,
+                        border: '1px solid #9e9e9e',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {h}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(gastosData.groups || []).flatMap((g) => {
+                  const headerRow = (
+                    <TableRow key={`h-${g.category}`}>
+                      <TableCell
+                        colSpan={7}
+                        sx={{
+                          bgcolor: '#e1bee7',
+                          fontWeight: 800,
+                          border: '1px solid #9e9e9e',
+                          py: 0.75,
+                        }}
+                      >
+                        {g.category}
+                      </TableCell>
+                    </TableRow>
+                  )
+                  const lineRows = (g.lines || []).map((row, li) => (
+                    <TableRow
+                      key={`${row.expenseId}-${row.expenseDate}-${row.concept}-${row.unitAmount}-${li}`}
+                    >
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.expenseDate}</TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0', fontFamily: 'monospace' }}>
+                        {row.expenseNumber || '—'}
+                      </TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.employeeOrUnit || '—'}</TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.concept || '—'}</TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.supplier || '—'}</TableCell>
+                      <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                        {money(row.lineSubtotal)}
+                      </TableCell>
+                      <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                        {money(row.netLineSubtotal)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                  const subRow = (
+                    <TableRow key={`s-${g.category}`}>
+                      <TableCell
+                        colSpan={5}
+                        align="right"
+                        sx={{ border: '1px solid #9e9e9e', fontWeight: 700, bgcolor: '#f5f5f5' }}
+                      >
+                        Subtotal {g.category}
+                      </TableCell>
+                      <TableCell align="right" sx={{ border: '1px solid #9e9e9e', fontWeight: 700, bgcolor: '#f5f5f5' }}>
+                        {money(g.subtotalMonto)}
+                      </TableCell>
+                      <TableCell align="right" sx={{ border: '1px solid #9e9e9e', fontWeight: 700, bgcolor: '#f5f5f5' }}>
+                        {money(g.subtotalMontoNeto)}
+                      </TableCell>
+                    </TableRow>
+                  )
+                  return [headerRow, ...lineRows, subRow]
+                })}
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    align="right"
+                    sx={{ border: '1px solid #9e9e9e', fontWeight: 800, bgcolor: '#ce93d8' }}
+                  >
+                    TOTAL
+                  </TableCell>
+                  <TableCell align="right" sx={{ border: '1px solid #9e9e9e', fontWeight: 800, bgcolor: '#ce93d8' }}>
+                    {money(gastosData.totalMonto)}
+                  </TableCell>
+                  <TableCell align="right" sx={{ border: '1px solid #9e9e9e', fontWeight: 800, bgcolor: '#ce93d8' }}>
+                    {money(gastosData.totalMontoNeto)}
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </TableContainer>

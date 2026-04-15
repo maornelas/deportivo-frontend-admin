@@ -11,14 +11,9 @@ import {
   SummaryCard,
   SalesChart,
   ExpensesChart,
-  FinanceSummary,
-  CategoryBarChart,
+  ChannelSalesSummary,
 } from '../components/DashboardWidgets'
-import {
-  getOrderDailySales,
-  getOrderStatsByStatus,
-  getOrderStatsAmountByStatus,
-} from '../api/orders'
+import { getOrderDailySales } from '../api/orders'
 import { getSalesReport } from '../api/salesReports'
 import { getExpenseReportSummary, listExpenses } from '../api/expenses'
 import { usePurchases } from '../contexts/PurchasesContext'
@@ -60,10 +55,6 @@ const Dashboard = () => {
   const [dailyExpensesLoading, setDailyExpensesLoading] = useState(true)
   const [expenseGrandTotal, setExpenseGrandTotal] = useState(null)
   const [expenseSummaryLoading, setExpenseSummaryLoading] = useState(true)
-  const [orderStatsByStatus, setOrderStatsByStatus] = useState(null)
-  const [orderStatsByStatusLoading, setOrderStatsByStatusLoading] = useState(true)
-  const [amountByStatus, setAmountByStatus] = useState(null)
-  const [amountByStatusLoading, setAmountByStatusLoading] = useState(true)
   const containerRef = useRef(null)
 
   const fetchChannelSales = useCallback(async () => {
@@ -186,43 +177,10 @@ const Dashboard = () => {
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [fetchExpenseSummary, fetchDailyExpenses])
 
-  const fetchOrderStatsByStatus = useCallback(async () => {
-    if (!startDate || !endDate) return
-    setOrderStatsByStatusLoading(true)
-    const result = await getOrderStatsByStatus({ startDate, endDate })
-    setOrderStatsByStatusLoading(false)
-    if (result.success && result.data) {
-      setOrderStatsByStatus(result.data)
-    } else {
-      setOrderStatsByStatus(null)
-    }
-  }, [startDate, endDate])
-
-  useEffect(() => {
-    fetchOrderStatsByStatus()
-  }, [fetchOrderStatsByStatus])
-
-  const fetchAmountByStatus = useCallback(async () => {
-    if (!startDate || !endDate) return
-    setAmountByStatusLoading(true)
-    const result = await getOrderStatsAmountByStatus({ startDate, endDate })
-    setAmountByStatusLoading(false)
-    if (result.success && result.data) {
-      setAmountByStatus(result.data)
-    } else {
-      setAmountByStatus(null)
-    }
-  }, [startDate, endDate])
-
-  useEffect(() => {
-    fetchAmountByStatus()
-  }, [fetchAmountByStatus])
-
   const [layout, setLayout] = useState([
-    { i: 'sales', x: 0, y: 0, w: 6, h: 4 },
-    { i: 'expenses', x: 6, y: 0, w: 6, h: 4 },
-    { i: 'finance', x: 0, y: 5, w: 6, h: 4 },
-    { i: 'category', x: 6, y: 5, w: 6, h: 4 },
+    { i: 'sales', x: 0, y: 0, w: 6, h: 5 },
+    { i: 'expenses', x: 6, y: 0, w: 6, h: 5 },
+    { i: 'finance', x: 0, y: 5, w: 12, h: 5 },
   ])
 
   useEffect(() => {
@@ -410,6 +368,7 @@ const Dashboard = () => {
             '& .react-grid-item': {
               transition: 'all 200ms ease',
               padding: '8px',
+              overflow: 'hidden',
             },
             '& .react-grid-item.cssTransforms': {
               transition: 'all 200ms ease',
@@ -459,8 +418,19 @@ const Dashboard = () => {
               preventCollision={false}
               margin={[16, 16]}
             >
-              <div key="sales">
-                <Box sx={{ width: '100%', height: '100%', minHeight: 320 }}>
+              <div key="sales" style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <Box sx={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <ExpensesChart
+                    onlineData={dailyChannelOnline}
+                    advisorData={dailyChannelAdvisor}
+                    loading={channelDailyLoading}
+                    startDate={startDate}
+                    endDate={endDate}
+                  />
+                </Box>
+              </div>
+              <div key="expenses" style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <Box sx={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
                   <SalesChart
                     dailySales={dailySales}
                     dailyExpenses={dailyExpenses}
@@ -471,30 +441,15 @@ const Dashboard = () => {
                   />
                 </Box>
               </div>
-              <div key="expenses">
-                <Box sx={{ width: '100%', height: '100%', minHeight: 320 }}>
-                  <ExpensesChart
-                    onlineData={dailyChannelOnline}
-                    advisorData={dailyChannelAdvisor}
-                    loading={channelDailyLoading}
-                    startDate={startDate}
-                    endDate={endDate}
-                  />
-                </Box>
-              </div>
-              <div key="finance">
-                <Box className="drag-handle" sx={{ width: '100%', height: '100%' }}>
-                  <FinanceSummary
-                    data={orderStatsByStatus}
-                    loading={orderStatsByStatusLoading}
-                  />
-                </Box>
-              </div>
-              <div key="category">
-                <Box className="drag-handle" sx={{ width: '100%', height: '100%' }}>
-                  <CategoryBarChart
-                    data={amountByStatus}
-                    loading={amountByStatusLoading}
+              <div key="finance" style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <Box
+                  className="drag-handle"
+                  sx={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column' }}
+                >
+                  <ChannelSalesSummary
+                    onlineTotal={onlineSalesTotal}
+                    advisorTotal={advisorSalesTotal}
+                    loading={channelSalesLoading}
                   />
                 </Box>
               </div>
