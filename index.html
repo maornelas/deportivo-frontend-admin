@@ -5,6 +5,34 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EL DEPORTIVO - Admin Portal</title>
+    <!-- randomUUID solo existe en contexto seguro (HTTPS / localhost). S3 website = HTTP → polyfill antes del bundle. -->
+    <script>
+      (function () {
+        var c = globalThis.crypto
+        if (!c || typeof c.randomUUID === 'function') return
+        c.randomUUID = function () {
+          var buf = new Uint8Array(16)
+          if (c.getRandomValues) c.getRandomValues(buf)
+          else for (var i = 0; i < 16; i++) buf[i] = (Math.random() * 256) | 0
+          buf[6] = (buf[6] & 0x0f) | 0x40
+          buf[8] = (buf[8] & 0x3f) | 0x80
+          var h = Array.from(buf, function (b) {
+            return ('0' + b.toString(16)).slice(-2)
+          }).join('')
+          return (
+            h.slice(0, 8) +
+            '-' +
+            h.slice(8, 12) +
+            '-' +
+            h.slice(12, 16) +
+            '-' +
+            h.slice(16, 20) +
+            '-' +
+            h.slice(20)
+          )
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

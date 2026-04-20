@@ -13,6 +13,7 @@ export const MODULE_CODE_BY_PATH = {
   '/usuarios': 'module.usuarios',
   '/catalogos': 'module.catalogos',
   '/roles': 'module.roles',
+  '/repartidor': 'module.repartidor',
 }
 
 /** Rutas sin módulo RBAC (siempre accesibles si hay sesión) */
@@ -37,6 +38,7 @@ export function moduleCodeForPath(pathname) {
 /** Orden de navegación para elegir la primera pantalla tras login */
 export const ADMIN_NAV_PATHS_ORDER = [
   '/dashboard',
+  '/repartidor',
   '/inventario',
   '/cotizaciones',
   '/ventas',

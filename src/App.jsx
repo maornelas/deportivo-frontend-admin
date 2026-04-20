@@ -19,6 +19,7 @@ import Roles from './pages/Roles'
 import Historial from './pages/Historial'
 import Notificaciones from './pages/Notificaciones'
 import Reporteria from './pages/Reporteria'
+import RepartidorEntregas from './pages/RepartidorEntregas'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading, user, canViewPath } = useAuth()
@@ -113,6 +114,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Reporteria />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/repartidor"
+        element={
+          <ProtectedRoute>
+            <RepartidorEntregas />
           </ProtectedRoute>
         }
       />

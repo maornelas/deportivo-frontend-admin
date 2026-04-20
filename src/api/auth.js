@@ -6,7 +6,7 @@ const getBaseUrl = () => {
 
 /**
  * Login para el panel de administración.
- * Envía role: "admin" para que el backend valide que el usuario tiene rol admin.
+ * El rol va en la cabecera `X-Login-Role` para no chocar con APIs cuyo DTO solo permite email/contraseña en el body.
  * @param {{ email: string, password: string }} credentials
  * @returns {Promise<{ success: boolean, data?: object, error?: string }>}
  */
@@ -14,11 +14,13 @@ export async function login({ email, password }) {
   const baseUrl = getBaseUrl()
   const res = await fetch(`${baseUrl}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Login-Role': 'admin',
+    },
     body: JSON.stringify({
       email: email.trim(),
       password,
-      role: 'admin',
     }),
   })
   const body = await res.json().catch(() => ({}))
