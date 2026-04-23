@@ -5,6 +5,26 @@ import { apiFetch, getBaseUrl } from './http'
  * @param {object} params - { userId, page, limit, startDate, endDate, search, orderNumber, status, paymentStatus, sortBy, sortOrder }
  * @returns {Promise<{ success: boolean, data?: { orders, total, page, limit, totalPages }, error?: string }>}
  */
+/**
+ * Pedidos entregados con datos del repartidor (para módulo Entregas).
+ * @param {{ startDate?: string, endDate?: string }} params - YYYY-MM-DD sobre fecha de entrega
+ */
+export async function listDeliveredOrdersByRepartidor(params = {}) {
+  const sp = new URLSearchParams()
+  if (params.startDate) sp.set('startDate', params.startDate)
+  if (params.endDate) sp.set('endDate', params.endDate)
+  const q = sp.toString() ? `?${sp.toString()}` : ''
+  const res = await apiFetch(`/order/deliveries/by-repartidor${q}`)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success || !Array.isArray(body.data)) {
+    return { success: false, error: body.message || 'Error al cargar entregas' }
+  }
+  return { success: true, data: body.data }
+}
+
 export async function searchOrders(params = {}) {
   const searchParams = new URLSearchParams()
   if (params.userId) searchParams.set('userId', params.userId)

@@ -6,6 +6,7 @@ export const MODULE_CODE_BY_PATH = {
   '/ventas': 'module.ventas',
   '/compras': 'module.compras',
   '/gastos': 'module.gastos',
+  '/entregas': 'module.entregas',
   '/historial': 'module.historial',
   '/notificaciones': 'module.notificaciones',
   '/reporteria': 'module.reporteria',
@@ -38,7 +39,7 @@ export function moduleCodeForPath(pathname) {
 /** Orden de navegación para elegir la primera pantalla tras login */
 export const ADMIN_NAV_PATHS_ORDER = [
   '/dashboard',
-  '/repartidor',
+  '/entregas',
   '/inventario',
   '/cotizaciones',
   '/ventas',

@@ -31,6 +31,7 @@ import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
 import { searchOrders, getOrderById, updateOrder } from '../api/orders'
+import { useAuth } from '../contexts/AuthContext'
 
 const ORDER_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
@@ -85,6 +86,7 @@ function getStatusColor(status) {
 }
 
 const Pedidos = () => {
+  const { user } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -170,7 +172,11 @@ const Pedidos = () => {
     if (!detailOrder?.id) return
     setStatusSaving(true)
     setDetailError('')
-    const result = await updateOrder(detailOrder.id, { status: newStatus })
+    const payload = { status: newStatus }
+    if (newStatus === 'delivered' && user?.id) {
+      payload.deliveredByUserId = user.id
+    }
+    const result = await updateOrder(detailOrder.id, payload)
     setStatusSaving(false)
     if (!result.success) {
       setDetailError(result.error || 'Error al actualizar estado')

@@ -191,7 +191,11 @@ const Ventas = () => {
     if (!detailOrder?.id) return
     setStatusSaving(true)
     setDetailError('')
-    const result = await updateOrder(detailOrder.id, { status: newStatus })
+    const payload = { status: newStatus }
+    if (newStatus === 'delivered' && user?.id) {
+      payload.deliveredByUserId = user.id
+    }
+    const result = await updateOrder(detailOrder.id, payload)
     setStatusSaving(false)
     if (!result.success) {
       setDetailError(result.error || 'Error al actualizar estado')
@@ -407,6 +411,7 @@ const Ventas = () => {
           </DialogContent>
           <DialogActions><Button onClick={handleCloseDetail} color="inherit">Cerrar</Button></DialogActions>
         </Dialog>
+
         {permissionDeniedSnackbar}
       </Box>
     </Box>

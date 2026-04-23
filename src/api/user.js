@@ -11,7 +11,8 @@ export async function getUsers(params = {}) {
   else searchParams.set('activeOnly', 'false')
   if (params.role) searchParams.set('role', params.role)
   if (params.excludeRole) searchParams.set('excludeRole', params.excludeRole)
-  const res = await apiFetch(`/user/get?${searchParams.toString()}`)
+  const qs = searchParams.toString()
+  const res = await apiFetch(qs ? `/user/get?${qs}` : '/user/get')
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: body.message || body.error || `Error ${res.status}` }
