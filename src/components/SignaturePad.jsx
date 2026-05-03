@@ -20,7 +20,7 @@ function getPoint(canvas, e) {
 /**
  * Lienzo de firma táctil y mouse. dimensiones internas fijas para buena resolución en PDF.
  */
-export default function SignaturePad({ width = 600, height = 200, onChange, sx }) {
+export default function SignaturePad({ width = 600, height = 200, onChange, sx, clearButtonSx, clearButtonLabel = 'Limpiar firma' }) {
   const canvasRef = useRef(null)
   const drawing = useRef(false)
   const last = useRef(null)
@@ -108,8 +108,8 @@ export default function SignaturePad({ width = 600, height = 200, onChange, sx }
           onTouchEnd={end}
         />
       </Box>
-      <Button size="small" variant="outlined" onClick={clear}>
-        Limpiar firma
+      <Button size="small" variant="outlined" onClick={clear} sx={clearButtonSx}>
+        {clearButtonLabel}
       </Button>
     </Stack>
   )

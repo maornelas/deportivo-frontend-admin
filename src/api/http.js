@@ -1,18 +1,34 @@
 const STORAGE_KEY = 'deportivo_admin_user'
 
+/**
+ * Base del API. En `npm run dev`, usar `/api/v1` para que Vite haga proxy a `VITE_DEV_PROXY_TARGET`
+ * (mismo origen que :5173 → sin CORS). `http://localhost:3000/api/v1` en el .env provoca cross-origin y fallos de preflight.
+ */
 export function getBaseUrl() {
   const raw = import.meta.env.VITE_API_URL?.trim()
+  let base
   if (raw) {
-    const base = raw.replace(/\/$/, '')
-    if (base.startsWith('http://') || base.startsWith('https://')) {
-      if (base.endsWith('/api/v1')) return base
-      return `${base}/api/v1`
+    const b = raw.replace(/\/$/, '')
+    if (b.startsWith('http://') || b.startsWith('https://')) {
+      base = b.endsWith('/api/v1') ? b : `${b}/api/v1`
+    } else if (b === '/api/v1' || b.endsWith('/api/v1')) {
+      base = b.startsWith('/') ? b : `/${b}`
+    } else {
+      const withPrefix = `${b}/api/v1`.replace(/\/{2,}/g, '/')
+      base = withPrefix.startsWith('/') ? withPrefix : `/${withPrefix}`
     }
-    if (base === '/api/v1' || base.endsWith('/api/v1')) return base.startsWith('/') ? base : `/${base}`
-    const withPrefix = `${base}/api/v1`.replace(/\/{2,}/g, '/')
-    return withPrefix.startsWith('/') ? withPrefix : `/${withPrefix}`
+  } else {
+    base = import.meta.env.DEV ? '/api/v1' : 'http://localhost:3000/api/v1'
   }
-  return 'http://localhost:3000/api/v1'
+
+  if (
+    import.meta.env.DEV &&
+    import.meta.env.VITE_API_SKIP_PROXY !== 'true' &&
+    /^https?:\/\/(localhost|127\.0\.0\.1):3000\/api\/v1$/i.test(base)
+  ) {
+    return '/api/v1'
+  }
+  return base
 }
 
 /** Une base + path de forma segura (conserva ?query en path). */

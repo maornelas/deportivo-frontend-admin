@@ -131,6 +131,15 @@ function repartidorLabel(row) {
   return r.email || 'Repartidor'
 }
 
+/** Variante visual de la card según estatus de entrega (lista repartidor). */
+function getDeliveryCardStatusVariant(row) {
+  const status = String(row?.status || '').toLowerCase()
+  const label = String(row?.statusLabel || '').toUpperCase()
+  if (status === 'delivered' || label.includes('ENTREGAD')) return 'delivered'
+  if (status === 'pending' || label.includes('PENDIENT')) return 'pending'
+  return 'default'
+}
+
 function formatDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -192,6 +201,19 @@ function DeliveryCompactCard({ row }) {
   const detailTo = row.orderNumber
     ? `/repartidor?folio=${encodeURIComponent(row.orderNumber)}`
     : null
+  const statusVariant = getDeliveryCardStatusVariant(row)
+  const headerPalette =
+    statusVariant === 'delivered'
+      ? { bg: '#15803d', color: '#ecfdf5' }
+      : statusVariant === 'pending'
+        ? { bg: '#7c2d12', color: '#fff7ed' }
+        : { bg: 'primary.main', color: 'primary.contrastText' }
+  const borderAccent =
+    statusVariant === 'delivered'
+      ? '#22c55e'
+      : statusVariant === 'pending'
+        ? '#c2410c'
+        : undefined
   const chipSx = {
     height: { xs: 16, sm: 17, md: 19, lg: 16 },
     maxWidth: '100%',
@@ -240,13 +262,14 @@ function DeliveryCompactCard({ row }) {
         boxSizing: 'border-box',
         textDecoration: 'none',
         color: 'inherit',
+        ...(borderAccent ? { borderColor: borderAccent, borderWidth: 2 } : {}),
         ...(detailTo
           ? {
               cursor: 'pointer',
               transition: 'box-shadow 0.2s, border-color 0.2s',
               '&:hover': {
                 boxShadow: 2,
-                borderColor: 'primary.main',
+                borderColor: borderAccent || 'primary.main',
               },
             }
           : {}),
@@ -257,8 +280,8 @@ function DeliveryCompactCard({ row }) {
           flexShrink: 0,
           px: { xs: 0.5, sm: 0.65, md: 0.75, lg: 0.45 },
           py: { xs: 0.35, sm: 0.45, md: 0.5, lg: 0.35 },
-          bgcolor: 'primary.main',
-          color: 'primary.contrastText',
+          bgcolor: headerPalette.bg,
+          color: headerPalette.color,
         }}
       >
         <Typography
@@ -322,7 +345,30 @@ function DeliveryCompactCard({ row }) {
           >
             {row.deliveryNumber || '—'}
           </Typography>
-          <Chip size="small" label={row.statusLabel || row.status} color="primary" variant="outlined" sx={chipSx} />
+          <Chip
+            size="small"
+            label={row.statusLabel || row.status}
+            variant="outlined"
+            sx={{
+              ...chipSx,
+              ...(statusVariant === 'delivered'
+                ? {
+                    borderColor: '#16a34a',
+                    color: '#166534',
+                    bgcolor: 'rgba(22, 163, 74, 0.12)',
+                  }
+                : statusVariant === 'pending'
+                  ? {
+                      borderColor: '#c2410c',
+                      color: '#7c2d12',
+                      bgcolor: 'rgba(194, 65, 12, 0.12)',
+                    }
+                  : {
+                      borderColor: 'primary.main',
+                      color: 'primary.main',
+                    }),
+            }}
+          />
         </Box>
         <Box sx={{ minWidth: 0, mt: { xs: 0.35, md: 'auto' } }}>
           <Typography variant="caption" sx={labelSx}>

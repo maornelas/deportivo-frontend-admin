@@ -228,3 +228,33 @@ export function getOrderSaleNotePdfUrl(orderId, { seller, refresh = true } = {})
   const q = params.toString() ? `?${params.toString()}` : ''
   return `${baseUrl}/order/pdf/${orderId}${q}`
 }
+
+/**
+ * Genera en el servidor la nota de venta (mismo formato que la original) con acuse y firma, y la sube a S3.
+ * @param {string} orderId
+ * @param {{ recipientName: string, recipientRole?: string, signaturePngDataUri?: string, deliveredItemIndices?: number[] }} payload
+ */
+export async function uploadSignedOrderSaleNotePdf(orderId, payload) {
+  const body =
+    typeof payload === 'string'
+      ? { pdfDataUri: payload }
+      : {
+          recipientName: payload.recipientName,
+          recipientRole: payload.recipientRole || '',
+          signaturePngDataUri: payload.signaturePngDataUri,
+          deliveredItemIndices: payload.deliveredItemIndices,
+        }
+  const res = await apiFetch(`/order/pdf/${encodeURIComponent(orderId)}/signed`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: json.message || json.error || `Error ${res.status}` }
+  }
+  if (!json.success || !json.data?.url) {
+    return { success: false, error: json.message || 'No se pudo subir la nota firmada' }
+  }
+  return { success: true, data: json.data }
+}

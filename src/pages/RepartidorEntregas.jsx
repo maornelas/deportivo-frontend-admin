@@ -22,17 +22,17 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Checkbox,
   AppBar,
   Toolbar,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Snackbar,
+  Slide,
 } from '@mui/material'
 import {
   LocalShipping,
-  Description,
   Map as MapIcon,
   ArrowBack,
   ExpandMore,
@@ -44,20 +44,175 @@ import {
   PhotoCamera,
   AttachFile,
   CheckCircle,
+  LocationOn,
+  Person,
+  Close,
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import SignaturePad from '../components/SignaturePad'
 import { SIDEBAR_WIDTH } from '../config/layout'
 import { useAuth } from '../contexts/AuthContext'
-import { searchOrders, getOrderById } from '../api/orders'
+import { searchOrders, getOrderById, uploadSignedOrderSaleNotePdf } from '../api/orders'
 import { getDeliveryByOrderId, createDelivery, updateDelivery } from '../api/deliveries'
-import jsPDF from 'jspdf'
-
 const MAPS_SCRIPT_ID = 'deportivo-google-maps-js'
 
-/** Por encima del overlay de recorrido (theme.zIndex.modal + 2) para que los Dialog reciban foco y clics. */
-const dialogAboveRouteOverlaySx = { zIndex: (theme) => theme.zIndex.modal + 100 }
+/** Duración mínima de la pantalla de animación al iniciar entrega (ms). */
+const MOTO_SPLASH_MIN_MS = 3000
+/** Duración mínima del splash al confirmar entrega (evita parpadeo si la API responde muy rápido). */
+const FINALIZING_SPLASH_MIN_MS = 2000
+
+/**
+ * Por encima del overlay de recorrido y capas internas de Google Maps (suelen usar z-index altos).
+ * MUI 7: usar slotProps.root; ModalProps puede no aplicarse al nodo correcto.
+ */
+const DIALOG_ABOVE_MAP_Z = 20000
+const dialogSlotPropsAboveMap = {
+  root: {
+    sx: { zIndex: DIALOG_ABOVE_MAP_Z },
+  },
+}
+
+/** Estilo compartido pantalla recorrido / loading (slate profesional). */
+const routeProPalette = {
+  bg: 'linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+  surface: 'rgba(30, 41, 59, 0.75)',
+  border: 'rgba(148, 163, 184, 0.22)',
+  textMuted: '#94a3b8',
+  text: '#e2e8f0',
+  accent: '#7dd3fc',
+}
+
+/** Pantalla completa: paquete en movimiento sobre la ruta (inicio o finalización de entrega). */
+function DeliveryRouteSplashOverlay({ title, subtitle, zIndexBoost = 200 }) {
+  return (
+    <Box
+      sx={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: (theme) => theme.zIndex.modal + zIndexBoost,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        px: 2,
+        background: routeProPalette.bg,
+      }}
+    >
+      <Inventory2 sx={{ fontSize: 42, color: routeProPalette.accent, mb: 1.25, opacity: 0.95 }} />
+      <Typography
+        variant="h6"
+        sx={{
+          color: 'common.white',
+          fontWeight: 700,
+          textAlign: 'center',
+          mb: 1,
+          letterSpacing: 0.3,
+        }}
+      >
+        {title}
+      </Typography>
+      <Typography
+        variant="body2"
+        sx={{ color: 'rgba(255,255,255,0.72)', textAlign: 'center', mb: 4, maxWidth: 320, lineHeight: 1.5 }}
+      >
+        {subtitle}
+      </Typography>
+
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: 520,
+          height: 148,
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: 2,
+          bgcolor: routeProPalette.surface,
+          border: `1px solid ${routeProPalette.border}`,
+          boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+        }}
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 40,
+            left: 0,
+            right: 0,
+            height: 14,
+            bgcolor: '#334155',
+            borderRadius: '2px',
+            boxShadow: 'inset 0 2px 0 rgba(0,0,0,0.2)',
+            backgroundImage:
+              'repeating-linear-gradient(90deg, #94a3b8 0, #94a3b8 18px, transparent 18px, transparent 36px)',
+            backgroundSize: '36px 4px',
+            backgroundPosition: '0 5px',
+            backgroundRepeat: 'repeat-x',
+            animation: 'roadScroll 0.7s linear infinite',
+            '@keyframes roadScroll': {
+              '0%': { backgroundPosition: '0 5px' },
+              '100%': { backgroundPosition: '36px 5px' },
+            },
+          }}
+        />
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 26,
+            width: 72,
+            height: 64,
+            left: '50%',
+            marginLeft: '-36px',
+            animation: 'packageRide 2.4s ease-in-out infinite',
+            filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.4))',
+            '@keyframes packageRide': {
+              '0%': { transform: 'translateX(-42vw) translateY(0) rotate(-2deg)' },
+              '25%': { transform: 'translateX(-14vw) translateY(-10px) rotate(0deg)' },
+              '50%': { transform: 'translateX(14vw) translateY(0) rotate(2deg)' },
+              '75%': { transform: 'translateX(38vw) translateY(-10px) rotate(0deg)' },
+              '100%': { transform: 'translateX(42vw) translateY(0) rotate(-2deg)' },
+            },
+          }}
+        >
+          <Box component="svg" viewBox="0 0 72 64" sx={{ width: '100%', height: '100%', display: 'block' }}>
+            <path
+              d="M 8 52 L 18 22 L 58 22 L 64 52 Z"
+              fill="#6d4c41"
+              stroke="#3e2723"
+              strokeWidth="1.2"
+            />
+            <path d="M 10 48 L 20 26 L 56 26 L 62 48 Z" fill="#8d6e63" opacity="0.95" />
+            <rect x="14" y="30" width="44" height="5" rx="1" fill="#5d4037" opacity="0.85" />
+            <rect x="22" y="18" width="28" height="10" rx="2" fill="#a1887f" stroke="#5d4037" strokeWidth="0.8" />
+            <path d="M 36 18 L 36 52" stroke="#4e342e" strokeWidth="1" strokeDasharray="3 2" opacity="0.7" />
+            <ellipse cx="36" cy="16" rx="8" ry="3" fill="#bcaaa4" opacity="0.9" />
+          </Box>
+        </Box>
+      </Box>
+
+      <CircularProgress size={36} sx={{ mt: 3, color: routeProPalette.accent }} />
+    </Box>
+  )
+}
+
+function MotoDeliverySplashOverlay() {
+  return (
+    <DeliveryRouteSplashOverlay
+      title="Preparando tu entrega"
+      subtitle="Un momento… estamos cargando tu ruta"
+      zIndexBoost={200}
+    />
+  )
+}
+
+function FinalizingDeliverySplashOverlay() {
+  return (
+    <DeliveryRouteSplashOverlay
+      title="Finalizando entrega"
+      subtitle="Estamos registrando la entrega en el sistema…"
+      zIndexBoost={450}
+    />
+  )
+}
 
 function loadGoogleMaps(apiKey) {
   if (!apiKey?.trim()) {
@@ -157,6 +312,27 @@ function singleLineAddress(order) {
   return formatAddressLines(order).join(', ')
 }
 
+/** Dirección de envío/facturación usada en el pedido (misma lógica que formatAddressLines). */
+function getOrderShippingLikeAddress(order) {
+  if (!order) return null
+  return order.shippingAddress?.addressLine1 ? order.shippingAddress : order.billingAddress
+}
+
+function repartidorHandoffStorageKey(orderId, deliveryId) {
+  return `deportivo-repartidor-handoff-${orderId}-${deliveryId}`
+}
+
+function isDeliveryMarkedDelivered(d) {
+  if (!d) return false
+  if (d.status === 'delivered') return true
+  const label = String(d.statusLabel || '').toUpperCase()
+  return label.includes('ENTREGAD')
+}
+
+function getDeliveryItemKey(item, index) {
+  return item?.id || item?.productId || `${item?.productSku || 'sku'}-${index}`
+}
+
 function googleMapsPlaceUrl(order, destLatLng) {
   if (destLatLng?.lat != null && destLatLng?.lng != null) {
     return `https://www.google.com/maps/dir/?api=1&destination=${destLatLng.lat},${destLatLng.lng}&travelmode=driving`
@@ -186,9 +362,6 @@ export default function RepartidorEntregas() {
 
   /** 'detail' = resumen + piezas + dirección; 'enroute' = mapa recorrido */
   const [phase, setPhase] = useState('detail')
-  const [signaturePng, setSignaturePng] = useState(null)
-  const [uploadedFile, setUploadedFile] = useState(null)
-  const [uploadPreviewUrl, setUploadPreviewUrl] = useState(null)
 
   const mapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
   const [mapsReady, setMapsReady] = useState(false)
@@ -197,6 +370,8 @@ export default function RepartidorEntregas() {
   const [routeSeed, setRouteSeed] = useState(null)
   const [liveDriver, setLiveDriver] = useState(null)
   const [routePaused, setRoutePaused] = useState(false)
+  /** Tras ver el mapa: primero INICIAR VIAJE (zoom + GPS); luego FINALIZAR VIAJE. */
+  const [tripStarted, setTripStarted] = useState(false)
   const [etaText, setEtaText] = useState('')
   const etaSecondsRef = useRef(null)
   /** Destino simulado según tu GPS: misma lógica en vista previa e INICIAR ENTREGA */
@@ -206,7 +381,8 @@ export default function RepartidorEntregas() {
   const [iniciarBusy, setIniciarBusy] = useState(false)
   const iniciarLockRef = useRef(false)
 
-  const [viajeSnackbarOpen, setViajeSnackbarOpen] = useState(false)
+  const [motoSplashOpen, setMotoSplashOpen] = useState(false)
+  const motoSplashStartedAtRef = useRef(0)
   const [finalizarConfirmOpen, setFinalizarConfirmOpen] = useState(false)
   const [receiverModalOpen, setReceiverModalOpen] = useState(false)
   const [receiverModalError, setReceiverModalError] = useState('')
@@ -220,8 +396,18 @@ export default function RepartidorEntregas() {
   const [handoffError, setHandoffError] = useState('')
   const [handoffBusy, setHandoffBusy] = useState(false)
   const handoffCameraInputRef = useRef(null)
+  const handoffMediaInputRef = useRef(null)
+  /** Productos marcados para entregar en el detalle. */
+  const [itemDeliveryChecks, setItemDeliveryChecks] = useState({})
+  /** Resumen del acuse tras confirmar (persistido en sessionStorage por pedido+entrega). */
+  const [deliveredHandoffSummary, setDeliveredHandoffSummary] = useState(null)
+
+  /** Panel lateral en mapa: dirección o destinatario (animado desde los iconos). */
+  const [mapSidePanelKind, setMapSidePanelKind] = useState(null)
 
   const mapDivRef = useRef(null)
+  const googleMapRef = useRef(null)
+  const directionsResultRef = useRef(null)
   const directionsRendererRef = useRef(null)
   const motoMarkerRef = useRef(null)
   const destMarkerRef = useRef(null)
@@ -230,6 +416,8 @@ export default function RepartidorEntregas() {
   const livePositionRef = useRef(null)
   const activeDeliveryIdRef = useRef(null)
   const routeSeedRef = useRef(null)
+  /** Evita doble zoom si se pulsa INICIAR VIAJE dos veces antes de re-render. */
+  const iniciarViajeAppliedRef = useRef(false)
 
   useEffect(() => {
     const folioParam = searchParams.get('folio') || searchParams.get('orderNumber')
@@ -243,9 +431,8 @@ export default function RepartidorEntregas() {
       if (watchIdRef.current != null) {
         navigator.geolocation.clearWatch(watchIdRef.current)
       }
-      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl)
     }
-  }, [uploadPreviewUrl])
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -264,6 +451,16 @@ export default function RepartidorEntregas() {
   useEffect(() => {
     routeSeedRef.current = routeSeed
   }, [routeSeed])
+
+  useEffect(() => {
+    if (!tripStarted) iniciarViajeAppliedRef.current = false
+  }, [tripStarted])
+
+  useEffect(() => {
+    if (phase !== 'enroute') {
+      setMapSidePanelKind(null)
+    }
+  }, [phase])
 
   /** Vista previa: destino aleatorio según tu posición actual */
   useEffect(() => {
@@ -305,6 +502,7 @@ export default function RepartidorEntregas() {
     setLoadState({ loading: true, error: '' })
     setOrder(null)
     setDelivery(null)
+    setDeliveredHandoffSummary(null)
     const search = await searchOrders({
       orderNumber: q,
       page: 1,
@@ -341,6 +539,36 @@ export default function RepartidorEntregas() {
     const deliveries = delRes.success ? delRes.data || [] : []
     const d0 = deliveries[0] || null
     setDelivery(d0)
+    if (d0 && isDeliveryMarkedDelivered(d0)) {
+      try {
+        const raw = sessionStorage.getItem(repartidorHandoffStorageKey(chosen.id, d0.id))
+        const parsed = raw ? JSON.parse(raw) : null
+        if (parsed) {
+          if (!parsed.signedNotePdfUrl && d0.signedDocumentUrl) parsed.signedNotePdfUrl = d0.signedDocumentUrl
+          setDeliveredHandoffSummary(parsed)
+        } else if (d0.signedDocumentUrl) {
+          setDeliveredHandoffSummary({
+            recipientName: '',
+            recipientRole: '',
+            hadSignature: false,
+            signaturePng: null,
+            deliveredItems: [],
+            deliveredTotal: 0,
+            photoFileName: null,
+            docFileName: null,
+            completedAt: d0.deliveredAt || d0.updatedAt || new Date().toISOString(),
+            signedNotePdfDataUri: null,
+            signedNotePdfUrl: d0.signedDocumentUrl,
+          })
+        } else {
+          setDeliveredHandoffSummary(null)
+        }
+      } catch {
+        setDeliveredHandoffSummary(null)
+      }
+    } else {
+      setDeliveredHandoffSummary(null)
+    }
     if (d0?.routePath && Array.isArray(d0.routePath) && d0.routePath.length > 0) {
       pathPointsRef.current = d0.routePath.map((p) => ({
         latitude: p.latitude,
@@ -363,56 +591,6 @@ export default function RepartidorEntregas() {
       loadByFolio(String(folioParam).trim())
     }
   }, [searchParams, loadByFolio])
-
-  const handleFile = (e) => {
-    const f = e.target.files?.[0]
-    setUploadedFile(f || null)
-    if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl)
-    if (f && f.type.startsWith('image/')) {
-      setUploadPreviewUrl(URL.createObjectURL(f))
-    } else {
-      setUploadPreviewUrl(null)
-    }
-  }
-
-  const buildPdfWithSignature = useCallback(() => {
-    if (!signaturePng) return
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-    const folio = order?.orderNumber || folioInput
-    pdf.setFontSize(14)
-    pdf.text('Nota de venta — firma digital', 14, 18)
-    pdf.setFontSize(10)
-    pdf.text(`Folio / referencia: ${folio?.trim() || '—'}`, 14, 26)
-    pdf.text(`Repartidor: ${[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || '—'}`, 14, 32)
-    pdf.text(`Fecha: ${new Date().toLocaleString('es-MX')}`, 14, 38)
-    pdf.addImage(signaturePng, 'PNG', 14, 48, 120, 45)
-    pdf.setFontSize(8)
-    pdf.text('Firma del cliente / receptor', 14, 98)
-    pdf.save(`nota-venta-${String(folio || 'sin-folio').replace(/\s+/g, '-')}.pdf`)
-  }, [signaturePng, folioInput, order, user])
-
-  const buildHandoffPdf = useCallback(() => {
-    if (!handoffSignaturePng) return
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-    const folio = order?.orderNumber || folioInput
-    pdf.setFontSize(14)
-    pdf.text('Acuse de entrega — firma del receptor', 14, 18)
-    pdf.setFontSize(10)
-    pdf.text(`Folio: ${folio?.trim() || '—'}`, 14, 26)
-    pdf.text(`Entrega: ${delivery?.deliveryNumber || '—'}`, 14, 32)
-    pdf.text(`Recibe: ${recipientName.trim() || '—'}`, 14, 38)
-    pdf.text(`Puesto: ${recipientRole.trim() || '—'}`, 14, 44)
-    pdf.text(
-      `Repartidor: ${[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || '—'}`,
-      14,
-      50,
-    )
-    pdf.text(`Fecha: ${new Date().toLocaleString('es-MX')}`, 14, 56)
-    pdf.addImage(handoffSignaturePng, 'PNG', 14, 62, 120, 45)
-    pdf.setFontSize(8)
-    pdf.text('Firma de quien recibe', 14, 112)
-    pdf.save(`acuse-entrega-${String(folio || 'sin-folio').replace(/\s+/g, '-')}.pdf`)
-  }, [handoffSignaturePng, recipientName, recipientRole, folioInput, order, delivery, user])
 
   const resetHandoffUi = useCallback(() => {
     setFinalizarConfirmOpen(false)
@@ -443,10 +621,21 @@ export default function RepartidorEntregas() {
     e.target.value = ''
   }
 
-  const onHandoffDocChange = (e) => {
+  const onHandoffImageOrDocChange = (e) => {
     const f = e.target.files?.[0]
-    setHandoffDocFile(f || null)
     e.target.value = ''
+    if (!f) return
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+    if (isPdf) {
+      setHandoffDocFile(f)
+      return
+    }
+    setHandoffPhotoFile(f)
+    setHandoffPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      if (f.type.startsWith('image/')) return URL.createObjectURL(f)
+      return null
+    })
   }
 
   const submitReceiverModal = () => {
@@ -469,6 +658,10 @@ export default function RepartidorEntregas() {
     setRouteSeed(null)
     setLiveDriver(null)
     setRoutePaused(false)
+    setTripStarted(false)
+    iniciarViajeAppliedRef.current = false
+    directionsResultRef.current = null
+    googleMapRef.current = null
     if (watchIdRef.current != null) {
       navigator.geolocation.clearWatch(watchIdRef.current)
       watchIdRef.current = null
@@ -527,6 +720,7 @@ export default function RepartidorEntregas() {
       return
     }
     setHandoffBusy(true)
+    const t0 = Date.now()
     const pos = livePositionRef.current
     if (pos) {
       pathPointsRef.current.push({
@@ -555,16 +749,94 @@ export default function RepartidorEntregas() {
             }
           : prev,
       )
+      const selectedDeliveredItems = (order?.items || [])
+        .filter((item, index) => itemDeliveryChecks[getDeliveryItemKey(item, index)] ?? true)
+        .map((item) => ({
+          productName: item.productName || item.productSku || 'Producto',
+          quantity: Number(item.quantity ?? 0),
+          totalPrice: Number(item.totalPrice || 0),
+        }))
+      const summary = {
+        recipientName: recipientName.trim(),
+        recipientRole: recipientRole.trim(),
+        hadSignature: Boolean(handoffSignaturePng),
+        signaturePng: handoffSignaturePng || null,
+        deliveredItems: selectedDeliveredItems,
+        deliveredTotal: selectedDeliveredItems.reduce((acc, it) => acc + Number(it.totalPrice || 0), 0),
+        photoFileName: handoffPhotoFile?.name ?? null,
+        docFileName: handoffDocFile?.name ?? null,
+        completedAt: new Date().toISOString(),
+      }
+      try {
+        if (!order?.id) {
+          throw new Error('No se encontró el ID de la orden para subir la nota firmada.')
+        }
+        const itemsForIndices = order?.items || []
+        const deliveredItemIndices = itemsForIndices
+          .map((_, index) => index)
+          .filter((index) => itemDeliveryChecks[getDeliveryItemKey(itemsForIndices[index], index)] ?? true)
+        const uploadRes = await uploadSignedOrderSaleNotePdf(order.id, {
+          recipientName: summary.recipientName,
+          recipientRole: summary.recipientRole,
+          signaturePngDataUri: summary.signaturePng || undefined,
+          deliveredItemIndices,
+        })
+        if (!uploadRes.success || !uploadRes.data?.url) {
+          throw new Error(uploadRes.error || 'No se pudo subir la nota firmada al bucket.')
+        }
+        summary.signedNotePdfUrl = uploadRes.data.url
+        summary.signedNotePdfDataUri = null
+        await updateDelivery(id, { signedDocumentUrl: uploadRes.data.url })
+      } catch {
+        setHandoffError('No se pudo generar/subir la nota firmada a S3. Intenta nuevamente.')
+        setHandoffBusy(false)
+        return
+      }
+      if (order?.id && id) {
+        try {
+          sessionStorage.setItem(repartidorHandoffStorageKey(order.id, id), JSON.stringify(summary))
+        } catch {
+          /* storage lleno o modo privado */
+        }
+      }
+      setDeliveredHandoffSummary(summary)
     } catch (e) {
       setHandoffError(e instanceof Error ? e.message : 'No se pudo registrar la entrega como entregada.')
       setHandoffBusy(false)
       return
     }
+    const wait = Math.max(0, FINALIZING_SPLASH_MIN_MS - (Date.now() - t0))
+    await new Promise((r) => window.setTimeout(r, wait))
     setHandoffBusy(false)
     resetHandoffUi()
     setPhase('detail')
     clearRouteUi()
-  }, [clearRouteUi, resetHandoffUi])
+  }, [
+    clearRouteUi,
+    resetHandoffUi,
+    order?.id,
+    recipientName,
+    recipientRole,
+    handoffSignaturePng,
+    handoffPhotoFile,
+    handoffDocFile,
+    order?.items,
+    itemDeliveryChecks,
+  ])
+
+  const viewSignedDeliveryNote = useCallback(() => {
+    if (!order || !delivery) return
+    const summary = deliveredHandoffSummary
+    const urlPdf = summary?.signedNotePdfUrl || delivery.signedDocumentUrl
+    if (urlPdf) {
+      window.open(urlPdf, '_blank', 'noopener,noreferrer')
+      return
+    }
+    if (summary?.signedNotePdfDataUri) {
+      window.open(summary.signedNotePdfDataUri, '_blank', 'noopener,noreferrer')
+      return
+    }
+  }, [order, delivery, deliveredHandoffSummary])
 
   const pauseEntrega = useCallback(() => {
     setRoutePaused(true)
@@ -577,6 +849,44 @@ export default function RepartidorEntregas() {
   const resumeEntrega = useCallback(() => {
     setRoutePaused(false)
   }, [])
+
+  /** Zoom a la ruta y enfoque tipo navegación; activa seguimiento GPS (watch + guardado). */
+  const iniciarViaje = useCallback(() => {
+    if (tripStarted || iniciarViajeAppliedRef.current) return
+    iniciarViajeAppliedRef.current = true
+    setTripStarted(true)
+    const map = googleMapRef.current
+    const g = window.google?.maps
+    const rs = routeSeedRef.current
+    if (map && g && rs) {
+      const pad = { top: 100, right: 28, bottom: 180, left: 28 }
+      const result = directionsResultRef.current
+      if (result?.routes?.[0]?.bounds) {
+        map.fitBounds(result.routes[0].bounds, pad)
+      } else {
+        const b = new g.LatLngBounds()
+        b.extend(rs.driver)
+        b.extend(rs.dest)
+        map.fitBounds(b, pad)
+      }
+      window.setTimeout(() => {
+        const pos = livePositionRef.current || rs.driver
+        if (!pos || !googleMapRef.current) return
+        const m = googleMapRef.current
+        m.panTo(pos)
+        /** Zoom cercano tipo navegación (18 ≈ manzana; antes 16 se veía lejos). */
+        const tripStartZoom = 18
+        const z = m.getZoom()
+        if (z != null) m.setZoom(Math.max(z, tripStartZoom))
+        else m.setZoom(tripStartZoom)
+        try {
+          m.setTilt(45)
+        } catch {
+          /* algunos entornos limitan tilt */
+        }
+      }, 500)
+    }
+  }, [tripStarted])
 
   const ensureDeliveryId = useCallback(async () => {
     if (delivery?.id) return delivery.id
@@ -611,61 +921,73 @@ export default function RepartidorEntregas() {
     if (iniciarLockRef.current) return
     iniciarLockRef.current = true
     setIniciarBusy(true)
-    setViajeSnackbarOpen(true)
+    motoSplashStartedAtRef.current = Date.now()
+    setMotoSplashOpen(true)
     /** Si aún no hay permiso o falló la vista previa, se vuelve a pedir GPS y se genera el destino aquí. */
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        try {
-          const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-          const dest =
-            simulatedDest != null
-              ? { lat: simulatedDest.lat, lng: simulatedDest.lng }
-              : randomDestination(origin.lat, origin.lng)
-          if (simulatedDest == null) {
-            setSimulatedDest(dest)
-          }
-          setPreviewGeoError('')
-          try {
-            await loadGoogleMaps(mapsKey)
-          } catch (e) {
-            setViajeSnackbarOpen(false)
-            setGeoError(e instanceof Error ? e.message : 'No se pudo cargar Google Maps')
-            return
-          }
-          try {
-            const deliveryId = await ensureDeliveryId()
-            pathPointsRef.current = [
-              {
-                latitude: origin.lat,
-                longitude: origin.lng,
-                recordedAt: new Date().toISOString(),
-              },
-            ]
-            await updateDelivery(deliveryId, {
-              routePath: [...pathPointsRef.current],
-              status: 'in_transit',
-              startLatitude: origin.lat,
-              startLongitude: origin.lng,
-              endLatitude: dest.lat,
-              endLongitude: dest.lng,
-            })
-            setRouteSeed({ driver: origin, dest })
-            livePositionRef.current = origin
-            setLiveDriver(origin)
-            setPhase('enroute')
-          } catch (e) {
-            setViajeSnackbarOpen(false)
-            setGeoError(e instanceof Error ? e.message : 'No se pudo iniciar la entrega.')
-          }
-        } finally {
+        const finishSplashAndRelease = () => {
+          const elapsed = Date.now() - motoSplashStartedAtRef.current
+          const wait = Math.max(0, MOTO_SPLASH_MIN_MS - elapsed)
+          window.setTimeout(() => {
+            setMotoSplashOpen(false)
+            iniciarLockRef.current = false
+            setIniciarBusy(false)
+          }, wait)
+        }
+        const abortSplash = () => {
+          setMotoSplashOpen(false)
           iniciarLockRef.current = false
           setIniciarBusy(false)
+        }
+        const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        const dest =
+          simulatedDest != null
+            ? { lat: simulatedDest.lat, lng: simulatedDest.lng }
+            : randomDestination(origin.lat, origin.lng)
+        if (simulatedDest == null) {
+          setSimulatedDest(dest)
+        }
+        setPreviewGeoError('')
+        try {
+          await loadGoogleMaps(mapsKey)
+        } catch (e) {
+          abortSplash()
+          setGeoError(e instanceof Error ? e.message : 'No se pudo cargar Google Maps')
+          return
+        }
+        try {
+          const deliveryId = await ensureDeliveryId()
+          pathPointsRef.current = [
+            {
+              latitude: origin.lat,
+              longitude: origin.lng,
+              recordedAt: new Date().toISOString(),
+            },
+          ]
+          await updateDelivery(deliveryId, {
+            routePath: [...pathPointsRef.current],
+            status: 'in_transit',
+            startLatitude: origin.lat,
+            startLongitude: origin.lng,
+            endLatitude: dest.lat,
+            endLongitude: dest.lng,
+          })
+          setTripStarted(false)
+          setRouteSeed({ driver: origin, dest })
+          livePositionRef.current = origin
+          setLiveDriver(origin)
+          setPhase('enroute')
+          finishSplashAndRelease()
+        } catch (e) {
+          abortSplash()
+          setGeoError(e instanceof Error ? e.message : 'No se pudo iniciar la entrega.')
         }
       },
       (err) => {
         iniciarLockRef.current = false
         setIniciarBusy(false)
-        setViajeSnackbarOpen(false)
+        setMotoSplashOpen(false)
         setGeoError(
           err.message ||
             'No se pudo obtener tu ubicación. Revisa permisos del navegador o HTTPS e inténtalo de nuevo.',
@@ -707,6 +1029,7 @@ export default function RepartidorEntregas() {
       streetViewControl: false,
       fullscreenControl: true,
     })
+    googleMapRef.current = map
 
     const directionsService = new window.google.maps.DirectionsService()
     const renderer = new window.google.maps.DirectionsRenderer({
@@ -723,6 +1046,7 @@ export default function RepartidorEntregas() {
       },
       (result, status) => {
         if (status === 'OK' && result) {
+          directionsResultRef.current = result
           renderer.setDirections(result)
           const leg = result.routes?.[0]?.legs?.[0]
           if (leg?.duration?.text) setEtaText(leg.duration.text)
@@ -755,6 +1079,8 @@ export default function RepartidorEntregas() {
     })
 
     return () => {
+      googleMapRef.current = null
+      directionsResultRef.current = null
       if (motoMarkerRef.current) {
         motoMarkerRef.current.setMap(null)
         motoMarkerRef.current = null
@@ -774,7 +1100,7 @@ export default function RepartidorEntregas() {
   }, [liveDriver])
 
   useEffect(() => {
-    if (phase !== 'enroute' || routePaused) return
+    if (phase !== 'enroute' || routePaused || !tripStarted) return
     if (!navigator.geolocation) return
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -792,11 +1118,11 @@ export default function RepartidorEntregas() {
         watchIdRef.current = null
       }
     }
-  }, [phase, routePaused])
+  }, [phase, routePaused, tripStarted])
 
   /** Guardar recorrido GPS cada 10 s en la base de datos */
   useEffect(() => {
-    if (phase !== 'enroute' || routePaused) return undefined
+    if (phase !== 'enroute' || routePaused || !tripStarted) return undefined
     const id = activeDeliveryIdRef.current
     if (!id) return undefined
     const tick = async () => {
@@ -824,16 +1150,28 @@ export default function RepartidorEntregas() {
     }
     const int = setInterval(tick, 10000)
     return () => clearInterval(int)
-  }, [phase, routePaused, routeSeed])
+  }, [phase, routePaused, routeSeed, tripStarted])
 
   if (!canViewPath('/repartidor') && !canViewPath('/entregas')) {
     return null
   }
 
   const items = order?.items || []
+  const selectedItemsCount = items.reduce((acc, item, index) => {
+    const key = getDeliveryItemKey(item, index)
+    return acc + (itemDeliveryChecks[key] ?? true ? 1 : 0)
+  }, 0)
+  const selectedItemsTotal = items.reduce((acc, item, index) => {
+    const key = getDeliveryItemKey(item, index)
+    if (!(itemDeliveryChecks[key] ?? true)) return acc
+    return acc + Number(item.totalPrice || 0)
+  }, 0)
+  const allItemsChecked = items.length > 0 && selectedItemsCount === items.length
   const addrLines = order ? formatAddressLines(order) : []
   const mapPreviewSrc =
     simulatedDest && mapsKey ? staticMapUrl(simulatedDest.lat, simulatedDest.lng, mapsKey) : null
+
+  const isDeliveryCompleted = isDeliveryMarkedDelivered(delivery)
 
   const folioFromUrl = String(searchParams.get('folio') || searchParams.get('orderNumber') || '').trim()
   /** Solo en /repartidor sin folio en URL y sin pedido: permitir buscar manualmente. */
@@ -959,7 +1297,7 @@ export default function RepartidorEntregas() {
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Inventory2 color="primary" />
                       <Typography fontWeight={700}>Piezas a entregar</Typography>
-                      <Chip label={items.length} size="small" />
+                      <Chip label={`${selectedItemsCount}/${items.length}`} size="small" />
                     </Stack>
                   </AccordionSummary>
                   <AccordionDetails>
@@ -970,15 +1308,52 @@ export default function RepartidorEntregas() {
                             <TableCell>Producto / SKU</TableCell>
                             <TableCell align="right">Cant.</TableCell>
                             <TableCell align="right">Importe</TableCell>
+                            <TableCell align="center" sx={{ width: 88 }}>
+                              <Tooltip title={allItemsChecked ? 'Desmarcar todos' : 'Marcar todos'}>
+                                <Checkbox
+                                  size="small"
+                                  checked={allItemsChecked}
+                                  indeterminate={selectedItemsCount > 0 && !allItemsChecked}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked
+                                    setItemDeliveryChecks(() => {
+                                      const next = {}
+                                      items.forEach((it, idx) => {
+                                        next[getDeliveryItemKey(it, idx)] = checked
+                                      })
+                                      return next
+                                    })
+                                  }}
+                                  inputProps={{ 'aria-label': 'Marcar todos los productos a entregar' }}
+                                />
+                              </Tooltip>
+                            </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {items.map((item) => (
-                            <TableRow key={item.id || item.productId}>
+                          {items.map((item, index) => {
+                            const key = getDeliveryItemKey(item, index)
+                            const checked = itemDeliveryChecks[key] ?? true
+                            return (
+                            <TableRow
+                              key={key}
+                              sx={
+                                checked
+                                  ? undefined
+                                  : {
+                                      bgcolor: 'rgba(220, 38, 38, 0.08)',
+                                      '& td': { color: '#b91c1c' },
+                                    }
+                              }
+                            >
                               <TableCell>
                                 {item.productName || '—'}{' '}
                                 {item.productSku ? (
-                                  <Typography component="span" variant="caption" color="text.secondary">
+                                  <Typography
+                                    component="span"
+                                    variant="caption"
+                                    color={checked ? 'text.secondary' : '#7f1d1d'}
+                                  >
                                     ({item.productSku})
                                   </Typography>
                                 ) : null}
@@ -987,14 +1362,27 @@ export default function RepartidorEntregas() {
                               <TableCell align="right">
                                 {formatMxCurrency(item.totalPrice, order.currency)}
                               </TableCell>
+                              <TableCell align="center">
+                                <Checkbox
+                                  size="small"
+                                  checked={checked}
+                                  onChange={() => {
+                                    setItemDeliveryChecks((prev) => ({
+                                      ...prev,
+                                      [key]: !(prev[key] ?? true),
+                                    }))
+                                  }}
+                                  inputProps={{ 'aria-label': `Marcar ${item.productName || 'producto'} para entrega` }}
+                                />
+                              </TableCell>
                             </TableRow>
-                          ))}
+                          )})}
                         </TableBody>
                       </Table>
                     </TableContainer>
                     <Typography variant="body2" sx={{ mt: 1.5 }}>
-                      Total pedido:{' '}
-                      <strong>{formatMxCurrency(order.totalAmount, order.currency)}</strong>
+                      Total pedido ({selectedItemsCount}/{items.length} piezas):{' '}
+                      <strong>{formatMxCurrency(selectedItemsTotal, order.currency)}</strong>
                     </Typography>
                   </AccordionDetails>
                 </Accordion>
@@ -1076,18 +1464,175 @@ export default function RepartidorEntregas() {
 
                 <Divider sx={{ my: 2 }} />
 
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  fullWidth
-                  startIcon={<LocalShipping />}
-                  onClick={iniciarEntrega}
-                  disabled={loadState.loading}
-                  sx={{ py: 1.5, fontWeight: 800, fontSize: '1rem', textTransform: 'none' }}
-                >
-                  {iniciarBusy ? 'Obteniendo ubicación…' : 'INICIAR ENTREGA'}
-                </Button>
+                {isDeliveryCompleted && (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      mb: 2,
+                      borderRadius: 2,
+                      bgcolor: 'action.hover',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
+                      Detalle del acuse de entrega
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                      La nota firmada usa el mismo formato que la nota de venta del sistema; al pie incluye «RECIBÍ DE
+                      CONFORMIDAD», la firma y los datos de quien recibe.
+                    </Typography>
+                    {deliveredHandoffSummary &&
+                    Array.isArray(deliveredHandoffSummary.deliveredItems) &&
+                    deliveredHandoffSummary.deliveredItems.length > 0 ? (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" fontWeight={700} sx={{ mb: 1 }}>
+                          Piezas en esta entrega
+                        </Typography>
+                        <Stack spacing={0.75}>
+                          {deliveredHandoffSummary.deliveredItems.map((it, idx) => (
+                            <Typography key={`${it.productName}-${idx}`} variant="body2" color="text.secondary">
+                              {idx + 1}. {it.productName}{' '}
+                              <Box component="span" sx={{ color: 'text.primary' }}>
+                                · Cant. {it.quantity} · {formatMxCurrency(it.totalPrice, order?.currency)}
+                              </Box>
+                            </Typography>
+                          ))}
+                        </Stack>
+                        {deliveredHandoffSummary.deliveredTotal != null ? (
+                          <Typography variant="body2" sx={{ mt: 1, fontWeight: 700 }}>
+                            Total piezas entregadas:{' '}
+                            {formatMxCurrency(deliveredHandoffSummary.deliveredTotal, order?.currency)}
+                          </Typography>
+                        ) : null}
+                      </Box>
+                    ) : null}
+
+                    {deliveredHandoffSummary &&
+                    (deliveredHandoffSummary.recipientName || deliveredHandoffSummary.recipientRole) ? (
+                      <Box
+                        sx={{
+                          mb: 2,
+                          p: 1.5,
+                          borderRadius: 1,
+                          bgcolor: 'background.paper',
+                          border: 1,
+                          borderColor: 'divider',
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          fontWeight={800}
+                          sx={{ display: 'block', textAlign: 'center', letterSpacing: 0.6, mb: 1.25 }}
+                        >
+                          RECIBÍ DE CONFORMIDAD
+                        </Typography>
+                        {deliveredHandoffSummary.signaturePng ? (
+                          <Box
+                            component="img"
+                            src={deliveredHandoffSummary.signaturePng}
+                            alt="Firma de quien recibe"
+                            sx={{
+                              display: 'block',
+                              mx: 'auto',
+                              maxWidth: '100%',
+                              maxHeight: 120,
+                              objectFit: 'contain',
+                              mb: 1.25,
+                            }}
+                          />
+                        ) : deliveredHandoffSummary.hadSignature ? (
+                          <Chip
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                            label="Firma registrada (ver PDF)"
+                            sx={{ display: 'flex', mx: 'auto', mb: 1, width: 'fit-content' }}
+                          />
+                        ) : null}
+                        <Typography variant="body2" align="center">
+                          <Box component="span" color="text.secondary">
+                            Nombre:{' '}
+                          </Box>
+                          <strong>{deliveredHandoffSummary.recipientName || '—'}</strong>
+                        </Typography>
+                        <Typography variant="body2" align="center" sx={{ mt: 0.5 }}>
+                          <Box component="span" color="text.secondary">
+                            Puesto:{' '}
+                          </Box>
+                          <strong>{deliveredHandoffSummary.recipientRole || '—'}</strong>
+                        </Typography>
+                      </Box>
+                    ) : null}
+
+                    {deliveredHandoffSummary?.photoFileName ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+                        Evidencia (imagen):{' '}
+                        <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                          {deliveredHandoffSummary.photoFileName}
+                        </Box>
+                      </Typography>
+                    ) : null}
+                    {deliveredHandoffSummary?.docFileName ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+                        Evidencia (documento):{' '}
+                        <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                          {deliveredHandoffSummary.docFileName}
+                        </Box>
+                      </Typography>
+                    ) : null}
+
+                    {deliveredHandoffSummary &&
+                    !deliveredHandoffSummary.recipientName &&
+                    !deliveredHandoffSummary.photoFileName &&
+                    !deliveredHandoffSummary.docFileName &&
+                    !delivery?.signedDocumentUrl ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        No hay detalle guardado en este navegador. Si recargaste la página, abre la nota firmada (PDF)
+                        desde el botón de abajo si ya se subió al servidor.
+                      </Typography>
+                    ) : null}
+
+                    {!deliveredHandoffSummary && !delivery?.signedDocumentUrl ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        La entrega figura como completada. No hay PDF firmado enlazado; consúltalo en historial o desde
+                        el equipo donde se cerró la entrega.
+                      </Typography>
+                    ) : null}
+
+                    {deliveredHandoffSummary?.completedAt ? (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        Registrado: {new Date(deliveredHandoffSummary.completedAt).toLocaleString('es-MX')}
+                      </Typography>
+                    ) : null}
+
+                    {deliveredHandoffSummary?.signedNotePdfUrl || delivery?.signedDocumentUrl ? (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={viewSignedDeliveryNote}
+                        sx={{ alignSelf: 'flex-start', textTransform: 'none', fontWeight: 700 }}
+                      >
+                        VER NOTA FIRMADA
+                      </Button>
+                    ) : null}
+                  </Paper>
+                )}
+
+                {!isDeliveryCompleted && (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="large"
+                    fullWidth
+                    startIcon={<LocalShipping />}
+                    onClick={iniciarEntrega}
+                    disabled={loadState.loading}
+                    sx={{ py: 1.5, fontWeight: 800, fontSize: '1rem', textTransform: 'none' }}
+                  >
+                    {iniciarBusy ? 'Obteniendo ubicación…' : 'INICIAR ENTREGA'}
+                  </Button>
+                )}
                 {!mapsKey?.trim() && (
                   <Alert severity="error" sx={{ mt: 2 }}>
                     Falta <code>VITE_GOOGLE_MAPS_API_KEY</code> en <code>.env</code>.
@@ -1100,57 +1645,6 @@ export default function RepartidorEntregas() {
                 )}
               </Stack>
             </Paper>
-
-            <Accordion sx={{ borderRadius: 2, mb: 2, '&:before': { display: 'none' } }}>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Description color="action" />
-                  <Typography fontWeight={600}>Firma de nota (opcional)</Typography>
-                </Stack>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Genera un PDF con firma en el dispositivo o sube una foto/PDF ya firmado.
-                </Alert>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Firma digital
-                </Typography>
-                <SignaturePad onChange={setSignaturePng} sx={{ maxWidth: '100%' }} />
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
-                  <Button variant="contained" fullWidth disabled={!signaturePng} onClick={buildPdfWithSignature}>
-                    Descargar PDF con firma
-                  </Button>
-                </Stack>
-                <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-                  Subir nota firmada
-                </Typography>
-                <Button variant="outlined" component="label" fullWidth sx={{ py: 1.5 }}>
-                  Elegir archivo (PDF o imagen)
-                  <input type="file" hidden accept="image/*,.pdf,application/pdf" onChange={handleFile} />
-                </Button>
-                {uploadedFile && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Archivo: <strong>{uploadedFile.name}</strong>
-                  </Typography>
-                )}
-                {uploadPreviewUrl && (
-                  <Box
-                    component="img"
-                    src={uploadPreviewUrl}
-                    alt="Vista previa"
-                    sx={{
-                      maxWidth: '100%',
-                      maxHeight: 240,
-                      objectFit: 'contain',
-                      borderRadius: 1,
-                      border: 1,
-                      borderColor: 'divider',
-                      mt: 1,
-                    }}
-                  />
-                )}
-              </AccordionDetails>
-            </Accordion>
           </>
         )}
 
@@ -1162,59 +1656,316 @@ export default function RepartidorEntregas() {
               zIndex: (t) => t.zIndex.modal + 2,
               display: 'flex',
               flexDirection: 'column',
-              bgcolor: 'background.default',
+              background: routeProPalette.bg,
               pb: 'env(safe-area-inset-bottom, 0px)',
             }}
           >
-            <AppBar position="static" elevation={1} color="default">
-              <Toolbar variant="dense" sx={{ flexWrap: 'wrap', gap: 1, py: 1 }}>
-                <IconButton edge="start" aria-label="Volver al detalle" onClick={() => void stopEntrega()} size="large">
+            <AppBar
+              position="static"
+              elevation={0}
+              sx={{
+                bgcolor: 'rgba(15, 23, 42, 0.92)',
+                backdropFilter: 'blur(12px)',
+                borderBottom: `1px solid ${routeProPalette.border}`,
+              }}
+            >
+              <Toolbar variant="dense" sx={{ flexWrap: 'wrap', gap: 1, py: 1.25, minHeight: 56 }}>
+                <IconButton
+                  edge="start"
+                  aria-label="Volver al detalle"
+                  onClick={() => void stopEntrega()}
+                  size="large"
+                  sx={{
+                    color: routeProPalette.text,
+                    '&:hover': { bgcolor: 'rgba(148,163,184,0.12)' },
+                  }}
+                >
                   <ArrowBack />
                 </IconButton>
                 <Box sx={{ flex: 1, minWidth: 140 }}>
-                  <Typography variant="caption" color="text.secondary" component="div">
-                    Tiempo estimado (tráfico)
+                  <Typography
+                    variant="caption"
+                    component="div"
+                    sx={{ color: routeProPalette.textMuted, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', fontSize: '0.65rem' }}
+                  >
+                    {tripStarted ? 'Tiempo estimado (tráfico)' : 'Ruta lista'}
                   </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main', lineHeight: 1.2 }}>
-                    {etaText || 'Calculando…'}
+                  <Typography
+                    variant="h6"
+                    sx={{ fontWeight: 800, color: routeProPalette.accent, lineHeight: 1.2, fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+                  >
+                    {tripStarted ? etaText || 'Calculando…' : etaText || 'Pulsa INICIAR VIAJE'}
                   </Typography>
+                  {!tripStarted ? (
+                    <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: routeProPalette.textMuted, lineHeight: 1.35 }}>
+                      El GPS y el guardado del recorrido empiezan al iniciar.
+                    </Typography>
+                  ) : null}
                 </Box>
-                <Button
-                  variant={routePaused ? 'contained' : 'outlined'}
-                  color="warning"
-                  size="small"
-                  startIcon={routePaused ? <PlayArrow /> : <Pause />}
-                  onClick={routePaused ? resumeEntrega : pauseEntrega}
-                  sx={{ textTransform: 'none' }}
+                <Tooltip
+                  title={
+                    !tripStarted
+                      ? 'Inicia el viaje para poder pausar'
+                      : routePaused
+                        ? 'Reanudar seguimiento'
+                        : 'Pausar seguimiento'
+                  }
                 >
-                  {routePaused ? 'Continuar' : 'Pausar'}
-                </Button>
+                  <span>
+                    <Button
+                      variant={routePaused ? 'contained' : 'outlined'}
+                      color={routePaused ? 'warning' : 'inherit'}
+                      size="small"
+                      disabled={!tripStarted}
+                      startIcon={routePaused ? <PlayArrow /> : <Pause />}
+                      onClick={routePaused ? resumeEntrega : pauseEntrega}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        ...(routePaused
+                          ? {}
+                          : {
+                              color: routeProPalette.text,
+                              borderColor: routeProPalette.border,
+                              '&:hover': { borderColor: '#94a3b8', bgcolor: 'rgba(148,163,184,0.08)' },
+                            }),
+                      }}
+                    >
+                      {routePaused ? 'Continuar' : 'Pausar'}
+                    </Button>
+                  </span>
+                </Tooltip>
               </Toolbar>
             </AppBar>
-            <Box sx={{ px: 2, py: 1, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider' }}>
-              <Typography variant="caption" color="text.secondary">
-                El recorrido se guarda en el servidor cada 10 s (incluido al usar atrás).
+            <Box
+              sx={{
+                px: 2,
+                py: 1.25,
+                bgcolor: routeProPalette.surface,
+                borderBottom: `1px solid ${routeProPalette.border}`,
+              }}
+            >
+              <Typography variant="caption" sx={{ color: routeProPalette.textMuted, lineHeight: 1.45, display: 'block' }}>
+                {tripStarted
+                  ? 'El recorrido se guarda en el servidor cada 10 s (incluido al usar atrás).'
+                  : 'Pulsa INICIAR VIAJE para comenzar el seguimiento y el guardado del recorrido.'}
               </Typography>
               {mapsError ? (
-                <Alert severity="error" sx={{ mt: 1 }}>
+                <Alert
+                  severity="error"
+                  sx={{
+                    mt: 1,
+                    bgcolor: 'rgba(127, 29, 29, 0.35)',
+                    color: '#fecaca',
+                    border: '1px solid rgba(248, 113, 113, 0.35)',
+                    '& .MuiAlert-icon': { color: '#fca5a5' },
+                  }}
+                >
                   {mapsError}
                 </Alert>
               ) : null}
               {geoError ? (
-                <Alert severity="warning" sx={{ mt: 1 }}>
+                <Alert
+                  severity="warning"
+                  sx={{
+                    mt: 1,
+                    bgcolor: 'rgba(120, 53, 15, 0.35)',
+                    color: '#fed7aa',
+                    border: '1px solid rgba(251, 146, 60, 0.35)',
+                    '& .MuiAlert-icon': { color: '#fdba74' },
+                  }}
+                >
                   {geoError}
                 </Alert>
               ) : null}
             </Box>
-            <Box sx={{ flex: 1, minHeight: 0, position: 'relative', width: '100%' }}>
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                position: 'relative',
+                width: '100%',
+                p: { xs: 0, sm: 1.5 },
+                boxSizing: 'border-box',
+              }}
+            >
               <Box
                 ref={mapDivRef}
                 sx={{
                   position: 'absolute',
-                  inset: 0,
-                  bgcolor: 'action.hover',
+                  inset: { xs: 0, sm: 12 },
+                  zIndex: 0,
+                  bgcolor: '#334155',
+                  borderRadius: { xs: 0, sm: 2 },
+                  overflow: 'hidden',
+                  boxShadow: { xs: 'none', sm: '0 16px 48px rgba(0,0,0,0.35)' },
+                  border: { xs: 'none', sm: `1px solid ${routeProPalette.border}` },
                 }}
               />
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: { xs: 10, sm: 22 },
+                  left: { xs: 10, sm: 22 },
+                  zIndex: 50,
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  gap: 1,
+                  maxWidth: { xs: 'calc(100vw - 20px)', sm: 420 },
+                  pointerEvents: 'none',
+                }}
+              >
+                <Stack direction="column" spacing={1} sx={{ pointerEvents: 'auto', flexShrink: 0 }}>
+                  <Tooltip title={mapSidePanelKind === 'address' ? 'Ocultar dirección' : 'Dirección de entrega'}>
+                    <IconButton
+                      aria-label="Ver dirección de entrega"
+                      aria-expanded={mapSidePanelKind === 'address'}
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setMapSidePanelKind((k) => (k === 'address' ? null : 'address'))
+                      }}
+                      sx={{
+                        bgcolor: mapSidePanelKind === 'address' ? routeProPalette.accent : 'rgba(255,255,255,0.95)',
+                        color: mapSidePanelKind === 'address' ? '#0f172a' : '#0f172a',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
+                        '&:hover': {
+                          bgcolor: mapSidePanelKind === 'address' ? '#bae6fd' : '#fff',
+                        },
+                      }}
+                    >
+                      <LocationOn />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={mapSidePanelKind === 'recipient' ? 'Ocultar destinatario' : 'Destinatario'}>
+                    <IconButton
+                      aria-label="Ver destinatario de la entrega"
+                      aria-expanded={mapSidePanelKind === 'recipient'}
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setMapSidePanelKind((k) => (k === 'recipient' ? null : 'recipient'))
+                      }}
+                      sx={{
+                        bgcolor: mapSidePanelKind === 'recipient' ? routeProPalette.accent : 'rgba(255,255,255,0.95)',
+                        color: '#0f172a',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
+                        '&:hover': {
+                          bgcolor: mapSidePanelKind === 'recipient' ? '#bae6fd' : '#fff',
+                        },
+                      }}
+                    >
+                      <Person />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+                <Box sx={{ pointerEvents: 'auto', minWidth: 0, flex: '0 1 auto' }}>
+                  <Slide
+                    in={mapSidePanelKind != null}
+                    direction="left"
+                    timeout={{ enter: 320, exit: 260 }}
+                    mountOnEnter
+                    unmountOnExit
+                  >
+                    <Paper
+                      elevation={12}
+                      sx={{
+                        width: { xs: 'min(calc(100vw - 92px), 300px)', sm: 300 },
+                        maxHeight: { xs: 'min(52vh, 360px)', sm: 400 },
+                        overflow: 'auto',
+                        p: 1.75,
+                        bgcolor: 'rgba(15, 23, 42, 0.98)',
+                        color: routeProPalette.text,
+                        border: `1px solid ${routeProPalette.border}`,
+                        borderRadius: 2,
+                        boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+                        backdropFilter: 'blur(12px)',
+                      }}
+                    >
+                      {mapSidePanelKind === 'address' ? (
+                        <>
+                          <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={1} sx={{ mb: 1.25 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: routeProPalette.accent, pr: 1 }}>
+                              Dirección de entrega
+                            </Typography>
+                            <IconButton
+                              size="small"
+                              aria-label="Cerrar panel"
+                              onClick={() => setMapSidePanelKind(null)}
+                              sx={{ color: routeProPalette.textMuted, mt: -0.5, mr: -0.5 }}
+                            >
+                              <Close fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                          {addrLines.length === 0 ? (
+                            <Typography variant="body2" sx={{ color: routeProPalette.textMuted }}>
+                              Sin dirección en el pedido.
+                            </Typography>
+                          ) : (
+                            addrLines.map((line, i) => (
+                              <Typography key={`map-addr-${i}`} variant="body2" sx={{ mb: 0.5, lineHeight: 1.45 }}>
+                                {line}
+                              </Typography>
+                            ))
+                          )}
+                        </>
+                      ) : null}
+                      {mapSidePanelKind === 'recipient' ? (
+                        <>
+                          <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={1} sx={{ mb: 1.25 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: routeProPalette.accent, pr: 1 }}>
+                              Destinatario
+                            </Typography>
+                            <IconButton
+                              size="small"
+                              aria-label="Cerrar panel"
+                              onClick={() => setMapSidePanelKind(null)}
+                              sx={{ color: routeProPalette.textMuted, mt: -0.5, mr: -0.5 }}
+                            >
+                              <Close fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                          {(() => {
+                            const addr = getOrderShippingLikeAddress(order)
+                            const nm = addr ? [addr.firstName, addr.lastName].filter(Boolean).join(' ').trim() : ''
+                            return (
+                              <>
+                                {nm ? (
+                                  <Typography variant="body2" sx={{ mb: addr?.phone ? 1 : 0, fontWeight: 600 }}>
+                                    {nm}
+                                  </Typography>
+                                ) : (
+                                  <Typography variant="body2" sx={{ mb: 1, color: routeProPalette.textMuted }}>
+                                    Sin nombre en la dirección de envío.
+                                  </Typography>
+                                )}
+                                {addr?.phone ? (
+                                  <Typography variant="body2" sx={{ color: routeProPalette.textMuted }}>
+                                    Tel. {addr.phone}
+                                  </Typography>
+                                ) : null}
+                                {recipientName.trim() ? (
+                                  <>
+                                    <Divider sx={{ my: 1.5, borderColor: routeProPalette.border }} />
+                                    <Typography variant="caption" sx={{ color: routeProPalette.textMuted, display: 'block', mb: 0.5 }}>
+                                      Confirmado al finalizar (acuse)
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                      {recipientName.trim()}
+                                      {recipientRole.trim() ? ` · ${recipientRole.trim()}` : ''}
+                                    </Typography>
+                                  </>
+                                ) : null}
+                              </>
+                            )
+                          })()}
+                        </>
+                      ) : null}
+                    </Paper>
+                  </Slide>
+                </Box>
+              </Box>
               {!evidencePanelOpen && (
                 <Box
                   sx={{
@@ -1222,73 +1973,118 @@ export default function RepartidorEntregas() {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    zIndex: 2,
+                    zIndex: 10,
+                    isolation: 'isolate',
                     p: 1.5,
                     pt: 1,
-                    bgcolor: 'background.paper',
-                    borderTop: 1,
-                    borderColor: 'divider',
-                    boxShadow: '0 -4px 12px rgba(0,0,0,0.08)',
+                    bgcolor: 'rgba(15, 23, 42, 0.94)',
+                    backdropFilter: 'blur(12px)',
+                    borderTop: `1px solid ${routeProPalette.border}`,
+                    boxShadow: '0 -8px 32px rgba(0,0,0,0.35)',
+                    pointerEvents: 'auto',
                   }}
                 >
                   <Button
+                    type="button"
                     variant="contained"
-                    color="success"
                     size="large"
                     fullWidth
-                    startIcon={<CheckCircle />}
-                    onClick={() => setFinalizarConfirmOpen(true)}
-                    sx={{ py: 1.35, fontWeight: 800, textTransform: 'none', fontSize: '1rem' }}
+                    startIcon={tripStarted ? <CheckCircle /> : <PlayArrow />}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (!tripStarted) {
+                        iniciarViaje()
+                        return
+                      }
+                      setFinalizarConfirmOpen(true)
+                    }}
+                    sx={{
+                      py: 1.35,
+                      fontWeight: 800,
+                      textTransform: 'none',
+                      fontSize: '1rem',
+                      bgcolor: '#22c55e',
+                      color: '#0f172a',
+                      boxShadow: '0 4px 14px rgba(34, 197, 94, 0.35)',
+                      '&:hover': { bgcolor: '#16a34a', color: '#0f172a' },
+                    }}
                   >
-                    FINALIZAR ENTREGA
+                    {tripStarted ? 'FINALIZAR VIAJE' : 'INICIAR VIAJE'}
                   </Button>
                 </Box>
               )}
               {evidencePanelOpen && (
                 <Paper
-                  elevation={8}
+                  elevation={0}
                   sx={{
                     position: 'absolute',
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    zIndex: 3,
+                    zIndex: 20,
                     maxHeight: { xs: '62vh', sm: '56vh' },
                     overflow: 'auto',
                     borderRadius: '12px 12px 0 0',
                     p: { xs: 1.5, sm: 2 },
                     pb: 'max(16px, env(safe-area-inset-bottom, 0px))',
+                    bgcolor: 'rgba(30, 41, 59, 0.98)',
+                    color: routeProPalette.text,
+                    border: `1px solid ${routeProPalette.border}`,
+                    borderBottom: 'none',
+                    backdropFilter: 'blur(12px)',
                   }}
                 >
                   <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
                     Entrega — acuse y evidencia
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Recibe: <strong>{recipientName.trim()}</strong> · Puesto:{' '}
-                    <strong>{recipientRole.trim()}</strong>
+                  <Typography variant="body2" sx={{ mb: 1.5, color: routeProPalette.textMuted }}>
+                    Recibe:{' '}
+                    <Box component="span" sx={{ color: routeProPalette.text, fontWeight: 700 }}>
+                      {recipientName.trim()}
+                    </Box>{' '}
+                    · Puesto:{' '}
+                    <Box component="span" sx={{ color: routeProPalette.text, fontWeight: 700 }}>
+                      {recipientRole.trim()}
+                    </Box>
                   </Typography>
                   {handoffError && (
-                    <Alert severity="error" sx={{ mb: 1.5 }}>
+                    <Alert
+                      severity="error"
+                      sx={{
+                        mb: 1.5,
+                        bgcolor: 'rgba(127, 29, 29, 0.35)',
+                        color: '#fecaca',
+                        border: '1px solid rgba(248, 113, 113, 0.35)',
+                        '& .MuiAlert-icon': { color: '#fca5a5' },
+                      }}
+                    >
                       {handoffError}
                     </Alert>
                   )}
-                  <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 0.5, color: routeProPalette.textMuted }}>
                     Firma de quien recibe
                   </Typography>
-                  <SignaturePad onChange={setHandoffSignaturePng} sx={{ maxWidth: '100%' }} />
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1.5 }}>
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      disabled={!handoffSignaturePng}
-                      onClick={buildHandoffPdf}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Descargar PDF con firma
-                    </Button>
-                  </Stack>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  <SignaturePad
+                    onChange={setHandoffSignaturePng}
+                    sx={{ maxWidth: '100%' }}
+                    clearButtonLabel="LIMPIAR FIRMA"
+                    clearButtonSx={{
+                      alignSelf: { xs: 'stretch', sm: 'flex-start' },
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.6,
+                      fontWeight: 700,
+                      fontSize: '0.75rem',
+                      color: routeProPalette.text,
+                      borderColor: routeProPalette.border,
+                      '&:hover': {
+                        borderColor: '#94a3b8',
+                        bgcolor: 'rgba(148,163,184,0.12)',
+                      },
+                    }}
+                  />
+                  <Divider sx={{ my: 2, borderColor: routeProPalette.border }} />
+                  <Typography variant="subtitle2" sx={{ mb: 1, color: routeProPalette.textMuted }}>
                     Evidencia (foto o documento)
                   </Typography>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -1300,27 +2096,56 @@ export default function RepartidorEntregas() {
                       capture="environment"
                       onChange={onHandoffPhotoChange}
                     />
+                    <input
+                      ref={handoffMediaInputRef}
+                      type="file"
+                      hidden
+                      accept="image/*,.pdf,application/pdf"
+                      onChange={onHandoffImageOrDocChange}
+                    />
                     <Button
                       variant="outlined"
                       fullWidth
                       startIcon={<PhotoCamera />}
                       onClick={() => handoffCameraInputRef.current?.click()}
-                      sx={{ textTransform: 'none', py: 1.25 }}
+                      sx={{
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.6,
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                        py: 1.25,
+                        color: routeProPalette.text,
+                        borderColor: routeProPalette.border,
+                        '&:hover': { borderColor: '#94a3b8', bgcolor: 'rgba(148,163,184,0.08)' },
+                      }}
                     >
-                      Tomar foto
+                      TOMAR FOTO
                     </Button>
-                    <Button variant="outlined" component="label" fullWidth startIcon={<AttachFile />} sx={{ py: 1.25 }}>
-                      Cargar imagen
-                      <input type="file" hidden accept="image/*" onChange={onHandoffPhotoChange} />
-                    </Button>
-                    <Button variant="outlined" component="label" fullWidth startIcon={<AttachFile />} sx={{ py: 1.25 }}>
-                      Cargar documento
-                      <input type="file" hidden accept="image/*,.pdf,application/pdf" onChange={onHandoffDocChange} />
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      startIcon={<AttachFile />}
+                      onClick={() => handoffMediaInputRef.current?.click()}
+                      sx={{
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        py: 1.25,
+                        color: routeProPalette.text,
+                        borderColor: routeProPalette.border,
+                        '&:hover': { borderColor: '#94a3b8', bgcolor: 'rgba(148,163,184,0.08)' },
+                      }}
+                    >
+                      CARGAR IMAGEN / DOCUMENTO
                     </Button>
                   </Stack>
                   {handoffPhotoFile && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                      Foto: <strong>{handoffPhotoFile.name}</strong>
+                    <Typography variant="caption" sx={{ mt: 1, display: 'block', color: routeProPalette.textMuted }}>
+                      Foto:{' '}
+                      <Box component="span" sx={{ fontWeight: 700, color: '#f1f5f9' }}>
+                        {handoffPhotoFile.name}
+                      </Box>
                     </Typography>
                   )}
                   {handoffPhotoPreview && (
@@ -1333,15 +2158,17 @@ export default function RepartidorEntregas() {
                         maxHeight: 160,
                         objectFit: 'contain',
                         borderRadius: 1,
-                        border: 1,
-                        borderColor: 'divider',
+                        border: `1px solid ${routeProPalette.border}`,
                         mt: 1,
                       }}
                     />
                   )}
                   {handoffDocFile && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                      Documento: <strong>{handoffDocFile.name}</strong>
+                    <Typography variant="caption" sx={{ mt: 1, display: 'block', color: routeProPalette.textMuted }}>
+                      Documento:{' '}
+                      <Box component="span" sx={{ fontWeight: 700, color: '#f1f5f9' }}>
+                        {handoffDocFile.name}
+                      </Box>
                     </Typography>
                   )}
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
@@ -1354,9 +2181,18 @@ export default function RepartidorEntregas() {
                         setEvidencePanelOpen(false)
                         setHandoffError('')
                       }}
-                      sx={{ textTransform: 'none', py: 1.25 }}
+                      sx={{
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.6,
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                        py: 1.25,
+                        color: routeProPalette.text,
+                        borderColor: routeProPalette.border,
+                        '&:hover': { borderColor: '#94a3b8', bgcolor: 'rgba(148,163,184,0.08)' },
+                      }}
                     >
-                      Volver al mapa
+                      VOLVER AL MAPA
                     </Button>
                     <Button
                       variant="contained"
@@ -1364,10 +2200,16 @@ export default function RepartidorEntregas() {
                       fullWidth
                       disabled={handoffBusy}
                       onClick={() => void confirmDeliveryHandoff()}
-                      startIcon={handoffBusy ? <CircularProgress size={18} color="inherit" /> : <CheckCircle />}
-                      sx={{ textTransform: 'none', py: 1.25, fontWeight: 700 }}
+                      startIcon={<CheckCircle />}
+                      sx={{
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.6,
+                        fontWeight: 800,
+                        fontSize: '0.8rem',
+                        py: 1.25,
+                      }}
                     >
-                      {handoffBusy ? 'Guardando…' : 'Confirmar entrega'}
+                      CONFIRMAR ENTREGA
                     </Button>
                   </Stack>
                 </Paper>
@@ -1376,13 +2218,29 @@ export default function RepartidorEntregas() {
 
             <Dialog
               open={finalizarConfirmOpen}
-              onClose={() => setFinalizarConfirmOpen(false)}
+              onClose={(_, reason) => {
+                if (reason === 'backdropClick') return
+                setFinalizarConfirmOpen(false)
+              }}
               fullWidth
               maxWidth="xs"
               aria-labelledby="finalizar-entrega-confirm-title"
-              ModalProps={{ sx: dialogAboveRouteOverlaySx }}
+              slotProps={dialogSlotPropsAboveMap}
             >
-              <DialogTitle id="finalizar-entrega-confirm-title">Finalizar entrega</DialogTitle>
+              <DialogTitle
+                id="finalizar-entrega-confirm-title"
+                sx={{
+                  bgcolor: '#0f172a',
+                  color: routeProPalette.text,
+                  borderBottom: `1px solid ${routeProPalette.border}`,
+                  py: 1.75,
+                  px: 3,
+                  fontWeight: 700,
+                  fontSize: '1.1rem',
+                }}
+              >
+                Finalizar entrega
+              </DialogTitle>
               <DialogContent>
                 <Typography variant="body2" color="text.secondary">
                   ¿Confirmas que deseas finalizar esta entrega? Después podrás indicar quién recibió el paquete, firmar y
@@ -1403,7 +2261,7 @@ export default function RepartidorEntregas() {
                   }}
                   sx={{ textTransform: 'none' }}
                 >
-                  Sí, continuar
+                  Sí, Finalizar
                 </Button>
               </DialogActions>
             </Dialog>
@@ -1416,7 +2274,7 @@ export default function RepartidorEntregas() {
               fullWidth
               maxWidth="sm"
               aria-labelledby="receptor-entrega-title"
-              ModalProps={{ sx: dialogAboveRouteOverlaySx }}
+              slotProps={dialogSlotPropsAboveMap}
             >
               <DialogTitle id="receptor-entrega-title">¿Quién recibe el paquete?</DialogTitle>
               <DialogContent>
@@ -1462,32 +2320,8 @@ export default function RepartidorEntregas() {
           </Box>
         )}
 
-        <Snackbar
-          open={viajeSnackbarOpen}
-          autoHideDuration={4500}
-          onClose={(_, reason) => {
-            if (reason === 'clickaway') return
-            setViajeSnackbarOpen(false)
-          }}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-          sx={{
-            zIndex: (theme) => theme.zIndex.modal + 120,
-            top: {
-              xs: 'max(88px, calc(70px + env(safe-area-inset-top, 0px)))',
-              sm: 'max(96px, calc(70px + env(safe-area-inset-top, 0px)))',
-            },
-            bottom: 'auto',
-          }}
-        >
-          <Alert
-            onClose={() => setViajeSnackbarOpen(false)}
-            severity="info"
-            variant="filled"
-            sx={{ width: '100%' }}
-          >
-            Iniciando Viaje
-          </Alert>
-        </Snackbar>
+        {motoSplashOpen ? <MotoDeliverySplashOverlay /> : null}
+        {handoffBusy ? <FinalizingDeliverySplashOverlay /> : null}
       </Box>
     </Box>
   )

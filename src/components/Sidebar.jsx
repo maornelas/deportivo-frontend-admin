@@ -27,6 +27,7 @@ import {
   Group as GroupIcon,
   MenuBook as CatalogosIcon,
   AdminPanelSettings as RolesIcon,
+  OndemandVideo as TutorialesIcon,
 } from '@mui/icons-material'
 
 const menuItems = [
@@ -48,6 +49,8 @@ const menuItems = [
   { type: 'divider' },
   { text: 'Catálogos', icon: <CatalogosIcon />, path: '/catalogos' },
   { text: 'Roles y permisos', icon: <RolesIcon />, path: '/roles' },
+  { type: 'divider' },
+  { text: 'Tutoriales', icon: <TutorialesIcon />, path: '/tutoriales' },
 ]
 
 const Sidebar = ({ isOpen = true, onClose }) => {

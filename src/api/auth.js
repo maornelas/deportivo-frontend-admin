@@ -1,8 +1,4 @@
-const getBaseUrl = () => {
-  const url = import.meta.env.VITE_API_URL
-  if (url) return url.replace(/\/$/, '')
-  return 'http://localhost:3000/api/v1'
-}
+import { getBaseUrl } from './http'
 
 /**
  * Login para el panel de administración.
