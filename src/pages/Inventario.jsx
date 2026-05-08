@@ -67,6 +67,11 @@ const ESTATUS_OPCIONES = [
 
 const MAX_FOTOS = 10
 
+/** En "Detalle del producto" no se suben fotos nuevas desde el panel. */
+const DETAIL_ALLOW_IMAGE_UPLOAD = false
+/** En "Nuevo producto" no se suben fotos (vista previa + botón Cargar imágenes desactivados). */
+const NEW_PRODUCT_ALLOW_IMAGE_UPLOAD = false
+
 const getInitialProducto = () => ({
   marcaId: '',
   categoriaId: '',
@@ -282,6 +287,7 @@ const Inventario = () => {
   }
 
   const handleImageFiles = (e) => {
+    if (!NEW_PRODUCT_ALLOW_IMAGE_UPLOAD) return
     const files = Array.from(e.target.files || []).filter((f) => f.type.startsWith('image/'))
     setProducto((prev) => {
       const current = prev.imageFiles || []
@@ -292,6 +298,7 @@ const Inventario = () => {
   }
 
   const handleImageDrop = (e) => {
+    if (!NEW_PRODUCT_ALLOW_IMAGE_UPLOAD) return
     e.preventDefault()
     e.stopPropagation()
     const files = Array.from(e.dataTransfer.files || []).filter((f) => f.type.startsWith('image/'))
@@ -375,7 +382,9 @@ const Inventario = () => {
       isActive: producto.estatus === 'DISPONIBLE',
       stockQuantity: piezasDisp,
     }
-    const imageFiles = (producto.imageFiles || []).slice(0, MAX_FOTOS)
+    const imageFiles = NEW_PRODUCT_ALLOW_IMAGE_UPLOAD
+      ? (producto.imageFiles || []).slice(0, MAX_FOTOS)
+      : []
     const result =
       imageFiles.length > 0
         ? await createProductWithImages(payload, imageFiles)
@@ -483,6 +492,7 @@ const Inventario = () => {
   }
 
   const handleDetailImageFiles = (e) => {
+    if (!DETAIL_ALLOW_IMAGE_UPLOAD) return
     const files = Array.from(e.target.files || []).filter((f) => f.type.startsWith('image/'))
     if (files.length === 0) return
     setDetailNewImageFiles((prev) => {
@@ -494,6 +504,7 @@ const Inventario = () => {
   }
 
   const handleDetailImageDrop = (e) => {
+    if (!DETAIL_ALLOW_IMAGE_UPLOAD) return
     e.preventDefault()
     e.stopPropagation()
     const files = Array.from(e.dataTransfer.files || []).filter((f) => f.type.startsWith('image/'))
@@ -506,7 +517,7 @@ const Inventario = () => {
   }
 
   const detailEditImageCount = detailExistingImages.length + detailNewImageFiles.length
-  const detailCanAddMoreImages = detailEditing && detailEditImageCount < MAX_FOTOS
+  const detailCanAddMoreImages = DETAIL_ALLOW_IMAGE_UPLOAD && detailEditing && detailEditImageCount < MAX_FOTOS
 
   const handleDetailInputChange = (e) => {
     const { name, value } = e.target
@@ -586,7 +597,7 @@ const Inventario = () => {
       }
     }
 
-    if (detailNewImageFiles.length > 0) {
+    if (DETAIL_ALLOW_IMAGE_UPLOAD && detailNewImageFiles.length > 0) {
       const ur = await uploadProductImages(detailProductId, detailNewImageFiles)
       if (!ur.success) {
         setDetailLoading(false)
@@ -635,7 +646,7 @@ const Inventario = () => {
   const handleSidebarClose = () => setSidebarOpen(false)
 
   const imageFiles = producto.imageFiles || []
-  const canAddMoreImages = imageFiles.length < MAX_FOTOS
+  const canAddMoreImages = NEW_PRODUCT_ALLOW_IMAGE_UPLOAD && imageFiles.length < MAX_FOTOS
 
   return (
     <Box sx={{ minHeight: '100vh' }}>
@@ -1040,7 +1051,7 @@ const Inventario = () => {
                 </Box>
               </Box>
 
-              {/* Columna derecha: Vista previa (clic o arrastrar imagen) */}
+              {/* Columna derecha: Vista previa (solo si se permiten imágenes al crear) */}
               <Box
                 sx={{
                   flexShrink: 0,
@@ -1055,27 +1066,32 @@ const Inventario = () => {
                   bgcolor: 'grey.50',
                   p: 2,
                   minHeight: 280,
+                  ...(NEW_PRODUCT_ALLOW_IMAGE_UPLOAD ? { cursor: 'pointer', '&:hover': { borderColor: 'grey.500', bgcolor: 'grey.100' } } : {}),
                 }}
-                component="label"
-                onDrop={handleImageDrop}
-                onDragOver={handleDragOver}
+                component={NEW_PRODUCT_ALLOW_IMAGE_UPLOAD ? 'label' : 'div'}
+                onDrop={NEW_PRODUCT_ALLOW_IMAGE_UPLOAD ? handleImageDrop : undefined}
+                onDragOver={NEW_PRODUCT_ALLOW_IMAGE_UPLOAD ? handleDragOver : undefined}
               >
-                <input type="file" hidden accept="image/*" multiple onChange={handleImageFiles} />
+                {NEW_PRODUCT_ALLOW_IMAGE_UPLOAD && (
+                  <input type="file" hidden accept="image/*" multiple onChange={handleImageFiles} />
+                )}
                 <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Vista previa</Typography>
                 <Avatar
-                  src={avatarPreviewUrl}
+                  src={NEW_PRODUCT_ALLOW_IMAGE_UPLOAD ? avatarPreviewUrl : undefined}
                   variant="rounded"
                   sx={{
                     width: 160,
                     height: 160,
                     bgcolor: 'grey.200',
-                    '&:hover': { bgcolor: 'grey.300' },
+                    ...(NEW_PRODUCT_ALLOW_IMAGE_UPLOAD ? { '&:hover': { bgcolor: 'grey.300' } } : {}),
                   }}
                 >
-                  {!avatarPreviewUrl && <ImageIcon sx={{ fontSize: 64, color: 'grey.500' }} />}
+                  {(NEW_PRODUCT_ALLOW_IMAGE_UPLOAD ? !avatarPreviewUrl : true) && (
+                    <ImageIcon sx={{ fontSize: 64, color: 'grey.500' }} />
+                  )}
                 </Avatar>
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, textAlign: 'center' }}>
-                  Clic o arrastrar imagen aquí
+                  {NEW_PRODUCT_ALLOW_IMAGE_UPLOAD ? 'Clic o arrastrar imagen aquí' : 'Carga de imágenes no disponible aquí'}
                 </Typography>
               </Box>
             </Box>
@@ -1133,16 +1149,22 @@ const Inventario = () => {
               </Box>
             </Box>
 
-            {/* Fotos: subir imágenes (se guardan en S3 en images-products/{productId}/) */}
-            <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Fotos de la pieza (hasta {MAX_FOTOS})</Typography>
-            {canAddMoreImages && (
-              <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />} sx={{ textTransform: 'none', mb: 2 }}>
-                Cargar imágenes
-                <input type="file" hidden accept="image/*" multiple onChange={handleImageFiles} />
-              </Button>
+            {/* Fotos al crear (solo si NEW_PRODUCT_ALLOW_IMAGE_UPLOAD) */}
+            {NEW_PRODUCT_ALLOW_IMAGE_UPLOAD && (
+              <>
+                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>
+                  Fotos de la pieza (hasta {MAX_FOTOS})
+                </Typography>
+                {canAddMoreImages && (
+                  <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />} sx={{ textTransform: 'none', mb: 2 }}>
+                    Cargar imágenes
+                    <input type="file" hidden accept="image/*" multiple onChange={handleImageFiles} />
+                  </Button>
+                )}
+              </>
             )}
             {/* Vistas previas de las partes cargadas (parte inferior); clic abre vista ampliada */}
-            {imageFiles.length > 0 && (
+            {NEW_PRODUCT_ALLOW_IMAGE_UPLOAD && imageFiles.length > 0 && (
               <Box sx={{ mt: 2, mb: 2 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>Vistas previas de las imágenes cargadas (clic para ampliar)</Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
@@ -1348,13 +1370,15 @@ const Inventario = () => {
                       bgcolor: 'grey.50',
                       p: 2,
                       minHeight: 280,
-                      ...(detailEditing ? { cursor: 'pointer', '&:hover': { borderColor: 'grey.500', bgcolor: 'grey.100' } } : {}),
+                      ...(DETAIL_ALLOW_IMAGE_UPLOAD && detailEditing
+                        ? { cursor: 'pointer', '&:hover': { borderColor: 'grey.500', bgcolor: 'grey.100' } }
+                        : {}),
                     }}
-                    component={detailEditing ? 'label' : 'div'}
-                    onDrop={detailEditing ? handleDetailImageDrop : undefined}
-                    onDragOver={detailEditing ? handleDragOver : undefined}
+                    component={DETAIL_ALLOW_IMAGE_UPLOAD && detailEditing ? 'label' : 'div'}
+                    onDrop={DETAIL_ALLOW_IMAGE_UPLOAD && detailEditing ? handleDetailImageDrop : undefined}
+                    onDragOver={DETAIL_ALLOW_IMAGE_UPLOAD && detailEditing ? handleDragOver : undefined}
                   >
-                    {detailEditing && (
+                    {DETAIL_ALLOW_IMAGE_UPLOAD && detailEditing && (
                       <input type="file" hidden accept="image/*" multiple onChange={handleDetailImageFiles} />
                     )}
                     <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Vista previa</Typography>
@@ -1366,15 +1390,23 @@ const Inventario = () => {
                       {!detailEditAvatarSrc && <ImageIcon sx={{ fontSize: 64, color: 'grey.500' }} />}
                     </Avatar>
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, textAlign: 'center' }}>
-                      {detailEditing
-                        ? detailCanAddMoreImages
-                          ? 'Clic o arrastrar para agregar fotos'
-                          : `Máximo ${MAX_FOTOS} imágenes`
-                        : detailImages.length > 1
-                          ? `${detailImages.length} imágenes`
-                          : detailImages[0]
-                            ? 'Imagen principal'
-                            : 'Sin imagen'}
+                      {!DETAIL_ALLOW_IMAGE_UPLOAD
+                        ? (() => {
+                            const n = detailEditing ? detailExistingImages.length : detailImages.length
+                            const hasImg = detailEditing ? !!detailEditAvatarSrc : !!(detailImages[0])
+                            if (n > 1) return `${n} imágenes`
+                            if (hasImg) return 'Imagen principal'
+                            return 'Sin imagen'
+                          })()
+                        : detailEditing
+                          ? detailCanAddMoreImages
+                            ? 'Clic o arrastrar para agregar fotos'
+                            : `Máximo ${MAX_FOTOS} imágenes`
+                          : detailImages.length > 1
+                            ? `${detailImages.length} imágenes`
+                            : detailImages[0]
+                              ? 'Imagen principal'
+                              : 'Sin imagen'}
                     </Typography>
                   </Box>
                 </Box>
@@ -1433,14 +1465,16 @@ const Inventario = () => {
                   </Box>
                 </Box>
 
-                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Fotos de la pieza (hasta {MAX_FOTOS})</Typography>
-                {detailEditing && detailCanAddMoreImages && (
+                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>
+                  {DETAIL_ALLOW_IMAGE_UPLOAD ? `Fotos de la pieza (hasta ${MAX_FOTOS})` : 'Fotos del producto'}
+                </Typography>
+                {DETAIL_ALLOW_IMAGE_UPLOAD && detailEditing && detailCanAddMoreImages && (
                   <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />} sx={{ textTransform: 'none', mb: 2 }}>
                     Cargar imágenes
                     <input type="file" hidden accept="image/*" multiple onChange={handleDetailImageFiles} />
                   </Button>
                 )}
-                {detailEditing && (detailExistingImages.length > 0 || detailNewImageFiles.length > 0) && (
+                {detailEditing && (detailExistingImages.length > 0 || (DETAIL_ALLOW_IMAGE_UPLOAD && detailNewImageFiles.length > 0)) && (
                   <Box sx={{ mt: 0, mb: 2 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>Vistas previas (clic para ampliar; use la papelera para quitar)</Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>

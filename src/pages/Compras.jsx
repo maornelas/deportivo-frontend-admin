@@ -3,9 +3,11 @@ import { SIDEBAR_WIDTH } from '../config/layout'
 
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
+  Alert,
   Box,
   Button,
   Chip,
+  CircularProgress,
   FormControl,
   InputLabel,
   MenuItem,
@@ -41,7 +43,7 @@ function formatTimeValue(v) {
 const Compras = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { purchases } = usePurchases()
+  const { purchases, loading, error } = usePurchases()
   const { canDoAction } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const { notify, pushNotificationSnackbar } = usePushNotification()
@@ -141,6 +143,12 @@ const Compras = () => {
           Compras
         </Typography>
 
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
         <Paper sx={{ p: 2, mb: 2 }}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end' }}>
             <TextField label="Fecha inicio" type="date" size="small" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
@@ -183,7 +191,12 @@ const Compras = () => {
         </Paper>
 
         <TableContainer component={Paper}>
-          <Table size="small" stickyHeader>
+          {loading && purchases.length === 0 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress />
+            </Box>
+          ) : null}
+          <Table size="small" stickyHeader sx={{ display: loading && purchases.length === 0 ? 'none' : 'table' }}>
             <TableHead>
               <TableRow>
                 <TableCell><strong>ID</strong></TableCell>
@@ -231,15 +244,17 @@ const Compras = () => {
               )}
             </TableBody>
           </Table>
-          <TablePagination
-            component="div"
-            count={computedPurchases.length}
-            page={page}
-            onPageChange={(_, newPage) => setPage(newPage)}
-            rowsPerPage={limit}
-            rowsPerPageOptions={[limit]}
-            labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-          />
+          {!(loading && purchases.length === 0) ? (
+            <TablePagination
+              component="div"
+              count={computedPurchases.length}
+              page={page}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              rowsPerPage={limit}
+              rowsPerPageOptions={[limit]}
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+            />
+          ) : null}
         </TableContainer>
 
         {pushNotificationSnackbar}

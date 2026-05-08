@@ -38,6 +38,7 @@ import { getBrands, getCarModelsByBrand } from '../api/products'
 import { downloadPurchaseNotePdf } from '../compras/purchaseNotePdf'
 import { useAuth } from '../contexts/AuthContext'
 import { usePurchases } from '../contexts/PurchasesContext'
+import { getPurchase, updatePurchase as apiUpdatePurchase, deletePurchase as apiDeletePurchase } from '../api/purchases'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
 import { showBrowserNotificationIfAllowed } from '../utils/browserPush'
@@ -116,13 +117,15 @@ function mapItemsToLines(items, purchase) {
 export default function CompraDetalle() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { purchases, updatePurchase, removePurchase } = usePurchases()
+  const { refreshPurchases } = usePurchases()
   const { canDoAction, user } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [loading, setLoading] = useState(false)
+  const [fetchLoading, setFetchLoading] = useState(true)
   const [error, setError] = useState('')
+  const [purchase, setPurchase] = useState(null)
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false)
@@ -154,11 +157,6 @@ export default function CompraDetalle() {
   const [dlgYear, setDlgYear] = useState('')
   const [dlgVersion, setDlgVersion] = useState('')
   const [dlgCarModels, setDlgCarModels] = useState([])
-
-  const purchase = useMemo(
-    () => purchases.find((p) => String(p.id) === String(id)),
-    [purchases, id],
-  )
 
   const draftVehicleBrandName = useMemo(
     () => (brands.find((b) => b.id === draftBrandId)?.name || '').trim(),
@@ -205,10 +203,22 @@ export default function CompraDetalle() {
       navigate('/compras', { replace: true })
       return
     }
-    if (!purchase) {
-      navigate('/compras', { replace: true })
+    let cancelled = false
+    setFetchLoading(true)
+    setError('')
+    getPurchase(id).then((r) => {
+      if (cancelled) return
+      setFetchLoading(false)
+      if (r.success && r.data) {
+        setPurchase(r.data)
+      } else {
+        setError(r.error || 'No se pudo cargar la compra.')
+      }
+    })
+    return () => {
+      cancelled = true
     }
-  }, [id, purchase, navigate])
+  }, [id])
 
   useEffect(() => {
     getBrands({ activeOnly: true }).then((r) => {
@@ -399,12 +409,51 @@ export default function CompraDetalle() {
     return { payload }
   }
 
+  const buildApiUpdateBody = () => {
+    const built = buildPurchasePayload()
+    if (built.error) return built
+    const p = built.payload
+    return {
+      payload: p,
+      apiBody: {
+        providerName: p.providerName,
+        purchaseDate: p.purchaseDate,
+        paymentMethod: p.paymentMethod,
+        status: p.status,
+        notes: p.notes,
+        currency: p.currency,
+        receiptFileName: p.receiptFileName || undefined,
+        vehicleBrandId: p.vehicleBrandId || undefined,
+        vehicleBrand: p.vehicleBrand || undefined,
+        vehicleModel: p.vehicleModel || undefined,
+        vehicleYear: p.vehicleYear || undefined,
+        vehicleVersion: p.vehicleVersion || undefined,
+        total: p.total,
+        items: (p.items || []).map((l) => ({
+          key: l.key,
+          productId: l.productId ?? null,
+          productName: l.productName,
+          sku: l.sku || '',
+          partType: l.partType,
+          partCondition: l.partCondition,
+          unitPrice: l.unitPrice,
+          quantity: l.quantity,
+          vehicleBrandId: l.vehicleBrandId || undefined,
+          vehicleBrand: l.vehicleBrand || undefined,
+          vehicleModel: l.vehicleModel || undefined,
+          vehicleYear: l.vehicleYear || undefined,
+          vehicleVersion: l.vehicleVersion || undefined,
+        })),
+      },
+    }
+  }
+
   const handleGenerarCompra = async () => {
     if (canEdit && !canDoAction(ACTION.COMPRAS_EDITAR)) {
       showDenied()
       return
     }
-    const built = buildPurchasePayload()
+    const built = buildApiUpdateBody()
     if (built.error) {
       setError(built.error)
       return
@@ -412,11 +461,19 @@ export default function CompraDetalle() {
     setError('')
     setLoading(true)
     try {
+      let pdfPayload = built.payload
       if (canEdit) {
-        updatePurchase(built.payload)
+        const res = await apiUpdatePurchase(purchase.id, built.apiBody)
+        if (!res.success) {
+          setError(res.error || 'No se pudo guardar.')
+          return
+        }
+        await refreshPurchases()
+        setPurchase(res.data)
+        pdfPayload = res.data
       }
       const registeredByDisplayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
-      downloadPurchaseNotePdf(built.payload, totals, { registeredByDisplayName })
+      downloadPurchaseNotePdf(pdfPayload, totals, { registeredByDisplayName })
     } catch (e) {
       console.error(e)
     } finally {
@@ -437,7 +494,7 @@ export default function CompraDetalle() {
     setDeleteConfirmOpen(false)
   }
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!purchase) return
     if (!canDoAction(ACTION.COMPRAS_ELIMINAR)) {
       showDenied()
@@ -447,7 +504,12 @@ export default function CompraDetalle() {
     setDeleteConfirmLoading(true)
     setError('')
     try {
-      removePurchase(purchase.id)
+      const del = await apiDeletePurchase(purchase.id)
+      if (!del.success) {
+        setError(del.error || 'No se pudo eliminar.')
+        return
+      }
+      await refreshPurchases()
       setDeleteConfirmOpen(false)
       const providerLabel = purchase.providerName ? ` · ${purchase.providerName}` : ''
       const flash = `La compra se canceló correctamente${providerLabel}.`
@@ -458,8 +520,25 @@ export default function CompraDetalle() {
     }
   }
 
+  if (fetchLoading) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Box>
+    )
+  }
+
   if (!purchase) {
-    return null
+    return (
+      <Box sx={{ minHeight: '100vh', p: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error || 'Compra no encontrada.'}
+        </Alert>
+        <Button variant="contained" onClick={() => navigate('/compras')}>
+          Volver al listado
+        </Button>
+      </Box>
+    )
   }
 
   return (

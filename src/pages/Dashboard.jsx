@@ -16,8 +16,7 @@ import {
 import { getOrderDailySales } from '../api/orders'
 import { getSalesReport } from '../api/salesReports'
 import { getExpenseReportSummary, listExpenses } from '../api/expenses'
-import { usePurchases } from '../contexts/PurchasesContext'
-import { computePurchaseTotal } from '../compras/shared'
+import { getPurchasesDaily } from '../api/purchases'
 
 /** YYYY-MM-DD en calendario local (misma semántica que <input type="date">). */
 function formatYMDLocal(d) {
@@ -38,7 +37,6 @@ function getDefaultDateRange() {
 
 const Dashboard = () => {
   const defaultRange = getDefaultDateRange()
-  const { purchases } = usePurchases()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [layoutWidth, setLayoutWidth] = useState(1200)
   const [startDate, setStartDate] = useState(defaultRange.startDate)
@@ -53,6 +51,8 @@ const Dashboard = () => {
   const [channelDailyLoading, setChannelDailyLoading] = useState(true)
   const [dailyExpenses, setDailyExpenses] = useState([])
   const [dailyExpensesLoading, setDailyExpensesLoading] = useState(true)
+  const [dailyPurchases, setDailyPurchases] = useState([])
+  const [dailyPurchasesLoading, setDailyPurchasesLoading] = useState(true)
   const [expenseGrandTotal, setExpenseGrandTotal] = useState(null)
   const [expenseSummaryLoading, setExpenseSummaryLoading] = useState(true)
   const containerRef = useRef(null)
@@ -107,6 +107,18 @@ const Dashboard = () => {
       setExpenseGrandTotal(Number(result.data.grandTotal ?? 0))
     } else {
       setExpenseGrandTotal(0)
+    }
+  }, [startDate, endDate])
+
+  const fetchDailyPurchases = useCallback(async () => {
+    if (!startDate || !endDate) return
+    setDailyPurchasesLoading(true)
+    const result = await getPurchasesDaily({ startDate, endDate })
+    setDailyPurchasesLoading(false)
+    if (result.success && Array.isArray(result.data)) {
+      setDailyPurchases(result.data)
+    } else {
+      setDailyPurchases([])
     }
   }, [startDate, endDate])
 
@@ -168,14 +180,19 @@ const Dashboard = () => {
   }, [fetchDailyExpenses])
 
   useEffect(() => {
+    fetchDailyPurchases()
+  }, [fetchDailyPurchases])
+
+  useEffect(() => {
     const onVis = () => {
       if (document.visibilityState !== 'visible') return
       fetchExpenseSummary()
       fetchDailyExpenses()
+      fetchDailyPurchases()
     }
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
-  }, [fetchExpenseSummary, fetchDailyExpenses])
+  }, [fetchExpenseSummary, fetchDailyExpenses, fetchDailyPurchases])
 
   const [layout, setLayout] = useState([
     { i: 'sales', x: 0, y: 0, w: 6, h: 5 },
@@ -217,36 +234,14 @@ const Dashboard = () => {
       : `$${Number(expenseGrandTotal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const totalComprasAmount = useMemo(() => {
-    if (!startDate || !endDate) return 0
-    const start = new Date(startDate + 'T00:00:00')
-    const end = new Date(endDate + 'T23:59:59.999')
-    return purchases.reduce((sum, p) => {
-      const pd = new Date(p.purchaseDate)
-      if (Number.isNaN(pd.getTime()) || pd < start || pd > end) return sum
-      const t = p.total != null ? Number(p.total) : computePurchaseTotal(p.items)
-      return sum + t
-    }, 0)
-  }, [purchases, startDate, endDate])
+    if (!Array.isArray(dailyPurchases)) return 0
+    return dailyPurchases.reduce((sum, d) => sum + Number(d.totalAmount ?? 0), 0)
+  }, [dailyPurchases])
 
-  /** Compras agregadas por día (misma forma que ventas/gastos: { date, totalAmount }) */
-  const dailyPurchasesByDate = useMemo(() => {
-    if (!startDate || !endDate) return []
-    const start = new Date(startDate + 'T00:00:00')
-    const end = new Date(endDate + 'T23:59:59.999')
-    const byDate = new Map()
-    for (const p of purchases) {
-      const pd = new Date(p.purchaseDate)
-      if (Number.isNaN(pd.getTime()) || pd < start || pd > end) continue
-      const d = (p.purchaseDate || '').slice(0, 10)
-      const t = p.total != null ? Number(p.total) : computePurchaseTotal(p.items)
-      byDate.set(d, (byDate.get(d) || 0) + t)
-    }
-    return Array.from(byDate.entries())
-      .map(([date, totalAmount]) => ({ date, totalAmount }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-  }, [purchases, startDate, endDate])
-
-  const totalComprasFormatted = `$${Number(totalComprasAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const totalComprasFormatted =
+    dailyPurchasesLoading && dailyPurchases.length === 0
+      ? '...'
+      : `$${Number(totalComprasAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const fmtMoney = (n) =>
     `$${Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -434,8 +429,8 @@ const Dashboard = () => {
                   <SalesChart
                     dailySales={dailySales}
                     dailyExpenses={dailyExpenses}
-                    dailyPurchases={dailyPurchasesByDate}
-                    loading={dailySalesLoading || dailyExpensesLoading}
+                    dailyPurchases={dailyPurchases}
+                    loading={dailySalesLoading || dailyExpensesLoading || dailyPurchasesLoading}
                     startDate={startDate}
                     endDate={endDate}
                   />

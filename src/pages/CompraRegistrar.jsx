@@ -39,6 +39,7 @@ import { createNotification } from '../api/notifications'
 import { downloadPurchaseNotePdf } from '../compras/purchaseNotePdf'
 import { useAuth } from '../contexts/AuthContext'
 import { usePurchases } from '../contexts/PurchasesContext'
+import { createPurchase } from '../api/purchases'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
 import {
@@ -109,7 +110,7 @@ const sectionHeaderSx = {
 export default function CompraRegistrar() {
   const navigate = useNavigate()
   const { canDoAction, user } = useAuth()
-  const { addPurchase, purchases } = usePurchases()
+  const { refreshPurchases } = usePurchases()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -299,16 +300,8 @@ export default function CompraRegistrar() {
     setSaving(true)
     try {
       const cleanLines = lines.filter((l) => safeTrim(l.productName))
-      const maxCmp = purchases.reduce((max, p) => {
-        const id = String(p?.id || '')
-        if (!/^CMP-\d{6}$/.test(id)) return max
-        const n = Number(id.slice(4))
-        return !Number.isNaN(n) && n > max ? n : max
-      }, 0)
-      const id = `CMP-${String(maxCmp + 1).padStart(6, '0')}`
       const headerVeh = summarizePurchaseHeaderVehicle(cleanLines)
-      const payload = {
-        id,
+      const apiBody = {
         providerName: editorProvider.trim(),
         purchaseDate: editorPurchaseDate,
         paymentMethod: editorPaymentMethod,
@@ -316,40 +309,44 @@ export default function CompraRegistrar() {
         notes: editorNotes || '',
         currency: 'MXN',
         receiptFileName: receiptFileName || '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        vehicleBrandId: headerVeh.vehicleBrandId,
-        vehicleBrand: headerVeh.vehicleBrand,
-        vehicleModel: headerVeh.vehicleModel,
-        vehicleYear: headerVeh.vehicleYear,
-        vehicleVersion: headerVeh.vehicleVersion,
+        vehicleBrandId: headerVeh.vehicleBrandId || undefined,
+        vehicleBrand: headerVeh.vehicleBrand || undefined,
+        vehicleModel: headerVeh.vehicleModel || undefined,
+        vehicleYear: headerVeh.vehicleYear || undefined,
+        vehicleVersion: headerVeh.vehicleVersion || undefined,
+        total: totals.total,
         items: cleanLines.map((l) => ({
           key: l.key,
-          productId: null,
+          productId: l.productId ?? null,
           productName: l.productName.trim(),
-          sku: '',
+          sku: l.sku || '',
           partType: l.partType,
           partCondition: l.partCondition,
           unitPrice: Number(l.unitPrice || 0),
           quantity: Math.max(1, parseInt(l.quantity, 10) || 1),
-          vehicleBrandId: l.vehicleBrandId || '',
-          vehicleBrand: l.vehicleBrand || '',
-          vehicleModel: l.vehicleModel || '',
-          vehicleYear: l.vehicleYear || '',
-          vehicleVersion: l.vehicleVersion || '',
+          vehicleBrandId: l.vehicleBrandId || undefined,
+          vehicleBrand: l.vehicleBrand || undefined,
+          vehicleModel: l.vehicleModel || undefined,
+          vehicleYear: l.vehicleYear || undefined,
+          vehicleVersion: l.vehicleVersion || undefined,
         })),
       }
-      payload.total = totals.total
-      addPurchase(payload)
+      const result = await createPurchase(apiBody)
+      if (!result.success) {
+        setError(result.error || 'No se pudo registrar la compra.')
+        return
+      }
+      await refreshPurchases()
+      const saved = result.data
       void createNotification({
         type: 'purchase_created',
         title: 'Nueva compra en el panel',
-        message: `Compra a ${payload.providerName} · Total ${formatMoney(totals.total)}`,
-        payload: { purchaseId: payload.id, providerName: payload.providerName, total: totals.total },
+        message: `Compra a ${saved.providerName} · Total ${formatMoney(totals.total)}`,
+        payload: { purchaseId: saved.id, providerName: saved.providerName, total: totals.total },
       }).catch(() => {})
       try {
         const registeredByDisplayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
-        downloadPurchaseNotePdf(payload, totals, { registeredByDisplayName })
+        downloadPurchaseNotePdf(saved, totals, { registeredByDisplayName })
       } catch (pdfErr) {
         console.error(pdfErr)
       }

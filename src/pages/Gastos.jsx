@@ -51,7 +51,7 @@ import { getRoles } from '../api/rbac'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
-import { showBrowserNotificationIfAllowed } from '../utils/browserPush'
+import { usePushNotification } from '../hooks/usePushNotification'
 
 const LIMIT = 15
 
@@ -133,6 +133,7 @@ const emptyItem = () => ({
 const Gastos = () => {
   const { canDoAction, user } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
+  const { notify, pushNotificationSnackbar } = usePushNotification()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -430,11 +431,18 @@ const Gastos = () => {
       return
     }
     setFormOpen(false)
+    const d = result.data
+    const folio = d?.expenseNumber
+    const amt = d?.totalAmount != null ? formatCurrency(d.totalAmount) : ''
     if (formMode === 'create') {
-      const folio = result.data?.expenseNumber
-      showBrowserNotificationIfAllowed(
-        'Gasto registrado correctamente',
-        folio ? `Folio ${folio}` : '',
+      notify(
+        folio ? `Gasto registrado · ${folio}${amt ? ` · ${amt}` : ''}` : 'Gasto registrado correctamente',
+        { browserTitle: 'Gasto registrado', browserBody: folio ? `Folio ${folio}` : 'Registro guardado' },
+      )
+    } else {
+      notify(
+        folio ? `Gasto actualizado · ${folio}${amt ? ` · ${amt}` : ''}` : 'Gasto actualizado correctamente',
+        { browserTitle: 'Gasto actualizado', browserBody: folio ? `Folio ${folio}` : 'Cambios guardados' },
       )
     }
     fetchList()
@@ -474,6 +482,12 @@ const Gastos = () => {
       setDeleteTarget(null)
       return
     }
+    const folio = deleteTarget.expenseNumber
+    const amt = deleteTarget.totalAmount != null ? formatCurrency(deleteTarget.totalAmount) : ''
+    notify(
+      folio ? `Gasto eliminado · ${folio}${amt ? ` · ${amt}` : ''}` : 'Gasto eliminado',
+      { browserTitle: 'Gasto eliminado', browserBody: folio ? `Folio ${folio}` : '' },
+    )
     setDeleteTarget(null)
     fetchList()
   }
@@ -1005,6 +1019,7 @@ const Gastos = () => {
           </DialogActions>
         </Dialog>
         {permissionDeniedSnackbar}
+        {pushNotificationSnackbar}
       </Box>
     </Box>
   )
