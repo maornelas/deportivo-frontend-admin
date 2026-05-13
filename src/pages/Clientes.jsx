@@ -30,6 +30,7 @@ import {
   Tabs,
   Tab,
   Card,
+  CardActionArea,
   CardContent,
   Chip,
   Stepper,
@@ -37,17 +38,18 @@ import {
   StepLabel,
   IconButton,
 } from '@mui/material'
-import { Search as SearchIcon, Person, LocationOn, ShoppingCart, CreditCard, AssignmentReturn, Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material'
+import { Search as SearchIcon, Person, Business, LocationOn, ShoppingCart, CreditCard, AssignmentReturn, Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
-import { getUsers, getUserById, updateUser, createUser } from '../api/user'
+import { getUsers, getUserById, updateUser, createUser, deleteUser } from '../api/user'
 import { getAddressesByUser, createAddress } from '../api/userAddress'
 import { getPaymentsByUser, createPayment } from '../api/userPayment'
 import { searchOrders } from '../api/orders'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
+import { usePushNotification } from '../hooks/usePushNotification'
 
 function formatDate(value) {
   if (!value) return '-'
@@ -62,12 +64,28 @@ function formatDateTime(value) {
 }
 
 function getInitials(user) {
+  const kind = user.customerAccountKind || 'person'
+  if (kind === 'company' && user.companyName?.trim()) {
+    const parts = user.companyName.trim().split(/\s+/).filter(Boolean)
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+    return user.companyName.trim().slice(0, 2).toUpperCase()
+  }
   const first = (user.firstName || '').trim()
   const last = (user.lastName || '').trim()
   if (first && last) return `${first[0]}${last[0]}`.toUpperCase()
   if (first) return first.slice(0, 2).toUpperCase()
   if (user.email) return user.email.slice(0, 2).toUpperCase()
   return '?'
+}
+
+function clientDisplayName(user) {
+  if (!user) return 'Cliente'
+  const kind = user.customerAccountKind || 'person'
+  if (kind === 'company') {
+    return user.companyName?.trim() || user.email || 'Cliente empresa'
+  }
+  const full = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
+  return full || user.email || 'Cliente'
 }
 
 const ROLE_OPTIONS = [
@@ -160,6 +178,8 @@ const Clientes = () => {
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const canEditCliente = canDoAction(ACTION.CLIENTES_EDITAR)
   const canCrearCliente = canDoAction(ACTION.CLIENTES_CREAR)
+  const canEliminarCliente = canDoAction(ACTION.CLIENTES_ELIMINAR)
+  const { notify, pushNotificationSnackbar } = usePushNotification()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -175,6 +195,8 @@ const Clientes = () => {
   const [editForm, setEditForm] = useState({ companyName: '', rfc: '', phone: '', role: 'customer', isActive: true })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [createKindDialogOpen, setCreateKindDialogOpen] = useState(false)
+  const [createAccountKind, setCreateAccountKind] = useState(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createStep, setCreateStep] = useState(0)
   const [createForm, setCreateForm] = useState({
@@ -190,6 +212,8 @@ const Clientes = () => {
   const [createPayments, setCreatePayments] = useState([])
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -261,15 +285,60 @@ const Clientes = () => {
     setClientPayments([])
     setClientOrders([])
     setSaveError(null)
+    setDeleteConfirmOpen(false)
+  }
+
+  const openDeleteClienteConfirm = () => {
+    if (!canEliminarCliente) {
+      showDenied()
+      return
+    }
+    if (!detailUser?.id || detailUser.role !== 'customer') {
+      setSaveError('Solo se pueden eliminar cuentas con rol Cliente desde este módulo.')
+      return
+    }
+    setDeleteConfirmOpen(true)
+  }
+
+  const handleConfirmDeleteCliente = async () => {
+    if (!detailUser?.id || !canEliminarCliente) {
+      showDenied()
+      setDeleteConfirmOpen(false)
+      return
+    }
+    setDeleteLoading(true)
+    setSaveError(null)
+    const id = detailUser.id
+    const label = clientDisplayName(detailUser)
+    const result = await deleteUser(id)
+    setDeleteLoading(false)
+    if (!result.success) {
+      setSaveError(result.error || 'No se pudo eliminar el cliente.')
+      setDeleteConfirmOpen(false)
+      return
+    }
+    setDeleteConfirmOpen(false)
+    handleCloseDetail()
+    await loadUsers()
+    notify(`Cliente eliminado correctamente: ${label}`, {
+      browserTitle: 'Cliente eliminado',
+      browserBody: label,
+    })
   }
 
   const clientRefunds = clientOrders.filter((o) => o.status === 'refunded')
 
-  const handleOpenCreate = () => {
+  const openCreateKindDialog = () => {
     if (!canCrearCliente) {
       showDenied()
       return
     }
+    setCreateKindDialogOpen(true)
+  }
+
+  const chooseCreateAccountKind = (kind) => {
+    setCreateKindDialogOpen(false)
+    setCreateAccountKind(kind)
     setCreateOpen(true)
     setCreateStep(0)
     setCreateForm({ email: '', passwordHash: '', firstName: '', lastName: '', companyName: '', rfc: '', phone: '' })
@@ -281,6 +350,7 @@ const Clientes = () => {
   const handleCloseCreate = () => {
     setCreateOpen(false)
     setCreateError(null)
+    setCreateAccountKind(null)
   }
 
   const handleCreateChange = (field, value) => {
@@ -304,7 +374,16 @@ const Clientes = () => {
 
   const handleCreateNext = () => {
     if (createStep === 0) {
-      if (!createForm.email?.trim() || !createForm.passwordHash?.trim()) {
+      if (createAccountKind === 'company') {
+        if (!createForm.companyName?.trim()) {
+          setCreateError('El nombre de la empresa es obligatorio.')
+          return
+        }
+        if (createForm.email?.trim() && !createForm.passwordHash?.trim()) {
+          setCreateError('Si indicas un correo, debes asignar una contraseña para acceso al portal, o deja el correo vacío.')
+          return
+        }
+      } else if (!createForm.email?.trim() || !createForm.passwordHash?.trim()) {
         setCreateError('Email y contraseña son obligatorios.')
         return
       }
@@ -320,23 +399,48 @@ const Clientes = () => {
       showDenied()
       return
     }
-    if (!createForm.email?.trim() || !createForm.passwordHash?.trim()) {
+    if (createAccountKind === 'company') {
+      if (!createForm.companyName?.trim()) {
+        setCreateError('El nombre de la empresa es obligatorio.')
+        return
+      }
+      if (createForm.email?.trim() && !createForm.passwordHash?.trim()) {
+        setCreateError('Si indicas un correo, debes asignar una contraseña, o deja el correo vacío.')
+        return
+      }
+    } else if (!createForm.email?.trim() || !createForm.passwordHash?.trim()) {
       setCreateError('Email y contraseña son obligatorios.')
       return
     }
     setCreateLoading(true)
     setCreateError(null)
     try {
-      const userRes = await createUser({
-        email: createForm.email.trim(),
-        passwordHash: createForm.passwordHash,
-        firstName: createForm.firstName?.trim() || undefined,
-        lastName: createForm.lastName?.trim() || undefined,
-        companyName: createForm.companyName?.trim() || undefined,
-        rfc: createForm.rfc?.trim() || undefined,
-        phone: createForm.phone?.trim() || undefined,
-        role: 'customer',
-      })
+      const isCompany = createAccountKind === 'company'
+      const userRes = await createUser(
+        isCompany
+          ? {
+              accountKind: 'company',
+              companyName: createForm.companyName.trim(),
+              firstName: createForm.firstName?.trim() || undefined,
+              lastName: createForm.lastName?.trim() || undefined,
+              rfc: createForm.rfc?.trim() || undefined,
+              phone: createForm.phone?.trim() || undefined,
+              role: 'customer',
+              ...(createForm.email?.trim() ? { email: createForm.email.trim() } : {}),
+              ...(createForm.passwordHash?.trim() ? { passwordHash: createForm.passwordHash } : {}),
+            }
+          : {
+              accountKind: 'person',
+              email: createForm.email.trim(),
+              passwordHash: createForm.passwordHash,
+              firstName: createForm.firstName?.trim() || undefined,
+              lastName: createForm.lastName?.trim() || undefined,
+              companyName: createForm.companyName?.trim() || undefined,
+              rfc: createForm.rfc?.trim() || undefined,
+              phone: createForm.phone?.trim() || undefined,
+              role: 'customer',
+            },
+      )
       if (!userRes.success || !userRes.data?.id) {
         setCreateError(userRes.error || 'Error al crear cliente')
         return
@@ -465,7 +569,7 @@ const Clientes = () => {
             }}
             sx={{ minWidth: 280 }}
           />
-          <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateKindDialog}>
             Crear cliente
           </Button>
         </Box>
@@ -530,9 +634,11 @@ const Clientes = () => {
                             {getInitials(u)}
                           </Avatar>
                         </TableCell>
-                        <TableCell>{u.email ?? '-'}</TableCell>
+                        <TableCell>{u.email?.trim() ? u.email : '—'}</TableCell>
                         <TableCell>
-                          {[u.firstName, u.lastName].filter(Boolean).join(' ') || '-'}
+                          {[u.firstName, u.lastName].filter(Boolean).join(' ') ||
+                            (u.customerAccountKind === 'company' ? u.companyName : '') ||
+                            '-'}
                         </TableCell>
                         <TableCell>{u.companyName ?? '-'}</TableCell>
                         <TableCell>{getRoleLabel(u.role)}</TableCell>
@@ -549,7 +655,7 @@ const Clientes = () => {
 
         <Dialog open={detailOpen} onClose={handleCloseDetail} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
           <ModalHeader
-            title={detailUser ? [detailUser.firstName, detailUser.lastName].filter(Boolean).join(' ') || detailUser.email || 'Cliente' : 'Detalle del cliente'}
+            title={detailUser ? clientDisplayName(detailUser) : 'Detalle del cliente'}
             onClose={handleCloseDetail}
           />
           <DialogContent dividers sx={{ minHeight: 480, height: 520, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -569,6 +675,18 @@ const Clientes = () => {
                 <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                 {detailTab === 0 && (
                   <Stack spacing={2}>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <Chip
+                        size="small"
+                        label={(detailUser.customerAccountKind || 'person') === 'company' ? 'Cliente empresa' : 'Cliente persona'}
+                        color={(detailUser.customerAccountKind || 'person') === 'company' ? 'secondary' : 'default'}
+                      />
+                      {(detailUser.customerAccountKind || 'person') === 'company' && !detailUser.email && (
+                        <Typography variant="caption" color="text.secondary">
+                          Sin acceso al portal (sin correo ni contraseña).
+                        </Typography>
+                      )}
+                    </Box>
                     <Typography variant="subtitle2" color="text.secondary">Información editable</Typography>
                     <TextField label="Empresa" size="small" fullWidth value={editForm.companyName} onChange={(e) => handleEditChange('companyName', e.target.value)} disabled={!canEditCliente} />
                     <TextField label="RFC" size="small" fullWidth value={editForm.rfc} onChange={(e) => handleEditChange('rfc', e.target.value)} disabled={!canEditCliente} />
@@ -718,29 +836,157 @@ const Clientes = () => {
               <Typography color="text.secondary">No se pudo cargar el cliente.</Typography>
             )}
           </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDetail}>Cerrar</Button>
-            {detailUser && canEditCliente && (
-              <Button variant="contained" onClick={handleSaveUser} disabled={saving}>
-                {saving ? 'Guardando…' : 'Guardar cambios'}
-              </Button>
-            )}
+          <DialogActions sx={{ flexWrap: 'wrap', gap: 1, justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {detailUser && canEliminarCliente && detailUser.role === 'customer' && (
+                <Button color="error" variant="outlined" onClick={openDeleteClienteConfirm} disabled={saving || deleteLoading}>
+                  Eliminar cliente
+                </Button>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', ml: 'auto' }}>
+              <Button onClick={handleCloseDetail}>Cerrar</Button>
+              {detailUser && canEditCliente && (
+                <Button variant="contained" onClick={handleSaveUser} disabled={saving}>
+                  {saving ? 'Guardando…' : 'Guardar cambios'}
+                </Button>
+              )}
+            </Box>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={deleteConfirmOpen}
+          onClose={() => !deleteLoading && setDeleteConfirmOpen(false)}
+          maxWidth="xs"
+          fullWidth
+          PaperProps={{ sx: { borderRadius: '12px' } }}
+        >
+          <ModalHeader title="Eliminar cliente" onClose={() => !deleteLoading && setDeleteConfirmOpen(false)} />
+          <DialogContent>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              ¿Eliminar definitivamente a{' '}
+                <strong>{detailUser ? clientDisplayName(detailUser) : 'este cliente'}</strong>
+              ?
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Se borrará el usuario del sistema. Si tiene pedidos u otros datos vinculados, la operación puede fallar según las reglas de la base de datos.
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setDeleteConfirmOpen(false)} disabled={deleteLoading}>
+              Cancelar
+            </Button>
+            <Button color="error" variant="contained" onClick={handleConfirmDeleteCliente} disabled={deleteLoading}>
+              {deleteLoading ? 'Eliminando…' : 'Sí, eliminar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={createKindDialogOpen}
+          onClose={() => setCreateKindDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}
+        >
+          <ModalHeader title="Tipo de cliente" onClose={() => setCreateKindDialogOpen(false)} />
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Elige si el registro es para una persona con acceso al portal o solo para una empresa (facturación / CRM, sin acceso).
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                <CardActionArea onClick={() => chooseCreateAccountKind('person')} sx={{ p: 2, minHeight: 160 }}>
+                  <Stack spacing={1} alignItems="center" textAlign="center">
+                    <Person sx={{ fontSize: 48, color: 'primary.main' }} />
+                    <Typography variant="h6">Persona</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Correo y contraseña obligatorios; puede comprar en la tienda en línea.
+                    </Typography>
+                  </Stack>
+                </CardActionArea>
+              </Card>
+              <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                <CardActionArea onClick={() => chooseCreateAccountKind('company')} sx={{ p: 2, minHeight: 160 }}>
+                  <Stack spacing={1} alignItems="center" textAlign="center">
+                    <Business sx={{ fontSize: 48, color: 'secondary.main' }} />
+                    <Typography variant="h6">Empresa</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Nombre de empresa obligatorio. Correo y contraseña opcionales (sin portal si no los indicas).
+                    </Typography>
+                  </Stack>
+                </CardActionArea>
+              </Card>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setCreateKindDialogOpen(false)}>Cancelar</Button>
           </DialogActions>
         </Dialog>
 
         <Dialog open={createOpen} onClose={handleCloseCreate} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
-          <ModalHeader title="Crear cliente" onClose={handleCloseCreate} />
+          <ModalHeader
+            title={createAccountKind === 'company' ? 'Crear cliente — Empresa' : 'Crear cliente — Persona'}
+            onClose={handleCloseCreate}
+          />
           <DialogContent>
             <Stepper activeStep={createStep} sx={{ pt: 2, pb: 3 }}>
-              <Step><StepLabel>Datos personales</StepLabel></Step>
+              <Step><StepLabel>{createAccountKind === 'company' ? 'Empresa' : 'Datos personales'}</StepLabel></Step>
               <Step><StepLabel>Direcciones</StepLabel></Step>
               <Step><StepLabel>Formas de pago</StepLabel></Step>
             </Stepper>
 
-            {createStep === 0 && (
+            {createStep === 0 && createAccountKind === 'company' && (
+              <Stack spacing={2}>
+                <Typography variant="subtitle2" color="text.secondary">Datos de la empresa</Typography>
+                <TextField
+                  label="Nombre de la empresa"
+                  size="small"
+                  fullWidth
+                  required
+                  value={createForm.companyName}
+                  onChange={(e) => handleCreateChange('companyName', e.target.value)}
+                />
+                <TextField
+                  label="Correo (opcional)"
+                  type="email"
+                  size="small"
+                  fullWidth
+                  value={createForm.email}
+                  onChange={(e) => handleCreateChange('email', e.target.value)}
+                  helperText="Si lo dejas vacío, el cliente no podrá iniciar sesión. Si lo llenas, debes indicar también una contraseña."
+                />
+                <TextField
+                  label="Contraseña (opcional)"
+                  type="password"
+                  size="small"
+                  fullWidth
+                  value={createForm.passwordHash}
+                  onChange={(e) => handleCreateChange('passwordHash', e.target.value)}
+                  helperText="Solo si quieres dar acceso al portal con el correo indicado."
+                />
+                <Typography variant="caption" color="text.secondary">Contacto (opcional)</Typography>
+                <TextField label="Nombre de contacto" size="small" fullWidth value={createForm.firstName} onChange={(e) => handleCreateChange('firstName', e.target.value)} />
+                <TextField label="Apellido de contacto" size="small" fullWidth value={createForm.lastName} onChange={(e) => handleCreateChange('lastName', e.target.value)} />
+                <TextField label="RFC" size="small" fullWidth value={createForm.rfc} onChange={(e) => handleCreateChange('rfc', e.target.value)} />
+                <TextField label="Teléfono" size="small" fullWidth value={createForm.phone} onChange={(e) => handleCreateChange('phone', e.target.value)} />
+              </Stack>
+            )}
+
+            {createStep === 0 && createAccountKind === 'person' && (
               <Stack spacing={2}>
                 <Typography variant="subtitle2" color="text.secondary">Información del cliente</Typography>
-                <TextField label="Email" type="email" size="small" fullWidth required value={createForm.email} onChange={(e) => handleCreateChange('email', e.target.value)} />
+                <TextField
+                  label="Email"
+                  type="email"
+                  size="small"
+                  fullWidth
+                  required
+                  value={createForm.email}
+                  onChange={(e) => handleCreateChange('email', e.target.value)}
+                  helperText="Cada correo solo puede tener una cuenta de cliente. Varios empleados de la misma empresa necesitan correos distintos."
+                />
                 <TextField label="Contraseña" type="password" size="small" fullWidth required value={createForm.passwordHash} onChange={(e) => handleCreateChange('passwordHash', e.target.value)} />
                 <TextField label="Nombre" size="small" fullWidth value={createForm.firstName} onChange={(e) => handleCreateChange('firstName', e.target.value)} />
                 <TextField label="Apellido" size="small" fullWidth value={createForm.lastName} onChange={(e) => handleCreateChange('lastName', e.target.value)} />
@@ -845,6 +1091,7 @@ const Clientes = () => {
           </DialogActions>
         </Dialog>
         {permissionDeniedSnackbar}
+        {pushNotificationSnackbar}
       </Box>
     </Box>
   )

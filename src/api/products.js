@@ -1,5 +1,15 @@
 import { apiFetch } from './http'
 
+/** Debe coincidir con MAX_PRODUCT_IMAGES en el backend (product-images constant). */
+const MAX_PRODUCT_IMAGES = 15
+
+/**
+ * Máximo de archivos por petición multipart en `POST .../products/:id/images`.
+ * Instancias antiguas de Nest + Multer suelen limitar a 10; enviar 11+ en una sola petición devuelve 400 "Unexpected field".
+ * Troceamos en `uploadProductImages` por debajo de este techo.
+ */
+const PRODUCT_IMAGE_FILES_PER_REQUEST = 10
+
 /**
  * Obtiene la lista de marcas (todas o solo activas).
  * @param {{ activeOnly?: boolean }} opts - activeOnly: false para traer todas las marcas
@@ -78,12 +88,12 @@ export async function createProduct(payload) {
 /**
  * Crea el producto y sube las imágenes en una sola petición (S3 + tabla product_images).
  * @param {object} payload - Mismo shape que createProduct (sin imageUrls)
- * @param {File[]} files - Hasta 10 archivos
+ * @param {File[]} files - Hasta 15 archivos
  */
 export async function createProductWithImages(payload, files) {
   const formData = new FormData()
   formData.append('product', JSON.stringify(payload))
-  const list = Array.isArray(files) ? files.slice(0, 10) : []
+  const list = Array.isArray(files) ? files.slice(0, MAX_PRODUCT_IMAGES) : []
   for (let i = 0; i < list.length; i++) {
     formData.append('images', list[i])
   }
@@ -194,25 +204,36 @@ export async function deleteProduct(id) {
 
 /**
  * Sube imágenes de un producto a S3 (images-products/{productId}/) y las registra.
+ * Envía los archivos en lotes para no superar el límite de Multer en el servidor (evita "Unexpected field").
  * @param {string} productId - ID del producto
- * @param {File[]} files - Archivos de imagen (máx. 10)
+ * @param {File[]} files - Archivos de imagen (máx. 15 en total entre lotes)
  * @returns {Promise<{ success: boolean, error?: string }>}
  */
 export async function uploadProductImages(productId, files) {
-  const formData = new FormData()
-  for (let i = 0; i < files.length; i++) {
-    formData.append('images', files[i])
-  }
-  const res = await apiFetch(`/products/${productId}/images`, {
-    method: 'POST',
-    body: formData,
-  })
-  const body = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    return { success: false, error: body.message || body.error || `Error ${res.status}` }
-  }
-  if (!body.success) {
-    return { success: false, error: body.message || 'Error al subir imágenes' }
+  const list = Array.isArray(files) ? files.slice(0, MAX_PRODUCT_IMAGES) : []
+  for (let offset = 0; offset < list.length; offset += PRODUCT_IMAGE_FILES_PER_REQUEST) {
+    const chunk = list.slice(offset, offset + PRODUCT_IMAGE_FILES_PER_REQUEST)
+    const formData = new FormData()
+    for (let i = 0; i < chunk.length; i++) {
+      formData.append('images', chunk[i])
+    }
+    const res = await apiFetch(`/products/${productId}/images`, {
+      method: 'POST',
+      body: formData,
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return {
+        success: false,
+        error:
+          body.message ||
+          (Array.isArray(body.message) ? body.message.join('; ') : body.error) ||
+          `Error ${res.status}`,
+      }
+    }
+    if (!body.success) {
+      return { success: false, error: body.message || 'Error al subir imágenes' }
+    }
   }
   return { success: true }
 }

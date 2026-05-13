@@ -65,12 +65,12 @@ const ESTATUS_OPCIONES = [
   { value: 'VENDIDO', label: 'Vendido' },
 ]
 
-const MAX_FOTOS = 10
+const MAX_FOTOS = 15
 
-/** En "Detalle del producto" no se suben fotos nuevas desde el panel. */
-const DETAIL_ALLOW_IMAGE_UPLOAD = false
-/** En "Nuevo producto" no se suben fotos (vista previa + botón Cargar imágenes desactivados). */
-const NEW_PRODUCT_ALLOW_IMAGE_UPLOAD = false
+/** En "Detalle del producto": al editar, subir fotos a S3 (`images-products/{productId}/`) vía API. */
+const DETAIL_ALLOW_IMAGE_UPLOAD = true
+/** En "Nuevo producto": vista previa + colección; al guardar, `createProductWithImages` si hay archivos. */
+const NEW_PRODUCT_ALLOW_IMAGE_UPLOAD = true
 
 const getInitialProducto = () => ({
   marcaId: '',
@@ -87,7 +87,7 @@ const getInitialProducto = () => ({
   /** Piezas disponibles en inventario (entero ≥ 1 por defecto al crear) */
   piezasDisponibles: '1',
   estatus: 'DISPONIBLE',
-  imageFiles: [], // File[]; hasta 10
+  imageFiles: [], // File[]; hasta MAX_FOTOS
 })
 
 const parseCarYearRange = (carYearRange) => {
@@ -497,8 +497,8 @@ const Inventario = () => {
     if (files.length === 0) return
     setDetailNewImageFiles((prev) => {
       const ex = detailExistingImagesRef.current.length
-      const cap = MAX_FOTOS - ex
-      return [...prev, ...files].slice(0, cap)
+      const room = Math.max(0, MAX_FOTOS - ex - prev.length)
+      return [...prev, ...files.slice(0, room)]
     })
     e.target.value = ''
   }
@@ -511,8 +511,8 @@ const Inventario = () => {
     if (files.length === 0) return
     setDetailNewImageFiles((prev) => {
       const ex = detailExistingImagesRef.current.length
-      const cap = MAX_FOTOS - ex
-      return [...prev, ...files].slice(0, cap)
+      const room = Math.max(0, MAX_FOTOS - ex - prev.length)
+      return [...prev, ...files.slice(0, room)]
     })
   }
 
