@@ -46,6 +46,7 @@ import {
   updateExpense,
   deleteExpense,
 } from '../api/expenses'
+import { getExpenseTypes } from '../api/expenseTypes'
 import { getUsers } from '../api/user'
 import { getRoles } from '../api/rbac'
 import { useAuth } from '../contexts/AuthContext'
@@ -55,29 +56,16 @@ import { usePushNotification } from '../hooks/usePushNotification'
 
 const LIMIT = 15
 
-/** Mismo orden y texto que el backend (`expense-categories.ts`). */
-const EXPENSE_CATEGORIES = [
-  'SUELDO',
-  'ALMUERZOS',
-  'PAQUETERIAS',
-  'REPARACIONES',
-  'INTERNET',
-  'TONY',
-  'MENSUALIDAD',
-  'GASOLINAS',
-  'COMPRA DE MERCANCÍAS',
-  'VIRGEN DE DOLORES',
-  'MATERIAL DE EMPAQUE',
-  'MATERIAL DE LIMPIEZA',
-  'EQUIPOS TELEFÓNICOS',
-  'SERVICIO CHEVROLET',
-  'GASTOS VARIOS',
-]
+function categoryNamesFromCatalog(catalog, { activeOnly = false } = {}) {
+  const list = Array.isArray(catalog) ? catalog : []
+  const filtered = activeOnly ? list.filter((t) => t.isActive !== false) : list
+  return filtered.map((t) => t.name).filter(Boolean)
+}
 
-function categoryOptionsForSelect(currentValue) {
+function categoryOptionsForSelect(catalogNames, currentValue) {
   const v = (currentValue || '').trim()
-  if (v && !EXPENSE_CATEGORIES.includes(v)) return [v, ...EXPENSE_CATEGORIES]
-  return EXPENSE_CATEGORIES
+  if (v && !catalogNames.includes(v)) return [v, ...catalogNames]
+  return catalogNames
 }
 
 function isEmpleadoRbacRole(role) {
@@ -171,8 +159,24 @@ const Gastos = () => {
   const [deleteLoading, setDeleteLoading] = useState(false)
 
   const [detailExpense, setDetailExpense] = useState(null)
+  const [expenseTypeCatalog, setExpenseTypeCatalog] = useState([])
+
+  const filterCategoryNames = useMemo(
+    () => categoryNamesFromCatalog(expenseTypeCatalog, { activeOnly: false }),
+    [expenseTypeCatalog],
+  )
+  const formCategoryNames = useMemo(
+    () => categoryNamesFromCatalog(expenseTypeCatalog, { activeOnly: true }),
+    [expenseTypeCatalog],
+  )
 
   const computedTotal = useMemo(() => sumLineItems(items), [items])
+
+  useEffect(() => {
+    getExpenseTypes({ activeOnly: false }).then((r) => {
+      if (r.success) setExpenseTypeCatalog(r.data || [])
+    })
+  }, [])
 
   const fetchList = useCallback(async () => {
     setLoading(true)
@@ -386,8 +390,8 @@ const Gastos = () => {
     if (!cat) {
       return { error: 'Selecciona una categoría.' }
     }
-    if (formMode === 'create' && !EXPENSE_CATEGORIES.includes(cat)) {
-      return { error: 'Categoría no válida.' }
+    if (formMode === 'create' && formCategoryNames.length > 0 && !formCategoryNames.includes(cat)) {
+      return { error: 'Categoría no válida o inactiva. Revise el catálogo en Catálogos → Tipos de gasto.' }
     }
     if (!expenseDate) {
       return { error: 'La fecha es obligatoria.' }
@@ -560,7 +564,7 @@ const Gastos = () => {
                   <MenuItem value="">
                     <em>Todas</em>
                   </MenuItem>
-                  {EXPENSE_CATEGORIES.map((c) => (
+                  {filterCategoryNames.map((c) => (
                     <MenuItem key={c} value={c}>
                       {c}
                     </MenuItem>
@@ -728,7 +732,7 @@ const Gastos = () => {
                         <MenuItem value="">
                           <em>Seleccionar categoría</em>
                         </MenuItem>
-                        {categoryOptionsForSelect(formCategory).map((c) => (
+                        {categoryOptionsForSelect(formCategoryNames, formCategory).map((c) => (
                           <MenuItem key={c} value={c}>
                             {c}
                           </MenuItem>

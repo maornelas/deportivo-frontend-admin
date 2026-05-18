@@ -7,6 +7,8 @@ import {
   Typography,
   Button,
   Paper,
+  Tabs,
+  Tab,
   Table,
   TableBody,
   TableCell,
@@ -48,6 +50,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
+import ExpenseTypesCatalog from '../components/ExpenseTypesCatalog'
 
 const Catalogos = () => {
   const { canDoAction } = useAuth()
@@ -57,6 +60,7 @@ const Catalogos = () => {
   const fromInventario = location.state?.from === 'inventario'
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [catalogTab, setCatalogTab] = useState(0)
   const [brands, setBrands] = useState([])
   const [selectedBrand, setSelectedBrand] = useState(null)
   const [models, setModels] = useState([])
@@ -309,11 +313,24 @@ const Catalogos = () => {
               Catálogos
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Autos para capturar: marcas (<strong>brands</strong>) y modelos (<strong>car_models</strong>) usados en inventario y productos.
+              Marcas y modelos de auto, y tipos de gasto para el módulo de Gastos.
             </Typography>
           </Box>
         </Box>
 
+        <Tabs
+          value={catalogTab}
+          onChange={(_, v) => setCatalogTab(v)}
+          sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab label="Marcas y modelos" sx={{ textTransform: 'none' }} />
+          <Tab label="Tipos de gasto" sx={{ textTransform: 'none' }} />
+        </Tabs>
+
+        {catalogTab === 1 ? (
+          <ExpenseTypesCatalog />
+        ) : (
+        <>
         <Box
           sx={{
             display: 'grid',
@@ -628,6 +645,8 @@ const Catalogos = () => {
             </Button>
           </DialogActions>
         </Dialog>
+        </>
+        )}
 
         <Snackbar open={snackbar.open} autoHideDuration={5000} onClose={() => setSnackbar((s) => ({ ...s, open: false }))} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
           <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))} variant="filled">

@@ -36,6 +36,9 @@ export const ACTION = {
   CATALOGOS_MODELO_CREAR: 'action.catalogos.modelo_crear',
   CATALOGOS_MODELO_EDITAR: 'action.catalogos.modelo_editar',
   CATALOGOS_MODELO_ELIMINAR: 'action.catalogos.modelo_eliminar',
+  CATALOGOS_TIPO_GASTO_CREAR: 'action.catalogos.tipo_gasto_crear',
+  CATALOGOS_TIPO_GASTO_EDITAR: 'action.catalogos.tipo_gasto_editar',
+  CATALOGOS_TIPO_GASTO_ELIMINAR: 'action.catalogos.tipo_gasto_eliminar',
 
   ROLES_CREAR: 'action.roles.crear',
   ROLES_EDITAR: 'action.roles.editar',

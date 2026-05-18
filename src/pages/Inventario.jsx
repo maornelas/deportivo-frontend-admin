@@ -33,6 +33,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
+  Chip,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -116,6 +117,12 @@ function stockUnitsFromApi(p) {
   return Math.max(0, n)
 }
 
+function productMarkedSoldFromApi(p) {
+  if (!p || typeof p !== 'object') return false
+  const t = p.soldAt ?? p.sold_at
+  return t != null && t !== ''
+}
+
 const Inventario = () => {
   const { canDoAction } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
@@ -157,6 +164,8 @@ const Inventario = () => {
   const [filterModelo, setFilterModelo] = useState('')
   const [filterAño, setFilterAño] = useState('')
   const [inventoryViewMode, setInventoryViewMode] = useState('table')
+  /** available = solo en inventario; sold = agotadas/vendidas; all = ambos */
+  const [inventoryListFilter, setInventoryListFilter] = useState('available')
   const filtersRef = useRef({ filterPieza: '', filterMarca: '', filterModelo: '', filterAño: '' })
   useEffect(() => {
     filtersRef.current = { filterPieza, filterMarca, filterModelo, filterAño }
@@ -204,6 +213,7 @@ const Inventario = () => {
         brandId: f.filterMarca || undefined,
         modelSearch: (f.filterModelo || '').trim() || undefined,
         year: (f.filterAño || '').trim() || undefined,
+        inventoryAvailability: inventoryListFilter === 'available' ? undefined : inventoryListFilter,
       })
       if (res.success && res.data) {
         setProducts(res.data.products || [])
@@ -213,7 +223,7 @@ const Inventario = () => {
     } finally {
       setListLoading(false)
     }
-  }, [])
+  }, [inventoryListFilter])
 
   useEffect(() => {
     loadBrands()
@@ -774,6 +784,29 @@ const Inventario = () => {
             >
               Limpiar
             </Button>
+            <ToggleButtonGroup
+              value={inventoryListFilter}
+              exclusive
+              onChange={(_, v) => v && setInventoryListFilter(v)}
+              size="small"
+              sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.25 } }}
+            >
+              <Tooltip title="Piezas con stock en inventario">
+                <ToggleButton value="available" aria-label="disponibles">
+                  Disponibles
+                </ToggleButton>
+              </Tooltip>
+              <Tooltip title="Piezas marcadas como vendidas (stock en cero por venta desde cotización)">
+                <ToggleButton value="sold" aria-label="vendidas">
+                  Vendidas
+                </ToggleButton>
+              </Tooltip>
+              <Tooltip title="Mostrar todo el catálogo">
+                <ToggleButton value="all" aria-label="todas">
+                  Todas
+                </ToggleButton>
+              </Tooltip>
+            </ToggleButtonGroup>
             <Box sx={{ flexGrow: 1, minWidth: 8 }} />
             <ToggleButtonGroup
               value={inventoryViewMode}
@@ -814,6 +847,9 @@ const Inventario = () => {
                     <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Estado</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Tipo</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', color: '#757575' }} align="center">
+                      Inventario
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }} align="center">
                       Piezas disp.
                     </TableCell>
                     <TableCell sx={{ fontWeight: 'bold', color: '#757575' }} align="right">
@@ -824,7 +860,7 @@ const Inventario = () => {
                 <TableBody>
                   {listLoading ? (
                     <TableRow>
-                      <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                      <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
                         <CircularProgress size={40} sx={{ color: '#7b1fa2' }} aria-label="Cargando inventario" />
                         <Typography variant="body2" sx={{ color: '#757575', mt: 2, display: 'block' }}>
                           Cargando productos…
@@ -833,9 +869,13 @@ const Inventario = () => {
                     </TableRow>
                   ) : products.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} align="center" sx={{ padding: '40px' }}>
+                      <TableCell colSpan={10} align="center" sx={{ padding: '40px' }}>
                         <Typography variant="body2" sx={{ color: '#757575' }}>
-                          No hay productos registrados. Agrega un nuevo producto o carga un archivo.
+                          {inventoryListFilter === 'sold'
+                            ? 'No hay piezas vendidas con estos filtros.'
+                            : inventoryListFilter === 'all'
+                              ? 'No hay productos con estos filtros.'
+                              : 'No hay productos registrados. Agrega un nuevo producto o carga un archivo.'}
                         </Typography>
                       </TableCell>
                     </TableRow>
@@ -854,6 +894,7 @@ const Inventario = () => {
                       const estadoLabel = p.partCondition === 'SEMINUEVO' ? 'Seminuevo' : p.partCondition === 'NUEVO' ? 'Nuevo' : p.partCondition || '—'
                       const tipoLabel = p.partType === 'GENÉRICO' ? 'Genérico' : p.partType === 'ORIGINAL' ? 'Original' : p.partType || '—'
                       const stockN = stockUnitsFromApi(p)
+                      const soldInv = productMarkedSoldFromApi(p)
                       return (
                         <TableRow
                           key={p.id}
@@ -875,6 +916,15 @@ const Inventario = () => {
                           <TableCell>{p.carYearRange || '—'}</TableCell>
                           <TableCell>{estadoLabel}</TableCell>
                           <TableCell>{tipoLabel}</TableCell>
+                          <TableCell align="center">
+                            <Chip
+                              size="small"
+                              label={soldInv ? 'Vendida' : 'Disponible'}
+                              color={soldInv ? 'default' : 'success'}
+                              variant={soldInv ? 'filled' : 'outlined'}
+                              sx={{ fontWeight: 600, fontSize: '0.7rem' }}
+                            />
+                          </TableCell>
                           <TableCell align="center" sx={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
                             {stockN != null ? stockN : '—'}
                           </TableCell>
@@ -899,7 +949,11 @@ const Inventario = () => {
                 </Box>
               ) : products.length === 0 ? (
                 <Typography variant="body2" sx={{ color: '#757575', textAlign: 'center', py: 6 }}>
-                  No hay productos registrados. Agrega un nuevo producto o carga un archivo.
+                  {inventoryListFilter === 'sold'
+                    ? 'No hay piezas vendidas con estos filtros.'
+                    : inventoryListFilter === 'all'
+                      ? 'No hay productos con estos filtros.'
+                      : 'No hay productos registrados. Agrega un nuevo producto o carga un archivo.'}
                 </Typography>
               ) : (
                 <Grid container spacing={2}>
@@ -910,6 +964,7 @@ const Inventario = () => {
                       brands.find((b) => b.id === p.brandId)?.nombre ||
                       '—'
                     const stockCard = stockUnitsFromApi(p)
+                    const soldCard = productMarkedSoldFromApi(p)
                     return (
                       <Grid item xs={6} sm={4} md={3} lg={2} key={p.id}>
                         <Card
@@ -949,6 +1004,15 @@ const Inventario = () => {
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={brandName}>
                               {brandName}
                             </Typography>
+                            <Box sx={{ mt: 0.75, display: 'flex', justifyContent: 'center' }}>
+                              <Chip
+                                size="small"
+                                label={soldCard ? 'Vendida' : 'Disponible'}
+                                color={soldCard ? 'default' : 'success'}
+                                variant={soldCard ? 'filled' : 'outlined'}
+                                sx={{ height: 22, fontSize: '0.65rem', fontWeight: 600 }}
+                              />
+                            </Box>
                             <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5, fontWeight: 600 }}>
                               {stockCard != null ? `Disp.: ${stockCard}` : 'Disp.: —'}
                             </Typography>
