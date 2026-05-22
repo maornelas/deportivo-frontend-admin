@@ -201,6 +201,7 @@ const Compras = () => {
               <TableRow>
                 <TableCell><strong>ID</strong></TableCell>
                 <TableCell><strong>Proveedor</strong></TableCell>
+                <TableCell><strong>Nota de venta</strong></TableCell>
                 <TableCell><strong>Fecha</strong></TableCell>
                 <TableCell><strong>Hora</strong></TableCell>
                 <TableCell align="right"><strong>Total</strong></TableCell>
@@ -211,7 +212,7 @@ const Compras = () => {
             <TableBody>
               {pagedPurchases.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                     Sin resultados con los filtros seleccionados.
                   </TableCell>
                 </TableRow>
@@ -231,6 +232,11 @@ const Compras = () => {
                         <Typography variant="body2">{String(p.id || '-')}</Typography>
                       </TableCell>
                       <TableCell>{p.providerName || '-'}</TableCell>
+                      <TableCell>
+                        {p.salesOrderNumber
+                          ? `${p.salesOrderNumber}${p.salesOrderClient ? ` · ${p.salesOrderClient}` : ''}`
+                          : '—'}
+                      </TableCell>
                       <TableCell>{formatDateValue(p.purchaseDate) || '-'}</TableCell>
                       <TableCell>{formatTimeValue(p.createdAt || p.purchaseDate)}</TableCell>
                       <TableCell align="right">{formatMoney(p.total, p.currency)}</TableCell>

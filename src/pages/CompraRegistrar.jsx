@@ -47,6 +47,7 @@ import {
   summarizePurchaseHeaderVehicle,
   vehicleLineFingerprint,
 } from '../compras/shared'
+import PurchaseSalesOrderPicker from '../compras/PurchaseSalesOrderPicker'
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
@@ -122,6 +123,7 @@ export default function CompraRegistrar() {
   const [editorStatus, setEditorStatus] = useState('pending')
   const [editorNotes, setEditorNotes] = useState('')
   const [receiptFileName, setReceiptFileName] = useState('')
+  const [linkedSalesOrder, setLinkedSalesOrder] = useState(null)
 
   const [brands, setBrands] = useState([])
   const [draftCarModels, setDraftCarModels] = useState([])
@@ -307,6 +309,7 @@ export default function CompraRegistrar() {
         paymentMethod: editorPaymentMethod,
         status: editorStatus,
         notes: editorNotes || '',
+        orderId: linkedSalesOrder?.id || undefined,
         currency: 'MXN',
         receiptFileName: receiptFileName || '',
         vehicleBrandId: headerVeh.vehicleBrandId || undefined,
@@ -431,50 +434,75 @@ export default function CompraRegistrar() {
                 </Typography>
               </Box>
               <Box sx={{ p: 2 }}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                  <TextField
-                    label="Proveedor"
-                    value={editorProvider}
-                    onChange={(e) => setEditorProvider(e.target.value)}
-                    size="small"
-                    required
-                    sx={{ minWidth: 260, flex: 1 }}
-                  />
-                  <TextField
-                    label="Fecha de compra"
-                    type="date"
-                    size="small"
-                    value={editorPurchaseDate}
-                    onChange={(e) => setEditorPurchaseDate(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    sx={{ width: 180 }}
-                  />
-                  <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <InputLabel>Estado del pago</InputLabel>
-                    <Select label="Estado del pago" value={editorStatus} onChange={(e) => setEditorStatus(e.target.value)}>
-                      {STATUS_OPTIONS.map((s) => (
-                        <MenuItem key={s.value} value={s.value}>
-                          {s.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl size="small" sx={{ minWidth: 220 }}>
-                    <InputLabel>Método de pago</InputLabel>
-                    <Select label="Método de pago" value={editorPaymentMethod} onChange={(e) => setEditorPaymentMethod(e.target.value)}>
-                      {PAYMENT_OPTIONS.map((p) => (
-                        <MenuItem key={p.value} value={p.value}>
-                          {p.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start' }}>
+                    <TextField
+                      label="Proveedor"
+                      value={editorProvider}
+                      onChange={(e) => setEditorProvider(e.target.value)}
+                      size="small"
+                      required
+                      sx={{ minWidth: 260, flex: 1 }}
+                    />
+                    <TextField
+                      label="Fecha de compra"
+                      type="date"
+                      size="small"
+                      value={editorPurchaseDate}
+                      onChange={(e) => setEditorPurchaseDate(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      sx={{ width: 180, flexShrink: 0 }}
+                    />
+                    <FormControl size="small" sx={{ minWidth: 200, width: { xs: '100%', sm: 200 }, flexShrink: 0 }}>
+                      <InputLabel>Estado del pago</InputLabel>
+                      <Select label="Estado del pago" value={editorStatus} onChange={(e) => setEditorStatus(e.target.value)}>
+                        {STATUS_OPTIONS.map((s) => (
+                          <MenuItem key={s.value} value={s.value}>
+                            {s.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Box>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexWrap: { xs: 'wrap', sm: 'nowrap' },
+                      gap: 2,
+                      alignItems: 'flex-start',
+                      width: '100%',
+                    }}
+                  >
+                    <FormControl
+                      size="small"
+                      sx={{ width: { xs: '100%', sm: 220 }, flexShrink: 0 }}
+                    >
+                      <InputLabel>Método de pago</InputLabel>
+                      <Select
+                        label="Método de pago"
+                        value={editorPaymentMethod}
+                        onChange={(e) => setEditorPaymentMethod(e.target.value)}
+                      >
+                        {PAYMENT_OPTIONS.map((p) => (
+                          <MenuItem key={p.value} value={p.value}>
+                            {p.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <PurchaseSalesOrderPicker
+                      value={linkedSalesOrder}
+                      onChange={setLinkedSalesOrder}
+                      disabled={saving}
+                      sx={{ flex: 1, width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 280 } }}
+                    />
+                  </Box>
                   <TextField
                     label="Notas"
                     size="small"
                     value={editorNotes}
                     onChange={(e) => setEditorNotes(e.target.value)}
-                    sx={{ flexBasis: '100%' }}
+                    fullWidth
                     multiline
                     minRows={2}
                   />
