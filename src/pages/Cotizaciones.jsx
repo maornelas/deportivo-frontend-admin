@@ -197,6 +197,7 @@ export default function Cotizaciones() {
                   <TableRow>
                     <TableCell><strong>Nº</strong></TableCell>
                     <TableCell><strong>Cliente</strong></TableCell>
+                    <TableCell><strong>Generada por</strong></TableCell>
                     <TableCell><strong>Fecha</strong></TableCell>
                     <TableCell><strong>Hora</strong></TableCell>
                     <TableCell align="right"><strong>Total</strong></TableCell>
@@ -205,7 +206,7 @@ export default function Cotizaciones() {
                 </TableHead>
                 <TableBody>
                   {rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} align="center" sx={{ py: 4 }}>Sin cotizaciones</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4 }}>Sin cotizaciones</TableCell></TableRow>
                   ) : (
                     rows.map((q) => (
                       <TableRow
@@ -224,6 +225,7 @@ export default function Cotizaciones() {
                           <Typography variant="body2">{q.quotationNumber || '—'}</Typography>
                         </TableCell>
                         <TableCell>{q.clientName || '—'}</TableCell>
+                        <TableCell>{q.advisorName?.trim() || '—'}</TableCell>
                         <TableCell>{formatDate(q.createdAt)}</TableCell>
                         <TableCell>{formatTime(q.createdAt)}</TableCell>
                         <TableCell align="right">{formatMoney(q.total, q.currency)}</TableCell>

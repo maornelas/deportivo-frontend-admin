@@ -15,7 +15,7 @@ import {
 } from '../components/DashboardWidgets'
 import { getOrderDailySales } from '../api/orders'
 import { getSalesReport } from '../api/salesReports'
-import { getExpenseReportSummary, listExpenses } from '../api/expenses'
+import { getExpenseGastosReport } from '../api/expenses'
 import { getPurchasesDaily } from '../api/purchases'
 
 /** YYYY-MM-DD en calendario local (misma semántica que <input type="date">). */
@@ -98,18 +98,6 @@ const Dashboard = () => {
     setDailyChannelAdvisor(rAdvisor.success && Array.isArray(rAdvisor.data) ? rAdvisor.data : [])
   }, [startDate, endDate])
 
-  const fetchExpenseSummary = useCallback(async () => {
-    if (!startDate || !endDate) return
-    setExpenseSummaryLoading(true)
-    const result = await getExpenseReportSummary({ startDate, endDate })
-    setExpenseSummaryLoading(false)
-    if (result.success && result.data) {
-      setExpenseGrandTotal(Number(result.data.grandTotal ?? 0))
-    } else {
-      setExpenseGrandTotal(0)
-    }
-  }, [startDate, endDate])
-
   const fetchDailyPurchases = useCallback(async () => {
     if (!startDate || !endDate) return
     setDailyPurchasesLoading(true)
@@ -122,36 +110,28 @@ const Dashboard = () => {
     }
   }, [startDate, endDate])
 
-  const fetchDailyExpenses = useCallback(async () => {
+  /** Mismo criterio que Reportería → GASTOS (totalMontoNeto y netLineSubtotal por línea). */
+  const fetchGastosForDashboard = useCallback(async () => {
     if (!startDate || !endDate) return
+    setExpenseSummaryLoading(true)
     setDailyExpensesLoading(true)
-    const limit = 500
-    let page = 1
+    const result = await getExpenseGastosReport({ startDate, endDate })
+    setExpenseSummaryLoading(false)
+    setDailyExpensesLoading(false)
+    if (!result.success || !result.data) {
+      setExpenseGrandTotal(0)
+      setDailyExpenses([])
+      return
+    }
+    setExpenseGrandTotal(Number(result.data.totalMontoNeto ?? 0))
     const byDate = new Map()
-    let totalPages = 1
-    try {
-      for (;;) {
-        const r = await listExpenses({
-          startDate,
-          endDate,
-          page,
-          limit,
-          sortBy: 'date',
-          sortOrder: 'ASC',
-        })
-        if (!r.success || !r.data?.expenses?.length) break
-        totalPages = r.data.totalPages ?? 1
-        for (const e of r.data.expenses) {
-          const d = (e.expenseDate || '').slice(0, 10)
-          if (!d) continue
-          byDate.set(d, (byDate.get(d) || 0) + Number(e.totalAmount ?? 0))
-        }
-        if (page >= totalPages) break
-        page += 1
-        if (page > 200) break
+    for (const g of result.data.groups || []) {
+      for (const line of g.lines || []) {
+        const d = (line.expenseDate || '').slice(0, 10)
+        if (!d) continue
+        const net = Number(line.netLineSubtotal ?? line.lineSubtotal ?? 0)
+        byDate.set(d, (byDate.get(d) || 0) + net)
       }
-    } finally {
-      setDailyExpensesLoading(false)
     }
     const series = Array.from(byDate.entries())
       .map(([date, totalAmount]) => ({ date, totalAmount }))
@@ -172,12 +152,8 @@ const Dashboard = () => {
   }, [fetchChannelDailySales])
 
   useEffect(() => {
-    fetchExpenseSummary()
-  }, [fetchExpenseSummary])
-
-  useEffect(() => {
-    fetchDailyExpenses()
-  }, [fetchDailyExpenses])
+    fetchGastosForDashboard()
+  }, [fetchGastosForDashboard])
 
   useEffect(() => {
     fetchDailyPurchases()
@@ -186,13 +162,12 @@ const Dashboard = () => {
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState !== 'visible') return
-      fetchExpenseSummary()
-      fetchDailyExpenses()
+      fetchGastosForDashboard()
       fetchDailyPurchases()
     }
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
-  }, [fetchExpenseSummary, fetchDailyExpenses, fetchDailyPurchases])
+  }, [fetchGastosForDashboard, fetchDailyPurchases])
 
   const [layout, setLayout] = useState([
     { i: 'sales', x: 0, y: 0, w: 6, h: 5 },

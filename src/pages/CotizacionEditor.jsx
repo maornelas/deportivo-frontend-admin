@@ -26,6 +26,7 @@ import {
   ListItemText,
   Badge,
   Autocomplete,
+  createFilterOptions,
   Avatar,
   Chip,
   Tabs,
@@ -87,6 +88,22 @@ function totalsFromLines(lines) {
   const total = Math.round((net + tax) * 100) / 100
   return { gross, disc, net, tax, total }
 }
+
+function clientDisplayName(user) {
+  if (!user) return ''
+  const kind = user.customerAccountKind || 'person'
+  if (kind === 'company') {
+    return user.companyName?.trim() || user.email || 'Cliente empresa'
+  }
+  const full = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
+  return full || user.email || 'Cliente'
+}
+
+const filterCustomerOptions = createFilterOptions({
+  limit: 50,
+  stringify: (u) =>
+    [u.firstName, u.lastName, u.companyName, u.email, u.phone, u.rfc].filter(Boolean).join(' '),
+})
 
 function formatMoney(n) {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(n) || 0)
@@ -267,7 +284,7 @@ export default function CotizacionEditor() {
   )
 
   const loadUsers = useCallback(async () => {
-    const r = await getUsers({ activeOnly: true })
+    const r = await getUsers({ activeOnly: true, role: 'customer' })
     if (r.success) setUsers(r.data || [])
   }, [])
 
@@ -487,6 +504,12 @@ export default function CotizacionEditor() {
     setCartLines((prev) => prev.map((l) => (l.key === key ? { ...l, discountPercent: pct } : l)))
   }
 
+  const setLineUnitPrice = (key, raw) => {
+    const n = parseFloat(String(raw).replace(/,/g, ''))
+    const price = Number.isNaN(n) ? 0 : Math.max(0, Math.round(n * 100) / 100)
+    setCartLines((prev) => prev.map((l) => (l.key === key ? { ...l, unitPrice: price } : l)))
+  }
+
   const bumpQuantity = (key, delta) => {
     setCartLines((prev) =>
       prev.map((l) => {
@@ -635,8 +658,7 @@ export default function CotizacionEditor() {
 
   const pickClient = async (u) => {
     if (!u) return
-    const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email
-    setClientName(name)
+    setClientName(clientDisplayName(u))
     setClientEmail(u.email || '')
     setClientPhone(u.phone || '')
     if (!u.id) return
@@ -860,17 +882,26 @@ export default function CotizacionEditor() {
                     <Autocomplete
                       sx={{ minWidth: 260, flex: 1 }}
                       options={users}
-                      getOptionLabel={(u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email || ''}
-                      filterOptions={(x) => x}
+                      getOptionLabel={clientDisplayName}
+                      filterOptions={filterCustomerOptions}
+                      isOptionEqualToValue={(a, b) => a?.id === b?.id}
+                      noOptionsText="Sin coincidencias"
                       onChange={(_, v) => pickClient(v)}
                       renderInput={(params) => (
-                        <TextField {...params} label="Buscar cliente (usuarios)" placeholder="Nombre o email" size="small" />
+                        <TextField
+                          {...params}
+                          label="Buscar cliente"
+                          placeholder="Nombre, empresa o email"
+                          size="small"
+                        />
                       )}
                       renderOption={(props, u) => (
                         <li {...props} key={u.id}>
                           <Box>
-                            <Typography variant="body2">{[u.firstName, u.lastName].filter(Boolean).join(' ')}</Typography>
-                            <Typography variant="caption" color="text.secondary">{u.email}</Typography>
+                            <Typography variant="body2">{clientDisplayName(u)}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {[u.email, u.phone].filter(Boolean).join(' · ') || '—'}
+                            </Typography>
                           </Box>
                         </li>
                       )}
@@ -1377,6 +1408,14 @@ export default function CotizacionEditor() {
                                     <AddQtyIcon sx={{ fontSize: 18 }} />
                                   </IconButton>
                                 </Box>
+                                <TextField
+                                  size="small"
+                                  label="Precio u."
+                                  value={l.unitPrice}
+                                  onChange={(e) => setLineUnitPrice(l.key, e.target.value)}
+                                  inputProps={{ min: 0, step: 0.01, style: { fontSize: '0.8rem' } }}
+                                  sx={{ width: 96, '& .MuiInputBase-input': { py: 0.35 } }}
+                                />
                                 <TextField
                                   size="small"
                                   label="Desc. %"
