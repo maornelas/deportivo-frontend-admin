@@ -715,8 +715,11 @@ const Gastos = () => {
                   </Grid>
                   <Grid item xs={12} sm={8}>
                     <FormControl fullWidth size="small" required>
-                      <InputLabel>Categoría</InputLabel>
+                      <InputLabel id="gastos-categoria-label" shrink>
+                        Categoría
+                      </InputLabel>
                       <Select
+                        labelId="gastos-categoria-label"
                         label="Categoría"
                         value={formCategory}
                         onChange={(e) => {
@@ -728,9 +731,18 @@ const Gastos = () => {
                           }
                         }}
                         displayEmpty
+                        renderValue={(selected) =>
+                          selected ? (
+                            selected
+                          ) : (
+                            <Box component="span" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                              Seleccionar categoría
+                            </Box>
+                          )
+                        }
                       >
-                        <MenuItem value="">
-                          <em>Seleccionar categoría</em>
+                        <MenuItem value="" disabled sx={{ display: 'none' }}>
+                          —
                         </MenuItem>
                         {categoryOptionsForSelect(formCategoryNames, formCategory).map((c) => (
                           <MenuItem key={c} value={c}>
