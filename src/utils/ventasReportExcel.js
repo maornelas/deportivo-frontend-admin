@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import { resolveLineUtilidad } from './ventasReportTotals'
 
 const HEADERS = [
   'SINIESTRO',
@@ -42,9 +43,14 @@ function statusFont(status) {
 }
 
 /**
- * @param {{ title: string, lines: Array<Record<string, unknown>>, filename: string }} opts
+ * @param {{
+ *   title: string,
+ *   lines: Array<Record<string, unknown>>,
+ *   filename: string,
+ *   totals?: { monto: number, montoNeto: number, seguro: number, seguroNeto: number, utilidad: number } | null,
+ * }} opts
  */
-export async function downloadVentasExcel({ title, lines, filename }) {
+export async function downloadVentasExcel({ title, lines, filename, totals = null }) {
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet('Ventas', { views: [{ showGridLines: true }] })
 
@@ -90,7 +96,7 @@ export async function downloadVentasExcel({ title, lines, filename }) {
         moneyNumber(line.montoNeto),
         moneyNumber(line.seguro),
         moneyNumber(line.seguroNeto),
-        moneyNumber(line.utilidad),
+        moneyNumber(resolveLineUtilidad(line.monto, line.seguro) ?? line.utilidad),
         line.vendedor || '—',
         line.status || '—',
       ]
@@ -121,6 +127,35 @@ export async function downloadVentasExcel({ title, lines, filename }) {
           cell.font = { bold: true, color: { argb: neg ? 'FFC62828' : 'FF2E7D32' } }
         }
       })
+      r += 1
+    }
+    if (totals) {
+      const row = ws.getRow(r)
+      ws.mergeCells(`A${r}:E${r}`)
+      const label = row.getCell(1)
+      label.value = 'TOTAL'
+      label.font = { bold: true }
+      label.alignment = { horizontal: 'right', vertical: 'middle' }
+      label.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCE93D8' } }
+      label.border = BORDER_GRID
+      ;['monto', 'montoNeto', 'seguro', 'seguroNeto', 'utilidad'].forEach((key, i) => {
+        const col = 6 + i
+        const cell = row.getCell(col)
+        cell.value = totals[key]
+        cell.numFmt = moneyFmt
+        cell.alignment = { horizontal: 'right' }
+        cell.font = { bold: true }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCE93D8' } }
+        cell.border = BORDER_GRID
+        if (key === 'utilidad' && totals.utilidad != null) {
+          const neg = totals.utilidad < 0
+          cell.font = { bold: true, color: { argb: neg ? 'FFC62828' : 'FF2E7D32' } }
+        }
+      })
+      ws.mergeCells(`K${r}:L${r}`)
+      const tail = row.getCell(11)
+      tail.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCE93D8' } }
+      tail.border = BORDER_GRID
       r += 1
     }
   }

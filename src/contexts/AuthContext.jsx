@@ -90,6 +90,9 @@ export function AuthProvider({ children }) {
     (pathname) => {
       const code = moduleCodeForPath(pathname)
       if (!code) return true
+      if (code === 'module.repartidor' && canAccessModuleCode('module.entregas', true)) {
+        return true
+      }
       return canAccessModuleCode(code, true)
     },
     [canAccessModuleCode],

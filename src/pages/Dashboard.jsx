@@ -17,6 +17,7 @@ import { getOrderDailySales } from '../api/orders'
 import { getSalesReport } from '../api/salesReports'
 import { getExpenseGastosReport } from '../api/expenses'
 import { getPurchasesDaily } from '../api/purchases'
+import { sumVentasSeguro, sumVentasSeguroByCanal } from '../utils/ventasReportTotals'
 
 /** YYYY-MM-DD en calendario local (misma semántica que <input type="date">). */
 function formatYMDLocal(d) {
@@ -41,7 +42,8 @@ const Dashboard = () => {
   const [layoutWidth, setLayoutWidth] = useState(1200)
   const [startDate, setStartDate] = useState(defaultRange.startDate)
   const [endDate, setEndDate] = useState(defaultRange.endDate)
-  const [channelSalesLoading, setChannelSalesLoading] = useState(true)
+  const [ventasReportTotalsLoading, setVentasReportTotalsLoading] = useState(true)
+  const [totalVentasMonto, setTotalVentasMonto] = useState(null)
   const [onlineSalesTotal, setOnlineSalesTotal] = useState(0)
   const [advisorSalesTotal, setAdvisorSalesTotal] = useState(0)
   const [dailySales, setDailySales] = useState([])
@@ -57,21 +59,23 @@ const Dashboard = () => {
   const [expenseSummaryLoading, setExpenseSummaryLoading] = useState(true)
   const containerRef = useRef(null)
 
-  const fetchChannelSales = useCallback(async () => {
+  /** Total ventas = suma Seguro (precio cotización sin IVA), mismo criterio que Reportería. */
+  const fetchVentasReportTotals = useCallback(async () => {
     if (!startDate || !endDate) return
-    setChannelSalesLoading(true)
-    const result = await getSalesReport({ kind: 'by_channel', startDate, endDate })
-    setChannelSalesLoading(false)
-    if (!result.success || !result.data?.byChannel) {
-      setOnlineSalesTotal(0)
-      setAdvisorSalesTotal(0)
-      return
-    }
-    const rows = result.data.byChannel
-    const online = rows.find((r) => r.salesChannel === 'online')
-    const advisor = rows.find((r) => r.salesChannel === 'advisor')
-    setOnlineSalesTotal(Number(online?.totalAmount ?? 0))
-    setAdvisorSalesTotal(Number(advisor?.totalAmount ?? 0))
+    setVentasReportTotalsLoading(true)
+    const [rLocal, rForaneo] = await Promise.all([
+      getSalesReport({ kind: 'ventas_detalle', startDate, endDate, salesChannel: 'local' }),
+      getSalesReport({ kind: 'ventas_detalle', startDate, endDate, salesChannel: 'foraneo' }),
+    ])
+    setVentasReportTotalsLoading(false)
+    const localLines = rLocal.success ? rLocal.data?.lines || [] : []
+    const foraneoLines = rForaneo.success ? rForaneo.data?.lines || [] : []
+    const allLines = [...localLines, ...foraneoLines]
+    const seguroLocal = sumVentasSeguro(localLines)
+    const seguroForaneo = sumVentasSeguro(foraneoLines)
+    setTotalVentasMonto(Math.round((seguroLocal + seguroForaneo) * 100) / 100)
+    setAdvisorSalesTotal(sumVentasSeguroByCanal(allLines, 'Asesor'))
+    setOnlineSalesTotal(sumVentasSeguroByCanal(allLines, 'Online'))
   }, [startDate, endDate])
 
   const fetchDailySales = useCallback(async () => {
@@ -110,7 +114,7 @@ const Dashboard = () => {
     }
   }, [startDate, endDate])
 
-  /** Mismo criterio que Reportería → GASTOS (totalMontoNeto y netLineSubtotal por línea). */
+  /** Mismo criterio que Reportería → GASTOS (columna Monto: totalMonto y lineSubtotal por línea). */
   const fetchGastosForDashboard = useCallback(async () => {
     if (!startDate || !endDate) return
     setExpenseSummaryLoading(true)
@@ -123,14 +127,14 @@ const Dashboard = () => {
       setDailyExpenses([])
       return
     }
-    setExpenseGrandTotal(Number(result.data.totalMontoNeto ?? 0))
+    setExpenseGrandTotal(Number(result.data.totalMonto ?? 0))
     const byDate = new Map()
     for (const g of result.data.groups || []) {
       for (const line of g.lines || []) {
         const d = (line.expenseDate || '').slice(0, 10)
         if (!d) continue
-        const net = Number(line.netLineSubtotal ?? line.lineSubtotal ?? 0)
-        byDate.set(d, (byDate.get(d) || 0) + net)
+        const monto = Number(line.lineSubtotal ?? 0)
+        byDate.set(d, (byDate.get(d) || 0) + monto)
       }
     }
     const series = Array.from(byDate.entries())
@@ -140,8 +144,8 @@ const Dashboard = () => {
   }, [startDate, endDate])
 
   useEffect(() => {
-    fetchChannelSales()
-  }, [fetchChannelSales])
+    fetchVentasReportTotals()
+  }, [fetchVentasReportTotals])
 
   useEffect(() => {
     fetchDailySales()
@@ -164,10 +168,11 @@ const Dashboard = () => {
       if (document.visibilityState !== 'visible') return
       fetchGastosForDashboard()
       fetchDailyPurchases()
+      fetchVentasReportTotals()
     }
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
-  }, [fetchGastosForDashboard, fetchDailyPurchases])
+  }, [fetchGastosForDashboard, fetchDailyPurchases, fetchVentasReportTotals])
 
   const [layout, setLayout] = useState([
     { i: 'sales', x: 0, y: 0, w: 6, h: 5 },
@@ -196,12 +201,10 @@ const Dashboard = () => {
     setSidebarOpen(false)
   }
 
-  const totalSoldAmount =
-    dailySalesLoading || !Array.isArray(dailySales)
-      ? null
-      : dailySales.reduce((sum, d) => sum + Number(d.totalAmount ?? d.totalamount ?? 0), 0)
   const totalSoldFormatted =
-    totalSoldAmount === null ? '...' : `$${Number(totalSoldAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    ventasReportTotalsLoading || totalVentasMonto === null
+      ? '...'
+      : `$${Number(totalVentasMonto).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const totalGastosFormatted =
     expenseSummaryLoading || expenseGrandTotal === null
@@ -220,8 +223,8 @@ const Dashboard = () => {
 
   const fmtMoney = (n) =>
     `$${Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  const onlineSalesFormatted = channelSalesLoading ? '...' : fmtMoney(onlineSalesTotal)
-  const advisorSalesFormatted = channelSalesLoading ? '...' : fmtMoney(advisorSalesTotal)
+  const onlineSalesFormatted = ventasReportTotalsLoading ? '...' : fmtMoney(onlineSalesTotal)
+  const advisorSalesFormatted = ventasReportTotalsLoading ? '...' : fmtMoney(advisorSalesTotal)
 
   return (
     <Box sx={{ minHeight: '100vh' }}>
@@ -419,7 +422,7 @@ const Dashboard = () => {
                   <ChannelSalesSummary
                     onlineTotal={onlineSalesTotal}
                     advisorTotal={advisorSalesTotal}
-                    loading={channelSalesLoading}
+                    loading={ventasReportTotalsLoading}
                   />
                 </Box>
               </div>

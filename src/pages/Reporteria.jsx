@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SIDEBAR_WIDTH } from '../config/layout'
 
 import {
@@ -21,13 +21,16 @@ import {
   Alert,
   Tab,
   Tabs,
+  Grid,
 } from '@mui/material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import { SummaryCard } from '../components/DashboardWidgets'
 import { getSalesReport, getVentasAsesorNames, getIncomeStatement } from '../api/salesReports'
 import { getExpenseGastosReport, downloadExpenseReportCsv } from '../api/expenses'
 import { useAuth } from '../contexts/AuthContext'
 import { downloadVentasExcel } from '../utils/ventasReportExcel'
+import { buildVentasTotals, enrichVentasLines } from '../utils/ventasReportTotals'
 
 function money(n) {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(n) || 0)
@@ -96,6 +99,30 @@ function comisionesReportTitle(startDateStr, endDateStr, asesorNombre) {
     return `COMISIONES ${nombre} ${mes} DEL ${y1}`
   }
   return `COMISIONES ${nombre} ${startDateStr} AL ${endDateStr}`
+}
+
+const VENTAS_INDICATOR_FIELDS = [
+  { key: 'monto', label: 'Compra', color: '#ff9800', gradientStart: '#ffb74d' },
+  { key: 'montoNeto', label: 'Compra + IVA', color: '#ef6c00', gradientStart: '#ff9800' },
+  { key: 'seguro', label: 'Cotización', color: '#2196f3', gradientStart: '#64b5f6' },
+  { key: 'seguroNeto', label: 'Cotización + IVA', color: '#7b1fa2', gradientStart: '#ab47bc' },
+  { key: 'utilidad', label: 'Utilidad', color: '#2e7d32', gradientStart: '#66bb6a' },
+]
+
+const VENTAS_COLUMN_HELP =
+  'Montos por pieza: MONTO = precio unitario de compra; MONTO NETO = compra + IVA (16 %); SEGURO = precio unitario de cotización; SEGURO NETO = cotización + IVA; UTILIDAD = SEGURO − MONTO (sin IVA). Si falta compra o cotización vinculada, la celda muestra «—».'
+
+function VentasReportIndicators({ totals }) {
+  if (!totals) return null
+  return (
+    <Grid container spacing={{ xs: 2, sm: 2, md: 2.5 }} sx={{ mb: 2 }}>
+      {VENTAS_INDICATOR_FIELDS.map(({ key, label, color, gradientStart }) => (
+        <Grid item xs={12} sm={6} md={4} lg={2} key={key} sx={{ display: 'flex' }}>
+          <SummaryCard title={label} value={money(totals[key])} color={color} gradientStart={gradientStart} />
+        </Grid>
+      ))}
+    </Grid>
+  )
 }
 
 function utilidadCellSx(utilidad) {
@@ -216,7 +243,6 @@ export default function Reporteria() {
       kind: 'ventas_detalle',
       startDate,
       endDate,
-      salesChannel: 'local',
       advisorName: selectedAdvisor.trim(),
     })
     setVentasLoading(false)
@@ -267,26 +293,52 @@ export default function Reporteria() {
     if (!r.success) setGastosError(r.error || 'Error al descargar CSV')
   }
 
+  const ventasTabTotals = useMemo(() => {
+    if (!isVentasTab) return null
+    const rows =
+      reportTab === 'ventas_locales'
+        ? ventasLocalesData?.lines || []
+        : ventasForaneasData?.lines || []
+    return buildVentasTotals(rows)
+  }, [isVentasTab, reportTab, ventasLocalesData, ventasForaneasData])
+
+  const comisionesTotals = useMemo(() => {
+    if (!isComisiones) return null
+    return buildVentasTotals(comisionesData?.lines || [])
+  }, [isComisiones, comisionesData])
+
+  const reportTotals = isComisiones ? comisionesTotals : ventasTabTotals
+
+  const lines = enrichVentasLines(currentVentasData?.lines || [])
+
   const handleDownloadExcel = async () => {
     if (!currentVentasData) return
     if (isComisiones) {
       const advSlug = `_${selectedAdvisor.trim().replace(/\s+/g, '_')}`
       const title = comisionesReportTitle(startDate, endDate, selectedAdvisor)
       const filename = `comisiones${advSlug}_${startDate}_${endDate}.xlsx`
-      await downloadVentasExcel({ title, lines: currentVentasData.lines || [], filename })
+      await downloadVentasExcel({
+        title,
+        lines,
+        filename,
+        totals: comisionesTotals,
+      })
       return
     }
     const title = ventasReportTitle(startDate, endDate, ventasScope)
     const slug = ventasScope === 'foraneo' ? 'ventas-foraneas' : 'ventas-locales'
     const filename = `${slug}_${startDate}_${endDate}.xlsx`
-    await downloadVentasExcel({ title, lines: currentVentasData.lines || [], filename })
+    await downloadVentasExcel({
+      title,
+      lines,
+      filename,
+      totals: isVentasTab ? ventasTabTotals : null,
+    })
   }
 
   if (!canViewPath('/reporteria')) {
     return null
   }
-
-  const lines = currentVentasData?.lines || []
 
   return (
     <Box sx={{ minHeight: '100vh' }}>
@@ -324,19 +376,20 @@ export default function Reporteria() {
 
         {isVentasLocales && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-            Pedidos con canal asesor (ventas locales). Excluye canceladas y reembolsadas. Misma lógica de columnas que el
-            detalle general (UNIDAD, PROVEEDOR, montos, utilidad, VENDEDOR desde la nota «Asesor: …»).
+            Ventas con dirección de entrega en <strong>León, Guanajuato</strong> (envío o, si no hay envío, facturación).
+            Excluye canceladas y reembolsadas. {VENTAS_COLUMN_HELP}
           </Typography>
         )}
         {isVentasForaneas && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-            Pedidos con canal online (ventas foráneas). Excluye canceladas y reembolsadas. Sin filtro por asesor.
+            Ventas con dirección <strong>fuera de León, Guanajuato</strong> (envío o facturación). Excluye canceladas y
+            reembolsadas. {VENTAS_COLUMN_HELP}
           </Typography>
         )}
         {isComisiones && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-            Misma tabla que ventas locales, filtrada por un asesor (nombre igual que la columna VENDEDOR / nota «Asesor: …»).
-            Solo canal asesor. Útil para comisiones por vendedor; la utilidad por línea resalta en verde o rojo.
+            Todas las ventas <strong>locales y foráneas</strong> del asesor en el rango (columna VENDEDOR / nota «Asesor:
+            …»). Excluye canceladas y reembolsadas. La utilidad por línea resalta en verde o rojo. {VENTAS_COLUMN_HELP}
           </Typography>
         )}
         {reportTab === 'gastos' && (
@@ -401,7 +454,12 @@ export default function Reporteria() {
             </Button>
           )}
           {(isVentasTab || isComisiones) && (
-            <Button variant="outlined" onClick={handleDownloadExcel} disabled={!currentVentasData} sx={{ ml: 'auto' }}>
+            <Button
+              variant="outlined"
+              onClick={handleDownloadExcel}
+              disabled={!currentVentasData}
+              sx={{ ml: 'auto' }}
+            >
               Descargar
             </Button>
           )}
@@ -421,6 +479,8 @@ export default function Reporteria() {
             </Button>
           )}
         </Paper>
+
+        {(isVentasTab || isComisiones) && <VentasReportIndicators totals={reportTotals} />}
 
         {(isVentasTab || isComisiones) && error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
@@ -510,42 +570,91 @@ export default function Reporteria() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  lines.map((row) => (
-                    <TableRow key={`${row.orderId}-${row.lineId}`}>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.siniestro || '—'}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.unidad || '—'}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0', maxWidth: 280 }}>{row.concepto || '—'}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0', whiteSpace: 'nowrap' }}>
-                        {row.canalVenta || '—'}
-                      </TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.proveedor || '—'}</TableCell>
-                      <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
-                        {moneyOrDash(row.monto)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
-                        {moneyOrDash(row.montoNeto)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
-                        {moneyOrDash(row.seguro)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
-                        {moneyOrDash(row.seguroNeto)}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          border: '1px solid #e0e0e0',
-                          ...utilidadCellSx(row.utilidad),
-                        }}
-                      >
-                        {moneyOrDash(row.utilidad)}
-                      </TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.vendedor || '—'}</TableCell>
-                      <TableCell align="center" sx={{ border: '1px solid #e0e0e0', ...statusCellSx(row.status) }}>
-                        {row.status || '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  <>
+                    {lines.map((row) => (
+                      <TableRow key={`${row.orderId}-${row.lineId}`}>
+                        <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.siniestro || '—'}</TableCell>
+                        <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.unidad || '—'}</TableCell>
+                        <TableCell sx={{ border: '1px solid #e0e0e0', maxWidth: 280 }}>{row.concepto || '—'}</TableCell>
+                        <TableCell sx={{ border: '1px solid #e0e0e0', whiteSpace: 'nowrap' }}>
+                          {row.canalVenta || '—'}
+                        </TableCell>
+                        <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.proveedor || '—'}</TableCell>
+                        <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                          {moneyOrDash(row.monto)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                          {moneyOrDash(row.montoNeto)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                          {moneyOrDash(row.seguro)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                          {moneyOrDash(row.seguroNeto)}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            border: '1px solid #e0e0e0',
+                            ...utilidadCellSx(row.utilidad),
+                          }}
+                        >
+                          {moneyOrDash(row.utilidad)}
+                        </TableCell>
+                        <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.vendedor || '—'}</TableCell>
+                        <TableCell align="center" sx={{ border: '1px solid #e0e0e0', ...statusCellSx(row.status) }}>
+                          {row.status || '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {(isVentasTab || isComisiones) && reportTotals && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          align="right"
+                          sx={{ border: '1px solid #9e9e9e', fontWeight: 800, bgcolor: '#ce93d8' }}
+                        >
+                          TOTAL
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ border: '1px solid #9e9e9e', fontWeight: 800, bgcolor: '#ce93d8' }}
+                        >
+                          {money(reportTotals.monto)}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ border: '1px solid #9e9e9e', fontWeight: 800, bgcolor: '#ce93d8' }}
+                        >
+                          {money(reportTotals.montoNeto)}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ border: '1px solid #9e9e9e', fontWeight: 800, bgcolor: '#ce93d8' }}
+                        >
+                          {money(reportTotals.seguro)}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ border: '1px solid #9e9e9e', fontWeight: 800, bgcolor: '#ce93d8' }}
+                        >
+                          {money(reportTotals.seguroNeto)}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            border: '1px solid #9e9e9e',
+                            fontWeight: 800,
+                            bgcolor: '#ce93d8',
+                            ...utilidadCellSx(reportTotals.utilidad),
+                          }}
+                        >
+                          {money(reportTotals.utilidad)}
+                        </TableCell>
+                        <TableCell colSpan={2} sx={{ border: '1px solid #9e9e9e', bgcolor: '#ce93d8' }} />
+                      </TableRow>
+                    )}
+                  </>
                 )}
               </TableBody>
             </Table>

@@ -71,9 +71,11 @@ const ACCESS_OPTIONS = [
 ]
 
 export default function Roles() {
-  const { canWritePath, canDoAction } = useAuth()
+  const { user, canWritePath, canDoAction } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const canEdit = canWritePath('/roles')
+  /** Super Administrador: puede editar permisos de roles de sistema */
+  const hasFullAccess = Boolean(user?.rbac?.fullAccess)
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -149,8 +151,10 @@ export default function Roles() {
     if (selectedId && modulePermissionsRows.some((r) => r.permission)) loadDetail(selectedId)
   }, [selectedId, modulePermissionsRows, loadDetail])
 
+  const permissionsLocked = (isSystem) => isSystem && !hasFullAccess
+
   const handleSavePermissions = async () => {
-    if (!detail || detail.isSystem || !canEdit) return
+    if (!detail || permissionsLocked(detail.isSystem) || !canEdit) return
     if (!canDoAction(ACTION.ROLES_GUARDAR_PERMISOS)) {
       showDenied()
       return
@@ -308,26 +312,32 @@ export default function Roles() {
                       {detail.name}
                     </Typography>
                     {detail.isSystem ? (
-                      <Chip color="primary" label="Rol de sistema (permisos fijos)" />
-                    ) : (
-                      canEdit && (
-                        <Button
-                          variant="contained"
-                          size="small"
-                          onClick={handleSavePermissions}
-                          disabled={savePermissionsLoading}
-                          startIcon={
-                            savePermissionsLoading ? (
-                              <CircularProgress size={18} color="inherit" aria-hidden />
-                            ) : (
-                              <SaveIcon />
-                            )
-                          }
-                        >
-                          {savePermissionsLoading ? 'Guardando…' : 'Guardar permisos'}
-                        </Button>
-                      )
-                    )}
+                      <Chip
+                        color="primary"
+                        label={
+                          hasFullAccess
+                            ? 'Rol de sistema'
+                            : 'Rol de sistema (permisos fijos)'
+                        }
+                      />
+                    ) : null}
+                    {canEdit && !permissionsLocked(detail.isSystem) ? (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={handleSavePermissions}
+                        disabled={savePermissionsLoading}
+                        startIcon={
+                          savePermissionsLoading ? (
+                            <CircularProgress size={18} color="inherit" aria-hidden />
+                          ) : (
+                            <SaveIcon />
+                          )
+                        }
+                      >
+                        {savePermissionsLoading ? 'Guardando…' : 'Guardar permisos'}
+                      </Button>
+                    ) : null}
                   </Box>
 
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -376,7 +386,7 @@ export default function Roles() {
                             <FormControl
                               size="small"
                               fullWidth
-                              disabled={detail.isSystem || !canEdit || savePermissionsLoading}
+                              disabled={permissionsLocked(detail.isSystem) || !canEdit || savePermissionsLoading}
                             >
                               <InputLabel id={`access-${row.key}`}>Acceso</InputLabel>
                               <Select

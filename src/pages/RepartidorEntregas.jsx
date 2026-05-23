@@ -50,13 +50,13 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import DeliveryDestinationPicker from '../repartidor/DeliveryDestinationPicker'
+import { loadGoogleMaps } from '../repartidor/googleMapsHelpers'
 import SignaturePad from '../components/SignaturePad'
 import { SIDEBAR_WIDTH } from '../config/layout'
 import { useAuth } from '../contexts/AuthContext'
 import { searchOrders, getOrderById, uploadSignedOrderSaleNotePdf } from '../api/orders'
 import { getDeliveryByOrderId, createDelivery, updateDelivery } from '../api/deliveries'
-const MAPS_SCRIPT_ID = 'deportivo-google-maps-js'
-
 /** Duración mínima de la pantalla de animación al iniciar entrega (ms). */
 const MOTO_SPLASH_MIN_MS = 3000
 /** Duración mínima del splash al confirmar entrega (evita parpadeo si la API responde muy rápido). */
@@ -214,38 +214,6 @@ function FinalizingDeliverySplashOverlay() {
   )
 }
 
-function loadGoogleMaps(apiKey) {
-  if (!apiKey?.trim()) {
-    return Promise.reject(new Error('Falta VITE_GOOGLE_MAPS_API_KEY'))
-  }
-  if (typeof window !== 'undefined' && window.google?.maps?.Map) {
-    return Promise.resolve()
-  }
-  return new Promise((resolve, reject) => {
-    const existing = document.getElementById(MAPS_SCRIPT_ID)
-    if (existing) {
-      const t0 = Date.now()
-      const iv = setInterval(() => {
-        if (window.google?.maps?.Map) {
-          clearInterval(iv)
-          resolve()
-        } else if (Date.now() - t0 > 15000) {
-          clearInterval(iv)
-          reject(new Error('Timeout cargando Google Maps'))
-        }
-      }, 100)
-      return
-    }
-    const s = document.createElement('script')
-    s.id = MAPS_SCRIPT_ID
-    s.async = true
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey.trim())}`
-    s.onload = () => resolve()
-    s.onerror = () => reject(new Error('No se pudo cargar el script de Google Maps'))
-    document.head.appendChild(s)
-  })
-}
-
 /** Pin moto */
 function motoPinIcon(maps) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="58" viewBox="0 0 48 58">
@@ -276,16 +244,6 @@ function destPinIcon(maps) {
     scaledSize: new maps.Size(44, 54),
     anchor: new maps.Point(22, 54),
   }
-}
-
-/** Destino aleatorio cerca de una posición (simulación / vista previa). */
-function randomDestination(lat, lng, minKm = 0.8, maxKm = 2.2) {
-  const distKm = minKm + Math.random() * (maxKm - minKm)
-  const bearing = Math.random() * 2 * Math.PI
-  const radLat = (lat * Math.PI) / 180
-  const dLat = (distKm / 111) * Math.cos(bearing)
-  const dLng = (distKm / (111 * Math.max(0.2, Math.cos(radLat)))) * Math.sin(bearing)
-  return { lat: lat + dLat, lng: lng + dLng }
 }
 
 function formatMxCurrency(value, currency = 'MXN') {
@@ -342,13 +300,6 @@ function googleMapsPlaceUrl(order, destLatLng) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
 }
 
-function staticMapUrl(lat, lng, apiKey) {
-  if (!apiKey || lat == null || lng == null) return null
-  const center = `${lat},${lng}`
-  const markers = `color:red|${lat},${lng}`
-  return `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(center)}&zoom=15&size=640x280&scale=2&maptype=roadmap&markers=${encodeURIComponent(markers)}&key=${encodeURIComponent(apiKey.trim())}`
-}
-
 export default function RepartidorEntregas() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -374,10 +325,8 @@ export default function RepartidorEntregas() {
   const [tripStarted, setTripStarted] = useState(false)
   const [etaText, setEtaText] = useState('')
   const etaSecondsRef = useRef(null)
-  /** Destino simulado según tu GPS: misma lógica en vista previa e INICIAR ENTREGA */
-  const [simulatedDest, setSimulatedDest] = useState(null)
-  const [previewGeoLoading, setPreviewGeoLoading] = useState(false)
-  const [previewGeoError, setPreviewGeoError] = useState('')
+  /** Punto de entrega definido por el repartidor (coordenadas + texto) */
+  const [deliveryDest, setDeliveryDest] = useState(null)
   const [iniciarBusy, setIniciarBusy] = useState(false)
   const iniciarLockRef = useRef(false)
 
@@ -462,36 +411,15 @@ export default function RepartidorEntregas() {
     }
   }, [phase])
 
-  /** Vista previa: destino aleatorio según tu posición actual */
-  useEffect(() => {
-    if (!order || phase !== 'detail') return
-    setPreviewGeoLoading(true)
-    setPreviewGeoError('')
-    if (!navigator.geolocation) {
-      setPreviewGeoError('Tu navegador no permite ubicación.')
-      setPreviewGeoLoading(false)
-      return
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setSimulatedDest(randomDestination(pos.coords.latitude, pos.coords.longitude))
-        setPreviewGeoLoading(false)
-      },
-      (err) => {
-        setPreviewGeoError(err.message || 'Permite ubicación para generar el destino simulado en el mapa.')
-        setPreviewGeoLoading(false)
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
-    )
-  }, [order?.id, phase])
-
-  const destLatLng = delivery?.endPoint?.latitude != null &&
-    delivery?.endPoint?.longitude != null
-    ? {
-        lat: Number(delivery.endPoint.latitude),
-        lng: Number(delivery.endPoint.longitude),
-      }
-    : null
+  const destLatLng =
+    deliveryDest?.lat != null && deliveryDest?.lng != null
+      ? { lat: deliveryDest.lat, lng: deliveryDest.lng }
+      : delivery?.endPoint?.latitude != null && delivery?.endPoint?.longitude != null
+        ? {
+            lat: Number(delivery.endPoint.latitude),
+            lng: Number(delivery.endPoint.longitude),
+          }
+        : null
 
   const loadByFolio = useCallback(async (folioRaw) => {
     const q = String(folioRaw || '').trim()
@@ -579,8 +507,16 @@ export default function RepartidorEntregas() {
       pathPointsRef.current = []
     }
     setOrder(detail.data)
-    setSimulatedDest(null)
-    setPreviewGeoError('')
+    const orderAddr = singleLineAddress(detail.data)
+    if (d0?.endPoint?.latitude != null && d0?.endPoint?.longitude != null) {
+      setDeliveryDest({
+        lat: Number(d0.endPoint.latitude),
+        lng: Number(d0.endPoint.longitude),
+        address: d0.destinationAddress || orderAddr || '',
+      })
+    } else {
+      setDeliveryDest(null)
+    }
     setPhase('detail')
     setLoadState({ loading: false, error: '' })
   }, [])
@@ -904,6 +840,29 @@ export default function RepartidorEntregas() {
     return res.data.id
   }, [delivery?.id, order?.id, user?.id])
 
+  const saveDeliveryDestination = useCallback(
+    async (dest) => {
+      const deliveryId = await ensureDeliveryId()
+      const res = await updateDelivery(deliveryId, {
+        endLatitude: dest.lat,
+        endLongitude: dest.lng,
+        destinationAddress: dest.address?.trim() || null,
+      })
+      if (!res.success) throw new Error(res.error || 'No se pudo guardar el destino')
+      setDelivery((prev) =>
+        prev
+          ? {
+              ...prev,
+              endPoint: { latitude: dest.lat, longitude: dest.lng },
+              destinationAddress: dest.address,
+            }
+          : prev,
+      )
+      setDeliveryDest(dest)
+    },
+    [ensureDeliveryId],
+  )
+
   const iniciarEntrega = useCallback(() => {
     setGeoError('')
     if (!mapsKey?.trim()) {
@@ -918,12 +877,19 @@ export default function RepartidorEntregas() {
       setGeoError('Tu navegador no permite geolocalización.')
       return
     }
+    const dest =
+      deliveryDest?.lat != null && deliveryDest?.lng != null
+        ? { lat: deliveryDest.lat, lng: deliveryDest.lng }
+        : null
+    if (!dest) {
+      setGeoError('Define y guarda el punto de entrega en el mapa antes de iniciar.')
+      return
+    }
     if (iniciarLockRef.current) return
     iniciarLockRef.current = true
     setIniciarBusy(true)
     motoSplashStartedAtRef.current = Date.now()
     setMotoSplashOpen(true)
-    /** Si aún no hay permiso o falló la vista previa, se vuelve a pedir GPS y se genera el destino aquí. */
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const finishSplashAndRelease = () => {
@@ -941,14 +907,6 @@ export default function RepartidorEntregas() {
           setIniciarBusy(false)
         }
         const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-        const dest =
-          simulatedDest != null
-            ? { lat: simulatedDest.lat, lng: simulatedDest.lng }
-            : randomDestination(origin.lat, origin.lng)
-        if (simulatedDest == null) {
-          setSimulatedDest(dest)
-        }
-        setPreviewGeoError('')
         try {
           await loadGoogleMaps(mapsKey)
         } catch (e) {
@@ -972,6 +930,7 @@ export default function RepartidorEntregas() {
             startLongitude: origin.lng,
             endLatitude: dest.lat,
             endLongitude: dest.lng,
+            destinationAddress: deliveryDest?.address?.trim() || null,
           })
           setTripStarted(false)
           setRouteSeed({ driver: origin, dest })
@@ -995,7 +954,7 @@ export default function RepartidorEntregas() {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     )
-  }, [mapsKey, order, simulatedDest, ensureDeliveryId])
+  }, [mapsKey, order, deliveryDest, ensureDeliveryId])
 
   useEffect(() => {
     if (phase !== 'enroute' || !routeSeed || !mapsKey) return
@@ -1100,14 +1059,13 @@ export default function RepartidorEntregas() {
   }, [liveDriver])
 
   useEffect(() => {
-    if (phase !== 'enroute' || routePaused || !tripStarted) return
+    if (phase !== 'enroute' || routePaused) return
     if (!navigator.geolocation) return
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        setLiveDriver({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        })
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        livePositionRef.current = p
+        setLiveDriver(p)
       },
       () => {},
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
@@ -1118,7 +1076,7 @@ export default function RepartidorEntregas() {
         watchIdRef.current = null
       }
     }
-  }, [phase, routePaused, tripStarted])
+  }, [phase, routePaused])
 
   /** Guardar recorrido GPS cada 10 s en la base de datos */
   useEffect(() => {
@@ -1168,10 +1126,8 @@ export default function RepartidorEntregas() {
   }, 0)
   const allItemsChecked = items.length > 0 && selectedItemsCount === items.length
   const addrLines = order ? formatAddressLines(order) : []
-  const mapPreviewSrc =
-    simulatedDest && mapsKey ? staticMapUrl(simulatedDest.lat, simulatedDest.lng, mapsKey) : null
-
   const isDeliveryCompleted = isDeliveryMarkedDelivered(delivery)
+  const canEditDestination = phase === 'detail' && !isDeliveryCompleted
 
   const folioFromUrl = String(searchParams.get('folio') || searchParams.get('orderNumber') || '').trim()
   /** Solo en /repartidor sin folio en URL y sin pedido: permitir buscar manualmente. */
@@ -1397,50 +1353,39 @@ export default function RepartidorEntregas() {
                     </Stack>
                   </AccordionSummary>
                   <AccordionDetails>
-                    {addrLines.length === 0 ? (
-                      <Typography color="text.secondary">Sin dirección en el pedido.</Typography>
-                    ) : (
-                      addrLines.map((line, i) => (
-                        <Typography key={`${i}-${line}`} variant="body2" sx={{ mb: 0.5 }}>
-                          {line}
+                    {addrLines.length > 0 ? (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                          Dirección del pedido (referencia)
                         </Typography>
-                      ))
-                    )}
-                    {previewGeoLoading && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1.5 }}>
-                        <CircularProgress size={22} />
-                        <Typography variant="body2" color="text.secondary">
-                          Obteniendo tu ubicación para el destino simulado…
-                        </Typography>
+                        {addrLines.map((line, i) => (
+                          <Typography key={`${i}-${line}`} variant="body2" sx={{ mb: 0.5 }}>
+                            {line}
+                          </Typography>
+                        ))}
                       </Box>
+                    ) : (
+                      <Typography color="text.secondary" sx={{ mb: 2 }}>
+                        Sin dirección en el pedido. Indica manualmente el punto de entrega.
+                      </Typography>
                     )}
-                    {previewGeoError && (
-                      <Alert severity="warning" sx={{ mt: 1.5 }}>
-                        {previewGeoError}
-                      </Alert>
+                    {mapsKey?.trim() ? (
+                      <DeliveryDestinationPicker
+                        mapsKey={mapsKey}
+                        value={deliveryDest}
+                        onChange={setDeliveryDest}
+                        onSave={canEditDestination ? saveDeliveryDestination : undefined}
+                        defaultAddress={
+                          deliveryDest?.address ||
+                          delivery?.destinationAddress ||
+                          singleLineAddress(order) ||
+                          ''
+                        }
+                        disabled={!canEditDestination}
+                      />
+                    ) : (
+                      <Alert severity="error">Falta VITE_GOOGLE_MAPS_API_KEY en .env</Alert>
                     )}
-                    {mapPreviewSrc ? (
-                      <>
-                        <Alert severity="info" sx={{ mt: 1.5 }}>
-                          Vista previa: <strong>destino de entrega simulado</strong> (aleatorio cerca de tu posición).
-                          Al pulsar INICIAR ENTREGA se usa el mismo destino para el recorrido.
-                        </Alert>
-                        <Box
-                          component="img"
-                          src={mapPreviewSrc}
-                          alt="Destino simulado en mapa"
-                          sx={{
-                            width: '100%',
-                            maxHeight: 220,
-                            objectFit: 'cover',
-                            borderRadius: 1,
-                            mt: 1.5,
-                            border: 1,
-                            borderColor: 'divider',
-                          }}
-                        />
-                      </>
-                    ) : null}
                     <Button
                       component="a"
                       href={googleMapsPlaceUrl(order, destLatLng)}
@@ -1451,14 +1396,10 @@ export default function RepartidorEntregas() {
                       startIcon={<MapIcon />}
                       endIcon={<OpenInNew sx={{ fontSize: 18 }} />}
                       sx={{ mt: 2, textTransform: 'none' }}
+                      disabled={!destLatLng}
                     >
                       Abrir en Google Maps
                     </Button>
-                    {!destLatLng && (
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                        Si no hay coordenadas guardadas en la entrega, Google Maps abrirá la búsqueda por dirección.
-                      </Typography>
-                    )}
                   </AccordionDetails>
                 </Accordion>
 
@@ -1620,18 +1561,32 @@ export default function RepartidorEntregas() {
                 )}
 
                 {!isDeliveryCompleted && (
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    size="large"
-                    fullWidth
-                    startIcon={<LocalShipping />}
-                    onClick={iniciarEntrega}
-                    disabled={loadState.loading}
-                    sx={{ py: 1.5, fontWeight: 800, fontSize: '1rem', textTransform: 'none' }}
-                  >
-                    {iniciarBusy ? 'Obteniendo ubicación…' : 'INICIAR ENTREGA'}
-                  </Button>
+                  <>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="large"
+                      fullWidth
+                      startIcon={<LocalShipping />}
+                      onClick={iniciarEntrega}
+                      disabled={
+                        loadState.loading ||
+                        iniciarBusy ||
+                        !mapsKey?.trim() ||
+                        deliveryDest?.lat == null ||
+                        deliveryDest?.lng == null
+                      }
+                      sx={{ py: 1.5, fontWeight: 800, fontSize: '1rem', textTransform: 'none' }}
+                    >
+                      {iniciarBusy ? 'Obteniendo ubicación…' : 'INICIAR ENTREGA'}
+                    </Button>
+                    {(deliveryDest?.lat == null || deliveryDest?.lng == null) && mapsKey?.trim() && (
+                      <Alert severity="info" sx={{ mt: 1.5 }}>
+                        Marca el punto de entrega en el mapa y pulsa <strong>Guardar destino</strong> antes de
+                        iniciar. Se usará tu GPS real y ese destino para la ruta.
+                      </Alert>
+                    )}
+                  </>
                 )}
                 {!mapsKey?.trim() && (
                   <Alert severity="error" sx={{ mt: 2 }}>
