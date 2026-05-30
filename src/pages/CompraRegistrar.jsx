@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SIDEBAR_WIDTH } from '../config/layout'
 
 import { useNavigate } from 'react-router-dom'
@@ -39,7 +39,7 @@ import { createNotification } from '../api/notifications'
 import { downloadPurchaseNotePdf } from '../compras/purchaseNotePdf'
 import { useAuth } from '../contexts/AuthContext'
 import { usePurchases } from '../contexts/PurchasesContext'
-import { createPurchase } from '../api/purchases'
+import { createPurchase, getSalesOrderPurchaseLines } from '../api/purchases'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
 import {
@@ -47,7 +47,52 @@ import {
   summarizePurchaseHeaderVehicle,
   vehicleLineFingerprint,
 } from '../compras/shared'
-import PurchaseSalesOrderPicker from '../compras/PurchaseSalesOrderPicker'
+import PurchaseSalesOrderPicker, { salesOrderOptionLabel } from '../compras/PurchaseSalesOrderPicker'
+import PurchaseOrderLinesModal from '../compras/PurchaseOrderLinesModal'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+function isValidUuid(s) {
+  return typeof s === 'string' && UUID_RE.test(s.trim())
+}
+
+function computePurchaseTotals(items) {
+  const gross = items.reduce(
+    (s, l) => s + Number(l.unitPrice || 0) * Math.max(1, parseInt(l.quantity, 10) || 1),
+    0,
+  )
+  const subtotal = Math.round(gross * 100) / 100
+  const tax = Math.round(subtotal * 0.16 * 100) / 100
+  const total = Math.round((subtotal + tax) * 100) / 100
+  return { subtotal, tax, total }
+}
+
+function markedPartsNamesList(salesOrderLines, selectedIds) {
+  return salesOrderLines
+    .filter((line) => selectedIds.has(line.orderItemId))
+    .map((line) => (line.productName || '').trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
+/** Ítems API desde piezas marcadas en el modal (sin monto; no van al resumen). */
+function orderLinesToPayloadItems(salesOrderLines, selectedIds) {
+  return salesOrderLines
+    .filter((line) => selectedIds.has(line.orderItemId))
+    .map((line) => ({
+      key: `order-${line.orderItemId}`,
+      productId: isValidUuid(line.productId) ? line.productId : null,
+      productName: line.productName,
+      sku: line.sku || '',
+      partType: line.partType || 'ORIGINAL',
+      partCondition: line.partCondition || 'NUEVO',
+      unitPrice: 0,
+      quantity: Math.max(1, parseInt(line.quantity, 10) || 1),
+      vehicleBrand: line.carBrand || undefined,
+      vehicleModel: line.carModel || undefined,
+      vehicleYear: line.carYears || undefined,
+      orderItemId: line.orderItemId,
+    }))
+}
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
@@ -124,6 +169,11 @@ export default function CompraRegistrar() {
   const [editorNotes, setEditorNotes] = useState('')
   const [receiptFileName, setReceiptFileName] = useState('')
   const [linkedSalesOrder, setLinkedSalesOrder] = useState(null)
+  const [salesOrderLines, setSalesOrderLines] = useState([])
+  const [salesOrderLinesLoading, setSalesOrderLinesLoading] = useState(false)
+  const [partsModalOpen, setPartsModalOpen] = useState(false)
+  /** Piezas de nota de venta marcadas en el modal (solo lista en Notas; sin montos en resumen). */
+  const [selectedSalesOrderItemIds, setSelectedSalesOrderItemIds] = useState(() => new Set())
 
   const [brands, setBrands] = useState([])
   const [draftCarModels, setDraftCarModels] = useState([])
@@ -153,13 +203,7 @@ export default function CompraRegistrar() {
     [brands, draftBrandId],
   )
 
-  const totals = useMemo(() => {
-    const gross = lines.reduce((s, l) => s + Number(l.unitPrice || 0) * Math.max(1, parseInt(l.quantity, 10) || 1), 0)
-    const subtotal = Math.round(gross * 100) / 100
-    const tax = Math.round(subtotal * 0.16 * 100) / 100
-    const total = Math.round((subtotal + tax) * 100) / 100
-    return { subtotal, tax, total }
-  }, [lines])
+  const totals = useMemo(() => computePurchaseTotals(lines), [lines])
 
   const totalPiezas = useMemo(
     () => lines.reduce((s, l) => s + Math.max(1, parseInt(l.quantity, 10) || 1), 0),
@@ -167,12 +211,18 @@ export default function CompraRegistrar() {
   )
 
   const summaryVehicle = useMemo(() => {
-    const withV = lines.filter((l) => formatLineVehicleLabel(l))
+    const fromOrder = orderLinesToPayloadItems(salesOrderLines, selectedSalesOrderItemIds).map((l) => ({
+      vehicleBrand: l.vehicleBrand,
+      vehicleModel: l.vehicleModel,
+      vehicleYear: l.vehicleYear,
+      vehicleVersion: l.vehicleVersion,
+    }))
+    const withV = [...lines, ...fromOrder].filter((l) => formatLineVehicleLabel(l))
     if (withV.length === 0) return ''
     const uniq = new Set(withV.map((l) => vehicleLineFingerprint(l)))
     if (uniq.size === 1) return formatLineVehicleLabel(withV[0])
     return 'Varios vehículos'
-  }, [lines])
+  }, [lines, salesOrderLines, selectedSalesOrderItemIds])
 
   useEffect(() => {
     getBrands({ activeOnly: true }).then((r) => {
@@ -199,6 +249,52 @@ export default function CompraRegistrar() {
       if (r.success) setDlgCarModels(r.data || [])
     })
   }, [dlgBrandId])
+
+  const handleLinkedSalesOrderChange = (order) => {
+    setLinkedSalesOrder(order)
+    setSalesOrderLines([])
+    setPartsModalOpen(false)
+    setSelectedSalesOrderItemIds(new Set())
+    setEditorNotes('')
+  }
+
+  useEffect(() => {
+    if (!linkedSalesOrder?.id) return
+    setEditorNotes(markedPartsNamesList(salesOrderLines, selectedSalesOrderItemIds))
+  }, [linkedSalesOrder?.id, salesOrderLines, selectedSalesOrderItemIds])
+
+  const loadSalesOrderLines = useCallback(async () => {
+    const orderId = linkedSalesOrder?.id
+    if (!orderId) return
+    setSalesOrderLinesLoading(true)
+    setError('')
+    const r = await getSalesOrderPurchaseLines(orderId)
+    setSalesOrderLinesLoading(false)
+    if (r.success) {
+      setSalesOrderLines(r.data?.lines || [])
+    } else {
+      setSalesOrderLines([])
+      setError(r.error || 'No se pudieron cargar las piezas de la nota de venta')
+    }
+  }, [linkedSalesOrder?.id])
+
+  const openPartsModal = () => {
+    if (!linkedSalesOrder?.id) return
+    setPartsModalOpen(true)
+    void loadSalesOrderLines()
+  }
+
+  const toggleSalesOrderLine = (line) => {
+    if (line.alreadyPurchased) return
+    const id = line.orderItemId
+    setSelectedSalesOrderItemIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    setError('')
+  }
 
   const updateLine = (key, patch) => setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
   const removeLine = (key) => setLines((prev) => prev.filter((l) => l.key !== key))
@@ -280,10 +376,14 @@ export default function CompraRegistrar() {
     if (!safeTrim(editorProvider)) return 'Indica el proveedor'
     if (!editorPurchaseDate) return 'Indica la fecha de compra'
     const clean = lines.filter((l) => safeTrim(l.productName))
-    if (clean.length < 1) return 'Agrega al menos una pieza'
+    const markedCount = selectedSalesOrderItemIds.size
+    if (clean.length < 1 && markedCount < 1) {
+      return 'Marca autopartes de la nota de venta o agrega al menos una pieza manual'
+    }
     for (const l of clean) {
-      if (!l.partType || !l.partCondition) return 'Completa tipo y estado en cada pieza'
+      if (!l.partType || !l.partCondition) return 'Completa tipo y estado en cada pieza manual'
       if (Number(l.unitPrice) < 0 || Number.isNaN(Number(l.unitPrice))) return 'Revisa los precios unitarios'
+      if (Number(l.unitPrice) <= 0) return 'Indica el precio de compra en cada pieza manual del resumen'
     }
     return ''
   }
@@ -302,7 +402,35 @@ export default function CompraRegistrar() {
     setSaving(true)
     try {
       const cleanLines = lines.filter((l) => safeTrim(l.productName))
-      const headerVeh = summarizePurchaseHeaderVehicle(cleanLines)
+      const orderItems = orderLinesToPayloadItems(salesOrderLines, selectedSalesOrderItemIds)
+      const allItems = [
+        ...cleanLines.map((l) => ({
+          key: l.key,
+          productId: isValidUuid(l.productId) ? l.productId : null,
+          productName: l.productName.trim(),
+          sku: l.sku || '',
+          partType: l.partType,
+          partCondition: l.partCondition,
+          unitPrice: Number(l.unitPrice || 0),
+          quantity: Math.max(1, parseInt(l.quantity, 10) || 1),
+          vehicleBrandId: l.vehicleBrandId || undefined,
+          vehicleBrand: l.vehicleBrand || undefined,
+          vehicleModel: l.vehicleModel || undefined,
+          vehicleYear: l.vehicleYear || undefined,
+          vehicleVersion: l.vehicleVersion || undefined,
+        })),
+        ...orderItems,
+      ]
+      const headerVeh = summarizePurchaseHeaderVehicle([
+        ...cleanLines,
+        ...orderItems.map((l) => ({
+          vehicleBrandId: '',
+          vehicleBrand: l.vehicleBrand,
+          vehicleModel: l.vehicleModel,
+          vehicleYear: l.vehicleYear,
+          vehicleVersion: l.vehicleVersion,
+        })),
+      ])
       const apiBody = {
         providerName: editorProvider.trim(),
         purchaseDate: editorPurchaseDate,
@@ -317,22 +445,8 @@ export default function CompraRegistrar() {
         vehicleModel: headerVeh.vehicleModel || undefined,
         vehicleYear: headerVeh.vehicleYear || undefined,
         vehicleVersion: headerVeh.vehicleVersion || undefined,
-        total: totals.total,
-        items: cleanLines.map((l) => ({
-          key: l.key,
-          productId: l.productId ?? null,
-          productName: l.productName.trim(),
-          sku: l.sku || '',
-          partType: l.partType,
-          partCondition: l.partCondition,
-          unitPrice: Number(l.unitPrice || 0),
-          quantity: Math.max(1, parseInt(l.quantity, 10) || 1),
-          vehicleBrandId: l.vehicleBrandId || undefined,
-          vehicleBrand: l.vehicleBrand || undefined,
-          vehicleModel: l.vehicleModel || undefined,
-          vehicleYear: l.vehicleYear || undefined,
-          vehicleVersion: l.vehicleVersion || undefined,
-        })),
+        total: computePurchaseTotals(allItems).total,
+        items: allItems,
       }
       const result = await createPurchase(apiBody)
       if (!result.success) {
@@ -344,12 +458,16 @@ export default function CompraRegistrar() {
       void createNotification({
         type: 'purchase_created',
         title: 'Nueva compra en el panel',
-        message: `Compra a ${saved.providerName} · Total ${formatMoney(totals.total)}`,
-        payload: { purchaseId: saved.id, providerName: saved.providerName, total: totals.total },
+        message: `Compra a ${saved.providerName} · Total ${formatMoney(computePurchaseTotals(allItems).total)}`,
+        payload: {
+          purchaseId: saved.id,
+          providerName: saved.providerName,
+          total: computePurchaseTotals(allItems).total,
+        },
       }).catch(() => {})
       try {
         const registeredByDisplayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
-        downloadPurchaseNotePdf(saved, totals, { registeredByDisplayName })
+        downloadPurchaseNotePdf(saved, computePurchaseTotals(allItems), { registeredByDisplayName })
       } catch (pdfErr) {
         console.error(pdfErr)
       }
@@ -492,19 +610,37 @@ export default function CompraRegistrar() {
                     </FormControl>
                     <PurchaseSalesOrderPicker
                       value={linkedSalesOrder}
-                      onChange={setLinkedSalesOrder}
+                      onChange={handleLinkedSalesOrderChange}
                       disabled={saving}
-                      sx={{ flex: 1, width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 280 } }}
+                      sx={{ flex: 1, width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 200 } }}
                     />
+                    {linkedSalesOrder?.id ? (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={openPartsModal}
+                        disabled={saving}
+                        sx={{ flexShrink: 0, whiteSpace: 'nowrap', alignSelf: 'center' }}
+                      >
+                        Ver autopartes
+                        {selectedSalesOrderItemIds.size > 0 ? ` (${selectedSalesOrderItemIds.size})` : ''}
+                      </Button>
+                    ) : null}
                   </Box>
                   <TextField
                     label="Notas"
                     size="small"
                     value={editorNotes}
-                    onChange={(e) => setEditorNotes(e.target.value)}
+                    onChange={linkedSalesOrder?.id ? undefined : (e) => setEditorNotes(e.target.value)}
                     fullWidth
                     multiline
-                    minRows={2}
+                    minRows={3}
+                    InputProps={{ readOnly: !!linkedSalesOrder?.id }}
+                    placeholder={
+                      linkedSalesOrder?.id
+                        ? 'Marque piezas en «Ver autopartes» (un nombre por línea)'
+                        : 'Notas adicionales (opcional)'
+                    }
                   />
                 </Box>
                 <Divider sx={{ my: 2 }} />
@@ -534,6 +670,11 @@ export default function CompraRegistrar() {
                 </Typography>
               </Box>
               <Box sx={{ p: 2 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontWeight: 600 }}>
+                  {linkedSalesOrder?.id
+                    ? 'Piezas adicionales (fuera de la nota de venta) o use «Ver autopartes» arriba'
+                    : 'Agregar piezas manualmente'}
+                </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end', mb: 2 }}>
                   <FormControl size="small" sx={{ minWidth: 180 }}>
                     <InputLabel>Marca</InputLabel>
@@ -633,7 +774,7 @@ export default function CompraRegistrar() {
             </Paper>
           </Box>
 
-          {/* Columna tipo carrito (cotización) */}
+          {/* Resumen — solo piezas manuales con precio */}
           <Box
             sx={{
               width: { xs: '100%', lg: 520 },
@@ -676,9 +817,9 @@ export default function CompraRegistrar() {
                 <Typography variant="subtitle1" fontWeight={700} letterSpacing={0.3}>
                   Resumen de compra
                 </Typography>
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', ml: { xs: 0, sm: 1 } }}>
-                  ({lines.length} {lines.length === 1 ? 'línea' : 'líneas'} · {totalPiezas} piezas)
-                </Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', ml: { xs: 0, sm: 1 } }}>
+                    ({lines.length} {lines.length === 1 ? 'línea' : 'líneas'} · {totalPiezas} piezas)
+                  </Typography>
                 {summaryVehicle ? (
                   <Typography
                     variant="body2"
@@ -708,7 +849,9 @@ export default function CompraRegistrar() {
                 <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', mb: 1 }}>
                   {lines.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center', px: 1 }}>
-                      Vacío. Usa «Agregar pieza» para añadir líneas al resumen.
+                      {selectedSalesOrderItemIds.size > 0
+                        ? `${selectedSalesOrderItemIds.size} pieza(s) marcada(s) (ver nombres en Notas). Agregue piezas manuales aquí para capturar importes.`
+                        : 'Vacío. Use «Ver autopartes» o «Agregar pieza».'}
                     </Typography>
                   ) : (
                     <List dense disablePadding>
@@ -818,33 +961,34 @@ export default function CompraRegistrar() {
                 </Box>
 
                 <Box sx={{ flexShrink: 0 }}>
-                  <Divider sx={{ my: 1 }} />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.75 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Subtotal
-                    </Typography>
-                    <Typography variant="body1">{formatMoney(totals.subtotal)}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.35 }}>
-                    <Box sx={{ minWidth: 0, pr: 1 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        IVA (16%)
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25, lineHeight: 1.35 }}>
-                        Importe que se cobra por IVA
-                      </Typography>
-                    </Box>
-                    <Typography variant="body1" fontWeight={700}>
-                      {formatMoney(totals.tax)}
-                    </Typography>
-                  </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, lineHeight: 1.35 }}>
-                    16% × {formatMoney(totals.subtotal)} = {formatMoney(totals.tax)}
-                  </Typography>
-                  <Divider sx={{ my: 0.75 }} />
-                  <Typography variant="h6" color="primary" sx={{ fontSize: '1.05rem', lineHeight: 1.3 }}>
-                    Total: {formatMoney(totals.total)}
-                  </Typography>
+                  {lines.length > 0 ? (
+                    <>
+                      <Divider sx={{ my: 1 }} />
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.35 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Subtotal
+                        </Typography>
+                        <Typography variant="body1">{formatMoney(totals.subtotal)}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.35 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          IVA (16%)
+                        </Typography>
+                        <Typography variant="body1" fontWeight={700}>
+                          {formatMoney(totals.tax)}
+                        </Typography>
+                      </Box>
+                      <Divider sx={{ my: 0.75 }} />
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                          Total
+                        </Typography>
+                        <Typography variant="h6" color="primary" sx={{ fontSize: '1.05rem' }}>
+                          {formatMoney(totals.total)}
+                        </Typography>
+                      </Box>
+                    </>
+                  ) : null}
                 </Box>
               </Box>
             </Paper>
@@ -930,6 +1074,17 @@ export default function CompraRegistrar() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <PurchaseOrderLinesModal
+          open={partsModalOpen}
+          onClose={() => setPartsModalOpen(false)}
+          salesOrder={linkedSalesOrder}
+          lines={salesOrderLines}
+          loading={salesOrderLinesLoading}
+          selectedOrderItemIds={selectedSalesOrderItemIds}
+          onToggle={toggleSalesOrderLine}
+        />
+
         {permissionDeniedSnackbar}
       </Box>
     </Box>

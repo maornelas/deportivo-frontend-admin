@@ -78,6 +78,21 @@ export async function deletePurchase(ref) {
 }
 
 /** @param {{ startDate: string, endDate: string }} range */
+/** Piezas de nota de venta para registrar compra (incluye ya compradas). */
+export async function getSalesOrderPurchaseLines(orderId, { excludePurchaseId } = {}) {
+  const sp = new URLSearchParams({ orderId })
+  if (excludePurchaseId) sp.set('excludePurchaseId', excludePurchaseId)
+  const res = await apiFetch(`/purchases/sales-order-lines?${sp.toString()}`)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success) {
+    return { success: false, error: body.message || 'Error al cargar piezas' }
+  }
+  return { success: true, data: body.data }
+}
+
 export async function getPurchasesDaily(range) {
   const sp = new URLSearchParams({
     startDate: range.startDate,

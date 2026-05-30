@@ -31,6 +31,7 @@ import {
   Chip,
   Tabs,
   Tab,
+  InputAdornment,
 } from '@mui/material'
 import {
   Delete as DeleteIcon,
@@ -107,6 +108,21 @@ const filterCustomerOptions = createFilterOptions({
 
 function formatMoney(n) {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(n) || 0)
+}
+
+const DEFAULT_DELIVERY_LEAD_DAYS = 5
+
+/** Extrae días de valores guardados («5 días», «7 días hábiles», etc.). */
+function parseDeliveryLeadDays(value) {
+  if (value == null || value === '') return DEFAULT_DELIVERY_LEAD_DAYS
+  const m = String(value).trim().match(/^(\d+)/)
+  if (!m) return DEFAULT_DELIVERY_LEAD_DAYS
+  return Math.min(365, Math.max(1, parseInt(m[1], 10)))
+}
+
+function formatDeliveryLeadTime(days) {
+  const d = Math.min(365, Math.max(1, parseInt(String(days), 10) || DEFAULT_DELIVERY_LEAD_DAYS))
+  return `${d} días`
 }
 
 function cartLineKey(productId, sku) {
@@ -237,6 +253,8 @@ export default function CotizacionEditor() {
   const [notes, setNotes] = useState('')
   const [claimNumber, setClaimNumber] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
+  /** Días de surtido al agregar pieza externa (cada línea guarda el suyo). */
+  const [manualDeliveryLeadDays, setManualDeliveryLeadDays] = useState(DEFAULT_DELIVERY_LEAD_DAYS)
   const [status, setStatus] = useState('draft')
 
   /** Carrito: solo piezas agregadas desde búsqueda */
@@ -364,6 +382,9 @@ export default function CotizacionEditor() {
             isManual,
             savedPartCondition: it.partCondition || undefined,
             ...(parsed.partType ? { partType: parsed.partType, partCondition: parsed.partCondition } : {}),
+            ...(isManual
+              ? { deliveryLeadDays: parseDeliveryLeadDays(it.deliveryLeadTime) }
+              : {}),
           }
         })
         const productIds = [...new Set(baseLines.map((l) => l.productId).filter(Boolean))]
@@ -432,6 +453,9 @@ export default function CotizacionEditor() {
     carModel: (l.carModel || '').trim() || undefined,
     carYears: (l.carYears || '').trim() || undefined,
     partCondition: resolvePartConditionForApi(l),
+    ...(l.isManual
+      ? { deliveryLeadTime: formatDeliveryLeadTime(l.deliveryLeadDays ?? DEFAULT_DELIVERY_LEAD_DAYS) }
+      : {}),
   }))
 
   const capQtyToStock = (line, qty) => {
@@ -560,10 +584,12 @@ export default function CotizacionEditor() {
         carYears: years,
         partType: manualPartType,
         partCondition: manualPartCondition,
+        deliveryLeadDays: manualDeliveryLeadDays,
       },
     ])
     setManualPieceName('')
     setManualUnitPrice('')
+    setManualDeliveryLeadDays(DEFAULT_DELIVERY_LEAD_DAYS)
     setSnackbar({ open: true, message: 'Pieza externa agregada al carrito', severity: 'success' })
   }
 
@@ -1182,6 +1208,28 @@ export default function CotizacionEditor() {
                           InputProps={{ inputProps: { min: 0, step: 0.01 } }}
                           sx={{ width: 140 }}
                         />
+                        <TextField
+                          label="Surtido"
+                          size="small"
+                          type="number"
+                          value={manualDeliveryLeadDays}
+                          onChange={(e) => {
+                            const n = parseInt(e.target.value, 10)
+                            if (!Number.isNaN(n)) {
+                              setManualDeliveryLeadDays(Math.min(365, Math.max(1, n)))
+                            }
+                          }}
+                          title="Tiempo de surtido de esta pieza (columna Arribo en el PDF)"
+                          sx={{ width: 108 }}
+                          InputProps={{
+                            endAdornment: (
+                              <InputAdornment position="end" sx={{ '& .MuiTypography-root': { fontSize: '0.8125rem' } }}>
+                                días
+                              </InputAdornment>
+                            ),
+                          }}
+                          inputProps={{ min: 1, max: 365, step: 1 }}
+                        />
                       </Box>
                       <Box sx={{ display: 'flex', mt: 2 }}>
                         <Button
@@ -1334,6 +1382,16 @@ export default function CotizacionEditor() {
                                   sx={{ mt: 0.125, mb: 0.125, lineHeight: 1.25, fontSize: '0.7rem' }}
                                 >
                                   {partTypeLabel(l.partType)} · {partConditionLabel(l.partCondition)}
+                                </Typography>
+                              ) : null}
+                              {l.isManual ? (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  display="block"
+                                  sx={{ mb: 0.25, lineHeight: 1.25, fontSize: '0.7rem' }}
+                                >
+                                  Arribo: {formatDeliveryLeadTime(l.deliveryLeadDays ?? DEFAULT_DELIVERY_LEAD_DAYS)}
                                 </Typography>
                               ) : null}
                               {!l.isManual && (l.productPartType || l.productPartCondition) ? (

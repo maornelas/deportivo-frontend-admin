@@ -30,7 +30,7 @@ import { getSalesReport, getVentasAsesorNames, getIncomeStatement } from '../api
 import { getExpenseGastosReport, downloadExpenseReportCsv } from '../api/expenses'
 import { useAuth } from '../contexts/AuthContext'
 import { downloadVentasExcel } from '../utils/ventasReportExcel'
-import { buildVentasTotals, enrichVentasLines } from '../utils/ventasReportTotals'
+import { buildVentasTotals, enrichVentasLines, resolveLineUtilidad } from '../utils/ventasReportTotals'
 
 function money(n) {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(n) || 0)
@@ -104,13 +104,11 @@ function comisionesReportTitle(startDateStr, endDateStr, asesorNombre) {
 const VENTAS_INDICATOR_FIELDS = [
   { key: 'monto', label: 'Compra', color: '#ff9800', gradientStart: '#ffb74d' },
   { key: 'montoNeto', label: 'Compra + IVA', color: '#ef6c00', gradientStart: '#ff9800' },
-  { key: 'seguro', label: 'Cotización', color: '#2196f3', gradientStart: '#64b5f6' },
-  { key: 'seguroNeto', label: 'Cotización + IVA', color: '#7b1fa2', gradientStart: '#ab47bc' },
+  { key: 'seguro', label: 'Seguro', color: '#2196f3', gradientStart: '#64b5f6' },
+  { key: 'seguroNeto', label: 'Seguro neto', color: '#7b1fa2', gradientStart: '#ab47bc' },
   { key: 'utilidad', label: 'Utilidad', color: '#2e7d32', gradientStart: '#66bb6a' },
+  { key: 'comision', label: 'Comisión (2.5%)', color: '#00897b', gradientStart: '#4db6ac' },
 ]
-
-const VENTAS_COLUMN_HELP =
-  'Montos por pieza: MONTO = precio unitario de compra; MONTO NETO = compra + IVA (16 %); SEGURO = precio unitario de cotización; SEGURO NETO = cotización + IVA; UTILIDAD = SEGURO − MONTO (sin IVA). Si falta compra o cotización vinculada, la celda muestra «—».'
 
 function VentasReportIndicators({ totals }) {
   if (!totals) return null
@@ -374,38 +372,6 @@ export default function Reporteria() {
           <Tab label="Estado de resultados" value="income" />
         </Tabs>
 
-        {isVentasLocales && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-            Ventas con dirección de entrega en <strong>León, Guanajuato</strong> (envío o, si no hay envío, facturación).
-            Excluye canceladas y reembolsadas. {VENTAS_COLUMN_HELP}
-          </Typography>
-        )}
-        {isVentasForaneas && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-            Ventas con dirección <strong>fuera de León, Guanajuato</strong> (envío o facturación). Excluye canceladas y
-            reembolsadas. {VENTAS_COLUMN_HELP}
-          </Typography>
-        )}
-        {isComisiones && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-            Todas las ventas <strong>locales y foráneas</strong> del asesor en el rango (columna VENDEDOR / nota «Asesor:
-            …»). Excluye canceladas y reembolsadas. La utilidad por línea resalta en verde o rojo. {VENTAS_COLUMN_HELP}
-          </Typography>
-        )}
-        {reportTab === 'gastos' && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-            Gastos del módulo Gastos: líneas con monto y monto neto; el concepto coincide con la categoría del registro;
-            empleado = quien guardó en admin; proveedor DEPORTIVO. Agrupado por categoría.             Sin columna de siniestro.
-          </Typography>
-        )}
-        {reportTab === 'income' && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-            Utilidad bruta = total de venta (neto de líneas, todos los canales) − total de compra. Utilidad neta = bruta −
-            gastos diversos (gastos activos con categoría distinta de SUELDO) − bonos − comisiones. Los sueldos se listan
-            aparte. Compras, bonos y comisiones aparecen en $0.00 hasta conectar esos datos en el sistema.
-          </Typography>
-        )}
-
         <Paper sx={{ p: 2, mb: 2, display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
           <TextField
             size="small"
@@ -571,7 +537,9 @@ export default function Reporteria() {
                   </TableRow>
                 ) : (
                   <>
-                    {lines.map((row) => (
+                    {lines.map((row) => {
+                      const lineUtilidad = resolveLineUtilidad(row.monto, row.seguro)
+                      return (
                       <TableRow key={`${row.orderId}-${row.lineId}`}>
                         <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.siniestro || '—'}</TableCell>
                         <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.unidad || '—'}</TableCell>
@@ -596,17 +564,17 @@ export default function Reporteria() {
                           align="right"
                           sx={{
                             border: '1px solid #e0e0e0',
-                            ...utilidadCellSx(row.utilidad),
+                            ...utilidadCellSx(lineUtilidad),
                           }}
                         >
-                          {moneyOrDash(row.utilidad)}
+                          {moneyOrDash(lineUtilidad)}
                         </TableCell>
                         <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.vendedor || '—'}</TableCell>
                         <TableCell align="center" sx={{ border: '1px solid #e0e0e0', ...statusCellSx(row.status) }}>
                           {row.status || '—'}
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )})}
                     {(isVentasTab || isComisiones) && reportTotals && (
                       <TableRow>
                         <TableCell

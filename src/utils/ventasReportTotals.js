@@ -1,16 +1,21 @@
-/** UTILIDAD = SEGURO − MONTO (sin IVA). */
-export function resolveLineUtilidad(monto, seguro) {
-  if (monto == null || monto === '' || seguro == null || seguro === '') return null
-  const mn = Number(monto)
-  const sn = Number(seguro)
-  if (Number.isNaN(mn) || Number.isNaN(sn)) return null
-  return Math.round((sn - mn) * 100) / 100
+function parseAmount(v) {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  return Number.isNaN(n) ? null : n
 }
 
-/** Asegura utilidad en cada línea cuando hay monto y seguro. */
+/** UTILIDAD = SEGURO − MONTO (sin IVA). Monto o seguro ausente se tratan como 0 si el otro existe. */
+export function resolveLineUtilidad(monto, seguro) {
+  const mn = parseAmount(monto)
+  const sn = parseAmount(seguro)
+  if (mn == null && sn == null) return null
+  return Math.round(((sn ?? 0) - (mn ?? 0)) * 100) / 100
+}
+
+/** Asegura utilidad = seguro − monto en cada línea. */
 export function enrichVentasLines(lines) {
   return (lines || []).map((row) => {
-    const utilidad = resolveLineUtilidad(row.monto, row.seguro) ?? row.utilidad ?? null
+    const utilidad = resolveLineUtilidad(row.monto, row.seguro)
     return row.utilidad === utilidad ? row : { ...row, utilidad }
   })
 }
@@ -56,6 +61,15 @@ export function sumVentasSeguroByCanal(lines, canalVenta) {
   return sumVentasColumnByCanal(lines, canalVenta, 'seguro')
 }
 
+/** Tasa de comisión sobre el total Seguro (sin IVA) en reportería de ventas. */
+export const VENTAS_COMISION_RATE = 0.025
+
+export function computeComisionFromSeguro(seguroTotal) {
+  const s = Number(seguroTotal)
+  if (Number.isNaN(s)) return 0
+  return Math.round(s * VENTAS_COMISION_RATE * 100) / 100
+}
+
 export function buildVentasTotals(rows) {
   const enriched = enrichVentasLines(rows)
   if (!enriched.length) return null
@@ -67,5 +81,6 @@ export function buildVentasTotals(rows) {
     seguro,
     seguroNeto: sumVentasColumn(enriched, 'seguroNeto'),
     utilidad: Math.round((seguro - monto) * 100) / 100,
+    comision: computeComisionFromSeguro(seguro),
   }
 }

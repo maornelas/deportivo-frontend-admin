@@ -103,13 +103,43 @@ function formatCurrency(value) {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(value))
 }
 
+const EXPENSE_IVA_RATE = 0.16
+
 function round2(n) {
   return Math.round(Number(n) * 100) / 100
 }
 
+function expenseLineBase(amount, quantity) {
+  return round2((parseFloat(amount) || 0) * (Math.max(1, parseInt(String(quantity), 10) || 1)))
+}
+
+/** Monto neto de línea: manual sin IVA, o (monto × cantidad) + IVA si el manual está vacío. */
+function expenseLineNet(amount, quantity, netLineSubtotalStr) {
+  const line = expenseLineBase(amount, quantity)
+  const netStr = String(netLineSubtotalStr ?? '').trim()
+  if (netStr !== '') {
+    return round2(parseFloat(netStr) || 0)
+  }
+  return round2(line * (1 + EXPENSE_IVA_RATE))
+}
+
 function sumLineItems(items) {
   if (!Array.isArray(items)) return 0
-  return round2(items.reduce((acc, it) => acc + Number(it.amount || 0) * Number(it.quantity || 0), 0))
+  return round2(items.reduce((acc, it) => acc + expenseLineBase(it.amount, it.quantity), 0))
+}
+
+function sumLineItemsNet(items) {
+  if (!Array.isArray(items)) return 0
+  return round2(
+    items.reduce((acc, it) => acc + expenseLineNet(it.amount, it.quantity, it.netLineSubtotal), 0),
+  )
+}
+
+function isManualNetLine(lineSubtotal, netLineSubtotal) {
+  const line = round2(lineSubtotal)
+  const net = round2(netLineSubtotal)
+  const autoWithIva = round2(line * (1 + EXPENSE_IVA_RATE))
+  return Math.abs(net - line) > 0.005 && Math.abs(net - autoWithIva) > 0.005
 }
 
 const emptyItem = () => ({
@@ -171,6 +201,7 @@ const Gastos = () => {
   )
 
   const computedTotal = useMemo(() => sumLineItems(items), [items])
+  const computedTotalNet = useMemo(() => sumLineItemsNet(items), [items])
 
   useEffect(() => {
     getExpenseTypes({ activeOnly: false }).then((r) => {
@@ -336,7 +367,7 @@ const Gastos = () => {
             return {
               amount: i.amount,
               quantity: i.quantity ?? 1,
-              netLineSubtotal: Math.abs(net - line) > 0.005 ? String(net) : '',
+              netLineSubtotal: isManualNetLine(line, net) ? String(net) : '',
             }
           })
         : [emptyItem()],
@@ -371,12 +402,10 @@ const Gastos = () => {
       .map((i) => {
         const amount = round2(parseFloat(i.amount) || 0)
         const quantity = Math.max(1, parseInt(String(i.quantity), 10) || 1)
-        const line = round2(amount * quantity)
         const netStr = String(i.netLineSubtotal ?? '').trim()
-        const netParsed = netStr !== '' ? round2(parseFloat(netStr)) : line
         const base = { amount, quantity }
-        if (netStr !== '' && Math.abs(netParsed - line) > 0.005) {
-          base.netLineSubtotal = netParsed
+        if (netStr !== '') {
+          base.netLineSubtotal = round2(parseFloat(netStr) || 0)
         }
         if (sueldoEmployeeOrUnit) {
           base.employeeOrUnit = sueldoEmployeeOrUnit
@@ -832,15 +861,15 @@ const Gastos = () => {
                         value={it.netLineSubtotal}
                         onChange={(e) => updateItem(idx, 'netLineSubtotal', e.target.value)}
                         placeholder="opcional"
-                        helperText="Si vacío = monto × cantidad"
+                        helperText="Si vacío = (monto × cant.) + IVA 16 %"
                       />
                     </Grid>
                     <Grid item xs={6} sm={4} md={2}>
                       <Typography variant="caption" color="text.secondary" display="block">
-                        Subtotal
+                        {String(it.netLineSubtotal ?? '').trim() ? 'Neto (manual)' : 'Neto (+ IVA)'}
                       </Typography>
                       <Typography variant="body2" sx={{ pt: 0.5, fontWeight: 600 }}>
-                        {formatCurrency((parseFloat(it.amount) || 0) * (parseInt(it.quantity, 10) || 0))}
+                        {formatCurrency(expenseLineNet(it.amount, it.quantity, it.netLineSubtotal))}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={4} md={1}>
@@ -854,7 +883,9 @@ const Gastos = () => {
                   + Agregar línea
                 </Button>
                 <Alert severity="info" sx={{ mt: 2 }}>
-                  Total calculado (se envía al API): <strong>{formatCurrency(computedTotal)}</strong>
+                  Total monto sin IVA (registro): <strong>{formatCurrency(computedTotal)}</strong>
+                  <br />
+                  Total neto líneas: <strong>{formatCurrency(computedTotalNet)}</strong>
                 </Alert>
               </>
             )}
