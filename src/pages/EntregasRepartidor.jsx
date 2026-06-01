@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import {
   Box,
@@ -157,6 +157,10 @@ function getInitialListViewMode() {
 
 const DELIVERIES_TABLE_COL_COUNT = 5
 
+function deliveriesTableColCount(showRepartidorColumn) {
+  return showRepartidorColumn ? DELIVERIES_TABLE_COL_COUNT : DELIVERIES_TABLE_COL_COUNT - 1
+}
+
 const paginationToolbarSx = {
   borderTop: 1,
   borderColor: 'divider',
@@ -176,7 +180,7 @@ const paginationToolbarSx = {
   },
 }
 
-function DeliveriesTableHeadRow() {
+function DeliveriesTableHeadRow({ showRepartidorColumn = true }) {
   return (
     <TableRow>
       <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Folio</TableCell>
@@ -189,14 +193,16 @@ function DeliveriesTableHeadRow() {
       >
         Nota / pedido
       </TableCell>
-      <TableCell sx={{ maxWidth: { xs: 72, sm: 'none' } }}>Repartidor</TableCell>
+      {showRepartidorColumn ? (
+        <TableCell sx={{ maxWidth: { xs: 72, sm: 'none' } }}>Repartidor</TableCell>
+      ) : null}
       <TableCell sx={{ width: { xs: '24%', sm: 'auto' }, whiteSpace: 'nowrap' }}>F. entrega</TableCell>
       <TableCell sx={{ width: { xs: '18%', sm: 'auto' } }}>Estatus</TableCell>
     </TableRow>
   )
 }
 
-function DeliveryCompactCard({ row }) {
+function DeliveryCompactCard({ row, showRepartidorColumn = true }) {
   const orderNo = row.orderNumber || '—'
   const detailTo = row.orderNumber
     ? `/repartidor?folio=${encodeURIComponent(row.orderNumber)}`
@@ -371,27 +377,32 @@ function DeliveryCompactCard({ row }) {
           />
         </Box>
         <Box sx={{ minWidth: 0, mt: { xs: 0.35, md: 'auto' } }}>
-          <Typography variant="caption" sx={labelSx}>
-            Repartidor
-          </Typography>
-          <Typography
-            variant="caption"
-            title={repartidorLabel(row)}
-            sx={{ ...valueSx, WebkitLineClamp: { xs: 2, lg: 1 } }}
-          >
-            {repartidorLabel(row)}
-          </Typography>
+          {showRepartidorColumn ? (
+            <>
+              <Typography variant="caption" sx={labelSx}>
+                Repartidor
+              </Typography>
+              <Typography
+                variant="caption"
+                title={repartidorLabel(row)}
+                sx={{ ...valueSx, WebkitLineClamp: { xs: 2, lg: 1 } }}
+              >
+                {repartidorLabel(row)}
+              </Typography>
+            </>
+          ) : null}
         </Box>
       </Box>
     </Paper>
   )
 }
 
-export default function EntregasRepartidor() {
+export function RepartidorDeliveriesList({ embedded = false }) {
   const theme = useTheme()
   const isCompact = useMediaQuery(theme.breakpoints.down('md'))
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'))
   const { canViewPath, user } = useAuth()
+  const canViewAllDeliveries = Boolean(user?.rbac?.fullAccess)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -423,6 +434,7 @@ export default function EntregasRepartidor() {
   }, [isCompact])
 
   useEffect(() => {
+    if (!canViewAllDeliveries) return
     let cancelled = false
     ;(async () => {
       const res = await getUsers({ role: 'repartidor', activeOnly: true })
@@ -433,7 +445,12 @@ export default function EntregasRepartidor() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [canViewAllDeliveries])
+
+  const deliveryFilterUserId = useMemo(() => {
+    if (canViewAllDeliveries) return repartidorId || undefined
+    return user?.id || undefined
+  }, [canViewAllDeliveries, repartidorId, user?.id])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -443,7 +460,7 @@ export default function EntregasRepartidor() {
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       dateField: dateField || undefined,
-      deliveredByUserId: repartidorId || undefined,
+      deliveredByUserId: deliveryFilterUserId,
       page: page + 1,
       limit: rowsPerPage,
     })
@@ -456,7 +473,7 @@ export default function EntregasRepartidor() {
       setTotal(res.data.total ?? 0)
     }
     setLoading(false)
-  }, [statusFilter, dateFrom, dateTo, dateField, repartidorId, page, rowsPerPage])
+  }, [statusFilter, dateFrom, dateTo, dateField, deliveryFilterUserId, page, rowsPerPage])
 
   useEffect(() => {
     load()
@@ -467,7 +484,7 @@ export default function EntregasRepartidor() {
     setDateFrom('')
     setDateTo('')
     setDateField('created')
-    setRepartidorId('')
+    if (canViewAllDeliveries) setRepartidorId('')
     setPage(0)
   }
 
@@ -554,7 +571,7 @@ export default function EntregasRepartidor() {
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       dateField: dateField || undefined,
-      deliveredByUserId: repartidorId || undefined,
+      deliveredByUserId: deliveryFilterUserId,
       page: 1,
       limit: rowsPerPage,
     })
@@ -567,44 +584,26 @@ export default function EntregasRepartidor() {
   /** Campos del panel de filtros: ancho de celda en grid (móvil 2 col, sm+ auto-fill). */
   const filtersFieldSx = { width: '100%', minWidth: 0 }
 
-  if (!canViewPath('/entregas')) {
+  if (!canViewPath('/repartidor')) {
     return null
   }
 
-  return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <Box
-        sx={{
-          width: '100%',
-          maxWidth: '100%',
-          boxSizing: 'border-box',
-          marginTop: '70px',
-          pt: { xs: 1.25, sm: 1.5, md: 3 },
-          pr: { xs: 'max(12px, env(safe-area-inset-right, 0px))', sm: 2, md: 3 },
-          pb: { xs: 'max(16px, env(safe-area-inset-bottom, 0px))', md: 4 },
-          pl: {
-            xs: 'max(12px, env(safe-area-inset-left, 0px))',
-            sm: 2,
-            md: `${SIDEBAR_WIDTH + 32}px`,
-          },
-          minHeight: 'calc(100vh - 70px)',
-        }}
-      >
-        <Header onMenuClick={() => setSidebarOpen((o) => !o)} />
-
+  const listContent = (
+    <>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           alignItems={{ xs: 'stretch', sm: 'center' }}
           spacing={1}
           sx={{ mb: 2, rowGap: 1, columnGap: 1 }}
         >
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
-            <LocalShipping color="primary" sx={{ fontSize: { xs: 28, sm: 32 }, flexShrink: 0 }} />
-            <Typography variant="h5" sx={{ fontWeight: 700, fontSize: { xs: '1.15rem', sm: '1.5rem' } }}>
-              Entregas
-            </Typography>
-          </Stack>
+          {!embedded ? (
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+              <LocalShipping color="primary" sx={{ fontSize: { xs: 28, sm: 32 }, flexShrink: 0 }} />
+              <Typography variant="h5" sx={{ fontWeight: 700, fontSize: { xs: '1.15rem', sm: '1.5rem' } }}>
+                Repartidor — entregas
+              </Typography>
+            </Stack>
+          ) : null}
           {!isCompact && (
             <ToggleButtonGroup
               size="small"
@@ -824,33 +823,35 @@ export default function EntregasRepartidor() {
                     ))}
                   </Select>
                 </FormControl>
-                <FormControl
-                  size="small"
-                  sx={{
-                    ...filtersFieldSx,
-                    gridColumn: { xs: '1 / -1', sm: 'auto' },
-                  }}
-                >
-                  <InputLabel id="entregas-repartidor">Repartidor</InputLabel>
-                  <Select
-                    labelId="entregas-repartidor"
-                    label="Repartidor"
-                    value={repartidorId}
-                    onChange={(e) => {
-                      setPage(0)
-                      setRepartidorId(e.target.value)
+                {canViewAllDeliveries ? (
+                  <FormControl
+                    size="small"
+                    sx={{
+                      ...filtersFieldSx,
+                      gridColumn: { xs: '1 / -1', sm: 'auto' },
                     }}
                   >
-                    <MenuItem value="">
-                      <em>Todos</em>
-                    </MenuItem>
-                    {repartidores.map((u) => (
-                      <MenuItem key={u.id} value={u.id}>
-                        {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}
+                    <InputLabel id="entregas-repartidor">Repartidor</InputLabel>
+                    <Select
+                      labelId="entregas-repartidor"
+                      label="Repartidor"
+                      value={repartidorId}
+                      onChange={(e) => {
+                        setPage(0)
+                        setRepartidorId(e.target.value)
+                      }}
+                    >
+                      <MenuItem value="">
+                        <em>Todos</em>
                       </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                      {repartidores.map((u) => (
+                        <MenuItem key={u.id} value={u.id}>
+                          {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                ) : null}
               </Box>
               <Stack
                 direction="row"
@@ -933,7 +934,7 @@ export default function EntregasRepartidor() {
                 }}
               >
                 {rows.map((r) => (
-                  <DeliveryCompactCard key={r.id} row={r} />
+                  <DeliveryCompactCard key={r.id} row={r} showRepartidorColumn={canViewAllDeliveries} />
                 ))}
               </Box>
             ) : (
@@ -978,13 +979,13 @@ export default function EntregasRepartidor() {
             >
               <Table size="small" stickyHeader sx={deliveriesTableSx}>
                 <TableHead>
-                  <DeliveriesTableHeadRow />
+                  <DeliveriesTableHeadRow showRepartidorColumn={canViewAllDeliveries} />
                 </TableHead>
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={DELIVERIES_TABLE_COL_COUNT}
+                        colSpan={deliveriesTableColCount(canViewAllDeliveries)}
                         align="center"
                         sx={{
                           py: 4,
@@ -1039,11 +1040,13 @@ export default function EntregasRepartidor() {
                             {r.orderNumber || '—'}
                           </Link>
                         </TableCell>
-                        <TableCell sx={{ maxWidth: { xs: 72, sm: 160 } }}>
-                          <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 1.25 }}>
-                            {repartidorLabel(r)}
-                          </Typography>
-                        </TableCell>
+                        {canViewAllDeliveries ? (
+                          <TableCell sx={{ maxWidth: { xs: 72, sm: 160 } }}>
+                            <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 1.25 }}>
+                              {repartidorLabel(r)}
+                            </Typography>
+                          </TableCell>
+                        ) : null}
                         <TableCell sx={{ whiteSpace: 'nowrap', width: { xs: '24%', sm: 'auto' } }}>
                           <Box component="span" sx={{ fontSize: 'inherit' }}>
                             {formatDate(r.deliveredAt)}
@@ -1278,7 +1281,40 @@ export default function EntregasRepartidor() {
             </Button>
           </DialogActions>
         </Dialog>
+    </>
+  )
+
+  if (embedded) {
+    return listContent
+  }
+
+  return (
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          marginTop: '70px',
+          pt: { xs: 1.25, sm: 1.5, md: 3 },
+          pr: { xs: 'max(12px, env(safe-area-inset-right, 0px))', sm: 2, md: 3 },
+          pb: { xs: 'max(16px, env(safe-area-inset-bottom, 0px))', md: 4 },
+          pl: {
+            xs: 'max(12px, env(safe-area-inset-left, 0px))',
+            sm: 2,
+            md: `${SIDEBAR_WIDTH + 32}px`,
+          },
+          minHeight: 'calc(100vh - 70px)',
+        }}
+      >
+        <Header onMenuClick={() => setSidebarOpen((o) => !o)} />
+        {listContent}
       </Box>
     </Box>
   )
+}
+
+export default function EntregasRepartidor() {
+  return <RepartidorDeliveriesList embedded={false} />
 }

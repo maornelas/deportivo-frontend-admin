@@ -20,7 +20,6 @@ import Historial from './pages/Historial'
 import Notificaciones from './pages/Notificaciones'
 import Reporteria from './pages/Reporteria'
 import RepartidorEntregas from './pages/RepartidorEntregas'
-import EntregasRepartidor from './pages/EntregasRepartidor'
 import Tutoriales from './pages/Tutoriales'
 
 function ProtectedRoute({ children }) {
@@ -95,14 +94,7 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/entregas"
-        element={
-          <ProtectedRoute>
-            <EntregasRepartidor />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/entregas" element={<Navigate to="/repartidor" replace />} />
       <Route
         path="/historial"
         element={

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link as RouterLink } from 'react-router-dom'
 import {
   Box,
   Typography,
@@ -55,6 +55,7 @@ import { loadGoogleMaps } from '../repartidor/googleMapsHelpers'
 import SignaturePad from '../components/SignaturePad'
 import { SIDEBAR_WIDTH } from '../config/layout'
 import { useAuth } from '../contexts/AuthContext'
+import { RepartidorDeliveriesList } from './EntregasRepartidor'
 import { searchOrders, getOrderById, uploadSignedOrderSaleNotePdf } from '../api/orders'
 import { getDeliveryByOrderId, createDelivery, updateDelivery } from '../api/deliveries'
 /** Duración mínima de la pantalla de animación al iniciar entrega (ms). */
@@ -1109,7 +1110,7 @@ export default function RepartidorEntregas() {
     return () => clearInterval(int)
   }, [phase, routePaused, routeSeed, tripStarted])
 
-  if (!canViewPath('/repartidor') && !canViewPath('/entregas')) {
+  if (!canViewPath('/repartidor')) {
     return null
   }
 
@@ -1129,8 +1130,8 @@ export default function RepartidorEntregas() {
   const canEditDestination = phase === 'detail' && !isDeliveryCompleted
 
   const folioFromUrl = String(searchParams.get('folio') || searchParams.get('orderNumber') || '').trim()
-  /** Solo en /repartidor sin folio en URL y sin pedido: permitir buscar manualmente. */
-  const showManualFolioSearch = !folioFromUrl && !order
+  /** Listado de entregas cuando no hay nota cargada en la URL. */
+  const showDeliveriesList = !folioFromUrl && !order && phase === 'detail'
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -1155,43 +1156,28 @@ export default function RepartidorEntregas() {
         <Header onMenuClick={() => setSidebarOpen((o) => !o)} />
 
         <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+          {!showDeliveriesList ? (
+            <Button
+              component={RouterLink}
+              to="/repartidor"
+              size="small"
+              startIcon={<ArrowBack />}
+              sx={{ textTransform: 'none', mr: 0.5 }}
+            >
+              Listado
+            </Button>
+          ) : null}
           <LocalShipping color="primary" sx={{ fontSize: { xs: 28, sm: 32 } }} />
           <Typography variant="h5" sx={{ fontWeight: 700, fontSize: { xs: '1.15rem', sm: '1.5rem' } }}>
             Repartidor — entregas
           </Typography>
         </Stack>
 
-        {showManualFolioSearch && (
-          <Paper elevation={2} sx={{ p: { xs: 1.5, sm: 2 }, mb: 2, borderRadius: 2 }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Número de nota de venta"
-                value={folioInput}
-                onChange={(e) => setFolioInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') loadByFolio(folioInput)
-                }}
-                placeholder="Ej. ORD-000123"
-              />
-              <Button variant="contained" onClick={() => loadByFolio(folioInput)} disabled={loadState.loading}>
-                Cargar
-              </Button>
-            </Stack>
-            {loadState.loading && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                <CircularProgress />
-              </Box>
-            )}
-            {loadState.error && (
-              <Alert severity="warning" sx={{ mb: 1 }}>
-                {loadState.error}
-              </Alert>
-            )}
-          </Paper>
-        )}
-        {!showManualFolioSearch && (loadState.loading || loadState.error) && (
+        {showDeliveriesList ? (
+          <RepartidorDeliveriesList embedded />
+        ) : (
+          <>
+        {(loadState.loading || loadState.error) && (
           <Paper elevation={2} sx={{ p: { xs: 1.5, sm: 2 }, mb: 2, borderRadius: 2 }}>
             {loadState.loading && (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
@@ -2263,6 +2249,8 @@ export default function RepartidorEntregas() {
 
         {motoSplashOpen ? <MotoDeliverySplashOverlay /> : null}
         {handoffBusy ? <FinalizingDeliverySplashOverlay /> : null}
+          </>
+        )}
       </Box>
     </Box>
   )

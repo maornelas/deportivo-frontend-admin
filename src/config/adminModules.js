@@ -6,7 +6,6 @@ export const MODULE_CODE_BY_PATH = {
   '/ventas': 'module.ventas',
   '/compras': 'module.compras',
   '/gastos': 'module.gastos',
-  '/entregas': 'module.entregas',
   '/historial': 'module.historial',
   '/notificaciones': 'module.notificaciones',
   '/reporteria': 'module.reporteria',
@@ -40,7 +39,6 @@ export function moduleCodeForPath(pathname) {
 export const ADMIN_NAV_PATHS_ORDER = [
   '/dashboard',
   '/repartidor',
-  '/entregas',
   '/inventario',
   '/cotizaciones',
   '/ventas',
@@ -59,6 +57,9 @@ export function canViewPathFromRbac(rbac, pathname) {
   if (!rbac || rbac.fullAccess) return true
   const code = moduleCodeForPath(pathname)
   if (!code) return true
+  if (code === 'module.repartidor') {
+    return (rbac.grants || []).some((g) => g.code === 'module.repartidor' || g.code === 'module.entregas')
+  }
   return (rbac.grants || []).some((g) => g.code === code)
 }
 
