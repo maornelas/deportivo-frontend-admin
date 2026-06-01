@@ -21,7 +21,6 @@ import {
   Alert,
   Tab,
   Tabs,
-  Grid,
 } from '@mui/material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
@@ -113,13 +112,28 @@ const VENTAS_INDICATOR_FIELDS = [
 function VentasReportIndicators({ totals }) {
   if (!totals) return null
   return (
-    <Grid container spacing={{ xs: 2, sm: 2, md: 2.5 }} sx={{ mb: 2 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexWrap: { xs: 'wrap', md: 'nowrap' },
+        gap: { xs: 2, sm: 2.5, md: 3.5 },
+        mb: 2,
+        width: '100%',
+        overflowX: { md: 'auto' },
+      }}
+    >
       {VENTAS_INDICATOR_FIELDS.map(({ key, label, color, gradientStart }) => (
-        <Grid item xs={12} sm={6} md={4} lg={2} key={key} sx={{ display: 'flex' }}>
-          <SummaryCard title={label} value={money(totals[key])} color={color} gradientStart={gradientStart} />
-        </Grid>
+        <Box
+          key={key}
+          sx={{
+            flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 calc(33.333% - 12px)', md: '1 1 0' },
+            minWidth: { xs: 130, md: 110 },
+          }}
+        >
+          <SummaryCard compact title={label} value={money(totals[key])} color={color} gradientStart={gradientStart} />
+        </Box>
       ))}
-    </Grid>
+    </Box>
   )
 }
 

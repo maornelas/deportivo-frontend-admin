@@ -17,7 +17,7 @@ import {
   Legend,
 } from 'recharts'
 
-const SummaryCard = ({ title, value, color, gradientStart }) => {
+const SummaryCard = ({ title, value, color, gradientStart, compact = false }) => {
   const gradientEnd = color
   const background = gradientStart
     ? `linear-gradient(135deg, ${gradientStart} 0%, ${gradientEnd} 100%)`
@@ -28,15 +28,17 @@ const SummaryCard = ({ title, value, color, gradientStart }) => {
       elevation={0}
       sx={{
         width: '100%',
-        padding: { xs: '12px 14px', sm: '13px 16px', md: '14px 16px' },
-        borderRadius: '11px',
+        padding: compact
+          ? { xs: '9px 12px', sm: '10px 13px' }
+          : { xs: '12px 14px', sm: '13px 16px', md: '14px 16px' },
+        borderRadius: compact ? '9px' : '11px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         height: '100%',
-        minHeight: { xs: '88px', sm: '92px' },
+        minHeight: compact ? { xs: '68px', sm: '72px' } : { xs: '88px', sm: '92px' },
         ...(background ? { background } : { backgroundColor: gradientEnd }),
-        boxShadow: '0 3px 12px rgba(0, 0, 0, 0.09)',
+        boxShadow: compact ? '0 2px 8px rgba(0, 0, 0, 0.08)' : '0 3px 12px rgba(0, 0, 0, 0.09)',
         border: 'none',
       }}
     >
@@ -46,10 +48,15 @@ const SummaryCard = ({ title, value, color, gradientStart }) => {
           sx={{
             color: 'white',
             fontWeight: 700,
-            fontSize: { xs: '24px', sm: '26px', md: '28px' },
-            lineHeight: 1.2,
+            fontSize: compact
+              ? { xs: '17px', sm: '18px', md: '20px' }
+              : { xs: '24px', sm: '26px', md: '28px' },
+            lineHeight: 1.15,
             letterSpacing: '-0.02em',
-            marginBottom: '4px',
+            marginBottom: compact ? '3px' : '4px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
           {value}
@@ -58,9 +65,14 @@ const SummaryCard = ({ title, value, color, gradientStart }) => {
           variant="subtitle2"
           sx={{
             color: 'rgba(255, 255, 255, 0.92)',
-            fontSize: { xs: '12px', sm: '12.5px', md: '13px' },
+            fontSize: compact
+              ? { xs: '10px', sm: '10.5px', md: '11px' }
+              : { xs: '12px', sm: '12.5px', md: '13px' },
             fontWeight: 500,
-            lineHeight: 1.25,
+            lineHeight: 1.2,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
           {title}
@@ -68,19 +80,30 @@ const SummaryCard = ({ title, value, color, gradientStart }) => {
       </Box>
       <Box
         sx={{
-          width: { xs: '38px', sm: '40px', md: '42px' },
-          height: { xs: '38px', sm: '40px', md: '42px' },
+          width: compact
+            ? { xs: '28px', sm: '30px' }
+            : { xs: '38px', sm: '40px', md: '42px' },
+          height: compact
+            ? { xs: '28px', sm: '30px' }
+            : { xs: '38px', sm: '40px', md: '42px' },
           borderRadius: '50%',
           backgroundColor: 'rgba(255, 255, 255, 1)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          marginLeft: { xs: '10px', sm: '11px' },
+          marginLeft: compact ? { xs: '6px', sm: '7px' } : { xs: '10px', sm: '11px' },
           boxShadow: '0 2px 6px rgba(0, 0, 0, 0.09)',
         }}
       >
-        <BarChartIcon sx={{ color: color, fontSize: { xs: '21px', sm: '22px', md: '24px' } }} />
+        <BarChartIcon
+          sx={{
+            color: color,
+            fontSize: compact
+              ? { xs: '15px', sm: '16px' }
+              : { xs: '21px', sm: '22px', md: '24px' },
+          }}
+        />
       </Box>
     </Paper>
   )

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { SIDEBAR_WIDTH } from '../config/layout'
 
-import { Box, Typography, Grid, TextField } from '@mui/material'
+import { Box, Typography, TextField } from '@mui/material'
 import GridLayout from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
@@ -264,48 +264,34 @@ const Dashboard = () => {
           </Box>
         </Box>
 
-        <Grid container spacing={{ xs: 2, sm: 2, md: 2.5 }} sx={{ marginBottom: { xs: '22px', sm: '26px', md: '30px' } }}>
-          <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
-            <SummaryCard
-              title="Total de ventas"
-              value={totalSoldFormatted}
-              color="#ff9800"
-              gradientStart="#ffb74d"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
-            <SummaryCard
-              title="Total de gastos"
-              value={totalGastosFormatted}
-              color="#ef6c00"
-              gradientStart="#ff9800"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
-            <SummaryCard
-              title="Total de compras"
-              value={totalComprasFormatted}
-              color="#2196f3"
-              gradientStart="#64b5f6"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
-            <SummaryCard
-              title="Ventas Online"
-              value={onlineSalesFormatted}
-              color="#7b1fa2"
-              gradientStart="#ab47bc"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
-            <SummaryCard
-              title="Ventas por Asesor"
-              value={advisorSalesFormatted}
-              color="#4caf50"
-              gradientStart="#66bb6a"
-            />
-          </Grid>
-        </Grid>
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: { xs: 'wrap', md: 'nowrap' },
+            gap: { xs: 2, sm: 2.5, md: 3.5 },
+            mb: { xs: '22px', sm: '26px', md: '30px' },
+            width: '100%',
+            overflowX: { md: 'auto' },
+          }}
+        >
+          {[
+            { title: 'Total de ventas', value: totalSoldFormatted, color: '#ff9800', gradientStart: '#ffb74d' },
+            { title: 'Total de gastos', value: totalGastosFormatted, color: '#ef6c00', gradientStart: '#ff9800' },
+            { title: 'Total de compras', value: totalComprasFormatted, color: '#2196f3', gradientStart: '#64b5f6' },
+            { title: 'Ventas Online', value: onlineSalesFormatted, color: '#7b1fa2', gradientStart: '#ab47bc' },
+            { title: 'Ventas por Asesor', value: advisorSalesFormatted, color: '#4caf50', gradientStart: '#66bb6a' },
+          ].map(({ title, value, color, gradientStart }) => (
+            <Box
+              key={title}
+              sx={{
+                flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 calc(33.333% - 12px)', md: '1 1 0' },
+                minWidth: { xs: 130, md: 110 },
+              }}
+            >
+              <SummaryCard compact title={title} value={value} color={color} gradientStart={gradientStart} />
+            </Box>
+          ))}
+        </Box>
 
         <Box
           ref={containerRef}
