@@ -38,6 +38,7 @@ import { searchOrders, getOrderById, updateOrder, updateOrderSalesChannel, getOr
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
+import OrderCancellationDialog from '../orders/OrderCancellationDialog'
 
 const ORDER_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
@@ -117,6 +118,8 @@ const Ventas = () => {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
   const [statusSaving, setStatusSaving] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [pendingCancelStatus, setPendingCancelStatus] = useState(null)
   const [channelFilter, setChannelFilter] = useState('all')
   const [channelSaving, setChannelSaving] = useState(false)
 
@@ -183,7 +186,7 @@ const Ventas = () => {
     fetchOrders()
   }
 
-  const handleStatusChange = async (newStatus) => {
+  const handleStatusChange = async (newStatus, cancellationReason) => {
     if (!canDoAction(ACTION.VENTAS_CAMBIAR_ESTADO_ORDEN)) {
       showDenied()
       return
@@ -195,18 +198,46 @@ const Ventas = () => {
     if (newStatus === 'delivered' && user?.id) {
       payload.deliveredByUserId = user.id
     }
+    if (cancellationReason) {
+      payload.cancellationReason = cancellationReason
+    }
     const result = await updateOrder(detailOrder.id, payload)
     setStatusSaving(false)
     if (!result.success) {
       setDetailError(result.error || 'Error al actualizar estado')
       return
     }
+    setCancelDialogOpen(false)
+    setPendingCancelStatus(null)
     const refreshed = await getOrderById(detailOrder.id)
     if (refreshed.success && refreshed.data) {
       setDetailOrder(refreshed.data)
     } else {
-      setDetailOrder((prev) => (prev ? { ...prev, status: newStatus } : null))
+      setDetailOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: newStatus,
+              cancellationReason: cancellationReason || prev.cancellationReason,
+            }
+          : null,
+      )
     }
+  }
+
+  const handleStatusSelect = (newStatus) => {
+    if (!detailOrder?.id || newStatus === detailOrder.status) return
+    if (newStatus === 'cancelled' || newStatus === 'refunded') {
+      setPendingCancelStatus(newStatus)
+      setCancelDialogOpen(true)
+      return
+    }
+    void handleStatusChange(newStatus)
+  }
+
+  const handleConfirmCancellation = (cancellationReason) => {
+    if (!pendingCancelStatus) return
+    void handleStatusChange(pendingCancelStatus, cancellationReason)
   }
 
   const handleChannelFilterChange = (_, value) => {
@@ -363,7 +394,7 @@ const Ventas = () => {
                   {channelSaving && <CircularProgress size={24} />}
                   <FormControl size="small" sx={{ minWidth: 180 }}>
                     <InputLabel>Estado de la orden</InputLabel>
-                    <Select label="Estado de la orden" value={detailOrder.status || 'pending'} onChange={(e) => handleStatusChange(e.target.value)} disabled={statusSaving}>
+                    <Select label="Estado de la orden" value={detailOrder.status || 'pending'} onChange={(e) => handleStatusSelect(e.target.value)} disabled={statusSaving}>
                       {ORDER_STATUS_OPTIONS.map((opt) => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
                     </Select>
                   </FormControl>
@@ -406,11 +437,32 @@ const Ventas = () => {
                   <Typography variant="subtitle1" fontWeight="bold">Total: {formatCurrency(detailOrder.totalAmount, detailOrder.currency)}</Typography>
                 </Box>
                 {detailOrder.notes && <><Divider sx={{ my: 2 }} /><Typography variant="subtitle2" color="text.secondary">Notas</Typography><Typography variant="body2">{detailOrder.notes}</Typography></>}
+                {detailOrder.cancellationReason ? (
+                  <>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography variant="subtitle2" color="error">
+                      Causa de cancelación
+                    </Typography>
+                    <Typography variant="body2">{detailOrder.cancellationReason}</Typography>
+                  </>
+                ) : null}
               </Box>
             )}
           </DialogContent>
           <DialogActions><Button onClick={handleCloseDetail} color="inherit">Cerrar</Button></DialogActions>
         </Dialog>
+
+        <OrderCancellationDialog
+          open={cancelDialogOpen}
+          onClose={() => {
+            if (statusSaving) return
+            setCancelDialogOpen(false)
+            setPendingCancelStatus(null)
+          }}
+          onConfirm={handleConfirmCancellation}
+          statusLabel={ORDER_STATUS_OPTIONS.find((o) => o.value === pendingCancelStatus)?.label || 'Cancelado'}
+          saving={statusSaving}
+        />
 
         {permissionDeniedSnackbar}
       </Box>

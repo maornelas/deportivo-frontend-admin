@@ -61,6 +61,25 @@ export function sumVentasSeguroByCanal(lines, canalVenta) {
   return sumVentasColumnByCanal(lines, canalVenta, 'seguro')
 }
 
+/** Agrupa Seguro (±) por día de creación del pedido — mismo criterio que Reportería/Dashboard. */
+export function aggregateDailySeguro(lines) {
+  const byDate = new Map()
+  for (const row of lines || []) {
+    const raw = row.orderCreatedAt ?? row.createdAt ?? ''
+    const key = typeof raw === 'string' ? raw.slice(0, 10) : ''
+    if (!key) continue
+    const seguro = Number(row.seguro ?? 0)
+    if (Number.isNaN(seguro)) continue
+    byDate.set(key, (byDate.get(key) || 0) + seguro)
+  }
+  return Array.from(byDate.entries())
+    .map(([date, totalAmount]) => ({
+      date,
+      totalAmount: Math.round(totalAmount * 100) / 100,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
 /** Tasa de comisión sobre el total Seguro (sin IVA) en reportería de ventas. */
 export const VENTAS_COMISION_RATE = 0.025
 

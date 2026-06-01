@@ -32,6 +32,7 @@ import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
 import { searchOrders, getOrderById, updateOrder } from '../api/orders'
 import { useAuth } from '../contexts/AuthContext'
+import OrderCancellationDialog from '../orders/OrderCancellationDialog'
 
 const ORDER_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
@@ -102,6 +103,8 @@ const Pedidos = () => {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
   const [statusSaving, setStatusSaving] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [pendingCancelStatus, setPendingCancelStatus] = useState(null)
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -168,7 +171,7 @@ const Pedidos = () => {
     fetchOrders()
   }
 
-  const handleStatusChange = async (newStatus) => {
+  const handleStatusChange = async (newStatus, cancellationReason) => {
     if (!detailOrder?.id) return
     setStatusSaving(true)
     setDetailError('')
@@ -176,13 +179,46 @@ const Pedidos = () => {
     if (newStatus === 'delivered' && user?.id) {
       payload.deliveredByUserId = user.id
     }
+    if (cancellationReason) {
+      payload.cancellationReason = cancellationReason
+    }
     const result = await updateOrder(detailOrder.id, payload)
     setStatusSaving(false)
     if (!result.success) {
       setDetailError(result.error || 'Error al actualizar estado')
       return
     }
-    setDetailOrder((prev) => (prev ? { ...prev, status: newStatus } : null))
+    setCancelDialogOpen(false)
+    setPendingCancelStatus(null)
+    const refreshed = await getOrderById(detailOrder.id)
+    if (refreshed.success && refreshed.data) {
+      setDetailOrder(refreshed.data)
+    } else {
+      setDetailOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: newStatus,
+              cancellationReason: cancellationReason || prev.cancellationReason,
+            }
+          : null,
+      )
+    }
+  }
+
+  const handleStatusSelect = (newStatus) => {
+    if (!detailOrder?.id || newStatus === detailOrder.status) return
+    if (newStatus === 'cancelled' || newStatus === 'refunded') {
+      setPendingCancelStatus(newStatus)
+      setCancelDialogOpen(true)
+      return
+    }
+    void handleStatusChange(newStatus)
+  }
+
+  const handleConfirmCancellation = (cancellationReason) => {
+    if (!pendingCancelStatus) return
+    void handleStatusChange(pendingCancelStatus, cancellationReason)
   }
 
   return (
@@ -363,7 +399,7 @@ const Pedidos = () => {
                     <Select
                       label="Estado de la orden"
                       value={detailOrder.status || 'pending'}
-                      onChange={(e) => handleStatusChange(e.target.value)}
+                      onChange={(e) => handleStatusSelect(e.target.value)}
                       disabled={statusSaving}
                     >
                       {ORDER_STATUS_OPTIONS.map((opt) => (
@@ -455,6 +491,15 @@ const Pedidos = () => {
                     <Typography variant="body2">{detailOrder.notes}</Typography>
                   </>
                 )}
+                {detailOrder.cancellationReason ? (
+                  <>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography variant="subtitle2" color="error">
+                      Causa de cancelación
+                    </Typography>
+                    <Typography variant="body2">{detailOrder.cancellationReason}</Typography>
+                  </>
+                ) : null}
               </Box>
             )}
           </DialogContent>
@@ -462,6 +507,18 @@ const Pedidos = () => {
             <Button onClick={handleCloseDetail} color="inherit">Cerrar</Button>
           </DialogActions>
         </Dialog>
+
+        <OrderCancellationDialog
+          open={cancelDialogOpen}
+          onClose={() => {
+            if (statusSaving) return
+            setCancelDialogOpen(false)
+            setPendingCancelStatus(null)
+          }}
+          onConfirm={handleConfirmCancellation}
+          statusLabel={ORDER_STATUS_OPTIONS.find((o) => o.value === pendingCancelStatus)?.label || 'Cancelado'}
+          saving={statusSaving}
+        />
       </Box>
     </Box>
   )

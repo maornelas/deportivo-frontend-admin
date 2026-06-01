@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import {
   Box,
   Typography,
@@ -302,7 +302,6 @@ function googleMapsPlaceUrl(order, destLatLng) {
 
 export default function RepartidorEntregas() {
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const { canViewPath, user } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -1156,19 +1155,6 @@ export default function RepartidorEntregas() {
         <Header onMenuClick={() => setSidebarOpen((o) => !o)} />
 
         <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
-          <Tooltip title={canViewPath('/entregas') ? 'Volver a Entregas' : 'Volver'}>
-            <IconButton
-              color="primary"
-              aria-label="Volver"
-              onClick={() => {
-                if (canViewPath('/entregas')) navigate('/entregas')
-                else navigate(-1)
-              }}
-              sx={{ mr: { xs: 0, sm: 0.5 } }}
-            >
-              <ArrowBack />
-            </IconButton>
-          </Tooltip>
           <LocalShipping color="primary" sx={{ fontSize: { xs: 28, sm: 32 } }} />
           <Typography variant="h5" sx={{ fontWeight: 700, fontSize: { xs: '1.15rem', sm: '1.5rem' } }}>
             Repartidor — entregas

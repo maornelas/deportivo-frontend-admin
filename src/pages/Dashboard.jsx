@@ -13,11 +13,14 @@ import {
   ExpensesChart,
   ChannelSalesSummary,
 } from '../components/DashboardWidgets'
-import { getOrderDailySales } from '../api/orders'
 import { getSalesReport } from '../api/salesReports'
 import { getExpenseGastosReport } from '../api/expenses'
 import { getPurchasesDaily } from '../api/purchases'
-import { sumVentasSeguro, sumVentasSeguroByCanal } from '../utils/ventasReportTotals'
+import {
+  sumVentasSeguro,
+  sumVentasSeguroByCanal,
+  aggregateDailySeguro,
+} from '../utils/ventasReportTotals'
 
 /** YYYY-MM-DD en calendario local (misma semántica que <input type="date">). */
 function formatYMDLocal(d) {
@@ -59,15 +62,19 @@ const Dashboard = () => {
   const [expenseSummaryLoading, setExpenseSummaryLoading] = useState(true)
   const containerRef = useRef(null)
 
-  /** Total ventas = suma Seguro (precio cotización sin IVA), mismo criterio que Reportería. */
+  /** Totales y series diarias = Seguro (±), incluye canceladas/reembolsadas con signo negativo. */
   const fetchVentasReportTotals = useCallback(async () => {
     if (!startDate || !endDate) return
     setVentasReportTotalsLoading(true)
+    setDailySalesLoading(true)
+    setChannelDailyLoading(true)
     const [rLocal, rForaneo] = await Promise.all([
       getSalesReport({ kind: 'ventas_detalle', startDate, endDate, salesChannel: 'local' }),
       getSalesReport({ kind: 'ventas_detalle', startDate, endDate, salesChannel: 'foraneo' }),
     ])
     setVentasReportTotalsLoading(false)
+    setDailySalesLoading(false)
+    setChannelDailyLoading(false)
     const localLines = rLocal.success ? rLocal.data?.lines || [] : []
     const foraneoLines = rForaneo.success ? rForaneo.data?.lines || [] : []
     const allLines = [...localLines, ...foraneoLines]
@@ -76,30 +83,9 @@ const Dashboard = () => {
     setTotalVentasMonto(Math.round((seguroLocal + seguroForaneo) * 100) / 100)
     setAdvisorSalesTotal(sumVentasSeguroByCanal(allLines, 'Asesor'))
     setOnlineSalesTotal(sumVentasSeguroByCanal(allLines, 'Online'))
-  }, [startDate, endDate])
-
-  const fetchDailySales = useCallback(async () => {
-    if (!startDate || !endDate) return
-    setDailySalesLoading(true)
-    const result = await getOrderDailySales({ startDate, endDate })
-    setDailySalesLoading(false)
-    if (result.success && Array.isArray(result.data)) {
-      setDailySales(result.data)
-    } else {
-      setDailySales([])
-    }
-  }, [startDate, endDate])
-
-  const fetchChannelDailySales = useCallback(async () => {
-    if (!startDate || !endDate) return
-    setChannelDailyLoading(true)
-    const [rOnline, rAdvisor] = await Promise.all([
-      getOrderDailySales({ startDate, endDate, salesChannel: 'online' }),
-      getOrderDailySales({ startDate, endDate, salesChannel: 'advisor' }),
-    ])
-    setChannelDailyLoading(false)
-    setDailyChannelOnline(rOnline.success && Array.isArray(rOnline.data) ? rOnline.data : [])
-    setDailyChannelAdvisor(rAdvisor.success && Array.isArray(rAdvisor.data) ? rAdvisor.data : [])
+    setDailySales(aggregateDailySeguro(allLines))
+    setDailyChannelOnline(aggregateDailySeguro(allLines.filter((l) => l.canalVenta === 'Online')))
+    setDailyChannelAdvisor(aggregateDailySeguro(allLines.filter((l) => l.canalVenta === 'Asesor')))
   }, [startDate, endDate])
 
   const fetchDailyPurchases = useCallback(async () => {
@@ -146,14 +132,6 @@ const Dashboard = () => {
   useEffect(() => {
     fetchVentasReportTotals()
   }, [fetchVentasReportTotals])
-
-  useEffect(() => {
-    fetchDailySales()
-  }, [fetchDailySales])
-
-  useEffect(() => {
-    fetchChannelDailySales()
-  }, [fetchChannelDailySales])
 
   useEffect(() => {
     fetchGastosForDashboard()

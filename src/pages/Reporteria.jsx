@@ -134,6 +134,7 @@ function utilidadCellSx(utilidad) {
 function statusCellSx(status) {
   const s = String(status || '').toUpperCase()
   if (s === 'LIBERADO') return { bgcolor: '#C8E6C9', color: '#1b5e20', fontWeight: 700 }
+  if (s === 'CANCELADA') return { bgcolor: '#FFCDD2', color: '#b71c1c', fontWeight: 700 }
   return { bgcolor: '#FFCDD2', color: '#b71c1c', fontWeight: 700 }
 }
 

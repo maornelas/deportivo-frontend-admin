@@ -35,6 +35,7 @@ import {
 } from '@mui/material'
 import {
   Delete as DeleteIcon,
+  Edit as EditIcon,
   ArrowBack as BackIcon,
   PictureAsPdf as PdfIcon,
   Search as SearchIcon,
@@ -63,6 +64,7 @@ import { getAddressesByUser } from '../api/userAddress'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
+import { usePushNotification } from '../hooks/usePushNotification'
 
 /** Subtotal de línea con descuento % por pieza (alineado con backend `QuotationItem.fromInput`) */
 function lineDetail(unitPrice, qty, discountPercent) {
@@ -108,6 +110,11 @@ const filterCustomerOptions = createFilterOptions({
 
 function formatMoney(n) {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(n) || 0)
+}
+
+function formatCartLineVehicle(l) {
+  const parts = [(l.carBrand || '').trim(), (l.carModel || '').trim(), (l.carYears || '').trim()].filter(Boolean)
+  return parts.join(' - ')
 }
 
 const DEFAULT_DELIVERY_LEAD_DAYS = 5
@@ -239,6 +246,7 @@ export default function CotizacionEditor() {
   const navigate = useNavigate()
   const { canDoAction, user } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
+  const { notify, pushNotificationSnackbar } = usePushNotification()
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -286,6 +294,20 @@ export default function CotizacionEditor() {
   const [busyModal, setBusyModal] = useState({ open: false, message: '' })
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
 
+  /** Editar línea del carrito (nombre, cantidad, precio, descuento, vehículo) */
+  const [editLineKey, setEditLineKey] = useState(null)
+  const [dlgProductName, setDlgProductName] = useState('')
+  const [dlgQuantity, setDlgQuantity] = useState('1')
+  const [dlgUnitPrice, setDlgUnitPrice] = useState('')
+  const [dlgDiscountPercent, setDlgDiscountPercent] = useState('0')
+  const [dlgBrandId, setDlgBrandId] = useState('')
+  const [dlgModel, setDlgModel] = useState('')
+  const [dlgYear, setDlgYear] = useState('')
+  const [dlgPartType, setDlgPartType] = useState('ORIGINAL')
+  const [dlgPartCondition, setDlgPartCondition] = useState('NUEVO')
+  const [dlgDeliveryLeadDays, setDlgDeliveryLeadDays] = useState(DEFAULT_DELIVERY_LEAD_DAYS)
+  const [dlgCarModels, setDlgCarModels] = useState([])
+
   const totals = useMemo(() => totalsFromLines(cartLines), [cartLines])
   const vehicleBrandNameForApi = useMemo(
     () => (brands.find((b) => b.id === filterBrandId)?.name || '').trim(),
@@ -326,6 +348,22 @@ export default function CotizacionEditor() {
       if (r.success) setCarModels(r.data || [])
     })
   }, [filterBrandId])
+
+  useEffect(() => {
+    if (!dlgBrandId) {
+      setDlgCarModels([])
+      return
+    }
+    getCarModelsByBrand(dlgBrandId).then((r) => {
+      if (r.success) setDlgCarModels(r.data || [])
+    })
+  }, [dlgBrandId])
+
+  const editLine = useMemo(
+    () => (editLineKey ? cartLines.find((l) => l.key === editLineKey) : null),
+    [editLineKey, cartLines],
+  )
+  const cartReadOnly = status === 'sold'
 
   useEffect(() => {
     if (isNew) return
@@ -522,18 +560,6 @@ export default function CotizacionEditor() {
     )
   }
 
-  const setLineDiscountPercent = (key, raw) => {
-    const n = parseFloat(String(raw).replace(',', '.'))
-    const pct = Number.isNaN(n) ? 0 : Math.min(100, Math.max(0, n))
-    setCartLines((prev) => prev.map((l) => (l.key === key ? { ...l, discountPercent: pct } : l)))
-  }
-
-  const setLineUnitPrice = (key, raw) => {
-    const n = parseFloat(String(raw).replace(/,/g, ''))
-    const price = Number.isNaN(n) ? 0 : Math.max(0, Math.round(n * 100) / 100)
-    setCartLines((prev) => prev.map((l) => (l.key === key ? { ...l, unitPrice: price } : l)))
-  }
-
   const bumpQuantity = (key, delta) => {
     setCartLines((prev) =>
       prev.map((l) => {
@@ -546,6 +572,81 @@ export default function CotizacionEditor() {
 
   const removeFromCart = (key) => {
     setCartLines((prev) => prev.filter((l) => l.key !== key))
+  }
+
+  const updateCartLine = (key, patch) => {
+    setCartLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
+  }
+
+  const openEditLineDialog = (key) => {
+    if (cartReadOnly) return
+    const l = cartLines.find((x) => x.key === key)
+    if (!l) return
+    let matchedBrandId = ''
+    if (l.carBrand?.trim()) {
+      const vn = l.carBrand.trim().toLowerCase()
+      const hit = brands.find((b) => (b.name || '').trim().toLowerCase() === vn)
+      if (hit) matchedBrandId = hit.id
+    }
+    setEditLineKey(key)
+    setDlgProductName(l.productName || '')
+    setDlgQuantity(String(Math.max(1, parseInt(l.quantity, 10) || 1)))
+    setDlgUnitPrice(String(l.unitPrice ?? ''))
+    setDlgDiscountPercent(String(l.discountPercent ?? 0))
+    setDlgBrandId(matchedBrandId)
+    setDlgModel(l.carModel || '')
+    setDlgYear(l.carYears || '')
+    setDlgPartType(l.partType || 'ORIGINAL')
+    setDlgPartCondition(l.partCondition || 'NUEVO')
+    setDlgDeliveryLeadDays(l.deliveryLeadDays ?? DEFAULT_DELIVERY_LEAD_DAYS)
+  }
+
+  const closeEditLineDialog = () => {
+    setEditLineKey(null)
+  }
+
+  const saveEditLineDialog = () => {
+    if (!editLineKey || !editLine) return
+    const productName = (dlgProductName || '').trim()
+    if (!productName) {
+      setError('Indica el nombre de la pieza')
+      return
+    }
+    const qRaw = parseInt(String(dlgQuantity), 10)
+    const quantity = Number.isNaN(qRaw) ? 1 : Math.max(1, qRaw)
+    const unitPrice = Number(dlgUnitPrice)
+    if (Number.isNaN(unitPrice) || unitPrice < 0) {
+      setError('Indica un precio unitario válido')
+      return
+    }
+    const discRaw = parseFloat(String(dlgDiscountPercent).replace(',', '.'))
+    const discountPercent = Number.isNaN(discRaw) ? 0 : Math.min(100, Math.max(0, discRaw))
+    const brandName = (brands.find((b) => b.id === dlgBrandId)?.name || '').trim()
+    const cappedQty = capQtyToStock(editLine, quantity)
+    const patch = {
+      productName,
+      quantity: cappedQty,
+      unitPrice: Math.round(unitPrice * 100) / 100,
+      discountPercent,
+      carBrand: brandName,
+      carModel: (dlgModel || '').trim(),
+      carYears: (dlgYear || '').trim(),
+    }
+    if (editLine.isManual) {
+      patch.partType = dlgPartType
+      patch.partCondition = dlgPartCondition
+      patch.deliveryLeadDays = Math.min(
+        365,
+        Math.max(1, parseInt(String(dlgDeliveryLeadDays), 10) || DEFAULT_DELIVERY_LEAD_DAYS),
+      )
+    }
+    updateCartLine(editLineKey, patch)
+    setError('')
+    closeEditLineDialog()
+    notify('Pieza actualizada correctamente', {
+      browserTitle: 'Cotización — pieza actualizada',
+      browserBody: productName,
+    })
   }
 
   const addManualPartToCart = () => {
@@ -1343,16 +1444,28 @@ export default function CotizacionEditor() {
                                 mb: 0.75,
                                 py: 0.75,
                                 px: 1,
-                                pr: 4.5,
+                                pr: cartReadOnly ? 4.5 : 7,
                                 border: '1px solid',
                                 borderColor: 'divider',
                               }}
                             >
+                              {!cartReadOnly ? (
+                                <IconButton
+                                  size="small"
+                                  onClick={() => openEditLineDialog(l.key)}
+                                  aria-label="Editar pieza"
+                                  sx={{ position: 'absolute', top: 2, right: 30, p: 0.35 }}
+                                  color="primary"
+                                >
+                                  <EditIcon sx={{ fontSize: 18 }} />
+                                </IconButton>
+                              ) : null}
                               <IconButton
                                 size="small"
                                 onClick={() => removeFromCart(l.key)}
                                 aria-label="Quitar"
                                 color="error"
+                                disabled={cartReadOnly}
                                 sx={{ position: 'absolute', top: 2, right: 2, p: 0.35 }}
                               >
                                 <DeleteIcon sx={{ fontSize: 18 }} />
@@ -1406,6 +1519,20 @@ export default function CotizacionEditor() {
                                   {l.productPartCondition ? partConditionLabel(l.productPartCondition) : '—'}
                                 </Typography>
                               ) : null}
+                              {formatCartLineVehicle(l) ? (
+                                <Typography
+                                  variant="caption"
+                                  color="primary"
+                                  display="block"
+                                  sx={{ mt: 0.125, mb: 0.2, lineHeight: 1.25, fontSize: '0.68rem', fontWeight: 600 }}
+                                >
+                                  Vehículo: {formatCartLineVehicle(l)}
+                                </Typography>
+                              ) : null}
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.15, fontSize: '0.7rem' }}>
+                                Precio u.: {formatMoney(l.unitPrice)}
+                                {(l.discountPercent ?? 0) > 0 ? ` · Desc. ${l.discountPercent}%` : ''}
+                              </Typography>
                               <Typography
                                 variant="caption"
                                 color="text.secondary"
@@ -1442,13 +1569,20 @@ export default function CotizacionEditor() {
                                   {maxPieces != null ? ` (máx. ${maxPieces})` : ''}
                                 </Typography>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
-                                  <IconButton size="small" sx={{ p: 0.25 }} onClick={() => bumpQuantity(l.key, -1)} aria-label="Menos">
+                                  <IconButton
+                                    size="small"
+                                    sx={{ p: 0.25 }}
+                                    onClick={() => bumpQuantity(l.key, -1)}
+                                    aria-label="Menos"
+                                    disabled={cartReadOnly}
+                                  >
                                     <RemoveQtyIcon sx={{ fontSize: 18 }} />
                                   </IconButton>
                                   <TextField
                                     size="small"
                                     value={qty}
                                     onChange={(e) => setQuantity(l.key, e.target.value)}
+                                    disabled={cartReadOnly}
                                     inputProps={{
                                       min: 1,
                                       ...(maxPieces != null ? { max: maxPieces } : {}),
@@ -1461,27 +1595,11 @@ export default function CotizacionEditor() {
                                     sx={{ p: 0.25 }}
                                     onClick={() => bumpQuantity(l.key, 1)}
                                     aria-label="Más"
-                                    disabled={maxPieces != null && qty >= maxPieces}
+                                    disabled={cartReadOnly || (maxPieces != null && qty >= maxPieces)}
                                   >
                                     <AddQtyIcon sx={{ fontSize: 18 }} />
                                   </IconButton>
                                 </Box>
-                                <TextField
-                                  size="small"
-                                  label="Precio u."
-                                  value={l.unitPrice}
-                                  onChange={(e) => setLineUnitPrice(l.key, e.target.value)}
-                                  inputProps={{ min: 0, step: 0.01, style: { fontSize: '0.8rem' } }}
-                                  sx={{ width: 96, '& .MuiInputBase-input': { py: 0.35 } }}
-                                />
-                                <TextField
-                                  size="small"
-                                  label="Desc. %"
-                                  value={l.discountPercent ?? 0}
-                                  onChange={(e) => setLineDiscountPercent(l.key, e.target.value)}
-                                  inputProps={{ min: 0, max: 100, step: 0.5, style: { fontSize: '0.8rem' } }}
-                                  sx={{ width: 88, '& .MuiInputBase-input': { py: 0.35 } }}
-                                />
                                 <Typography variant="body2" fontWeight={700} sx={{ ml: { xs: 0, sm: 'auto' }, fontSize: '0.8125rem' }}>
                                   {formatMoney(sub)}
                                 </Typography>
@@ -1539,7 +1657,7 @@ export default function CotizacionEditor() {
                       letterSpacing: 0.5,
                     }}
                   >
-                    Generar cotización
+                    {quotationId ? 'Regenerar cotización' : 'Generar cotización'}
                   </Button>
                 </Box>
               </Box>
@@ -1547,6 +1665,178 @@ export default function CotizacionEditor() {
           </>
         )}
         </Box>
+
+        <Dialog open={editLineKey != null} onClose={closeEditLineDialog} maxWidth="sm" fullWidth>
+          <DialogTitle
+            sx={{
+              bgcolor: '#7B2CBF',
+              color: '#fff',
+              fontWeight: 600,
+              py: 1,
+              px: 2,
+              pr: 0.75,
+              minHeight: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Typography component="span" variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+              Editar pieza
+            </Typography>
+            <IconButton size="small" onClick={closeEditLineDialog} sx={{ color: '#fff', p: 0.5 }} aria-label="Cerrar">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent sx={{ pt: 2.5 }}>
+            <TextField
+              label="Nombre de pieza"
+              size="small"
+              value={dlgProductName}
+              onChange={(e) => setDlgProductName(e.target.value)}
+              fullWidth
+              sx={{ mt: 1.5, mb: 2 }}
+              inputProps={{ maxLength: 255 }}
+            />
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end' }}>
+              <TextField
+                label="Cantidad"
+                size="small"
+                type="number"
+                value={dlgQuantity}
+                onChange={(e) => setDlgQuantity(e.target.value)}
+                inputProps={{
+                  min: 1,
+                  ...(editLine && !editLine.isManual && normalizeInventoryUnits(editLine.stockQuantity) != null
+                    ? { max: Math.max(1, normalizeInventoryUnits(editLine.stockQuantity)) }
+                    : {}),
+                  step: 1,
+                }}
+                sx={{ width: 110 }}
+                helperText={
+                  editLine && !editLine.isManual && normalizeInventoryUnits(editLine.stockQuantity) != null
+                    ? `Máx. ${Math.max(1, normalizeInventoryUnits(editLine.stockQuantity))} en inventario`
+                    : undefined
+                }
+              />
+              <TextField
+                label="Precio unitario"
+                size="small"
+                type="number"
+                value={dlgUnitPrice}
+                onChange={(e) => setDlgUnitPrice(e.target.value)}
+                inputProps={{ min: 0, step: 0.01 }}
+                sx={{ width: 160 }}
+              />
+              <TextField
+                label="Desc. %"
+                size="small"
+                type="number"
+                value={dlgDiscountPercent}
+                onChange={(e) => setDlgDiscountPercent(e.target.value)}
+                inputProps={{ min: 0, max: 100, step: 0.5 }}
+                sx={{ width: 110 }}
+              />
+            </Box>
+            {editLine?.isManual ? (
+              <>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  Pieza externa
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end' }}>
+                  <FormControl size="small" sx={{ minWidth: 140 }}>
+                    <InputLabel>Tipo</InputLabel>
+                    <Select label="Tipo" value={dlgPartType} onChange={(e) => setDlgPartType(e.target.value)}>
+                      {PIEZA_MANUAL_TIPO.map((o) => (
+                        <MenuItem key={o.value} value={o.value}>
+                          {o.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" sx={{ minWidth: 140 }}>
+                    <InputLabel>Estado</InputLabel>
+                    <Select label="Estado" value={dlgPartCondition} onChange={(e) => setDlgPartCondition(e.target.value)}>
+                      {PIEZA_MANUAL_ESTADO.map((o) => (
+                        <MenuItem key={o.value} value={o.value}>
+                          {o.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    label="Surtido (días)"
+                    size="small"
+                    type="number"
+                    value={dlgDeliveryLeadDays}
+                    onChange={(e) => setDlgDeliveryLeadDays(e.target.value)}
+                    inputProps={{ min: 1, max: 365, step: 1 }}
+                    sx={{ width: 140 }}
+                  />
+                </Box>
+              </>
+            ) : editLine && (editLine.productPartType || editLine.productPartCondition) ? (
+              <>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {editLine.productPartType ? partTypeLabel(editLine.productPartType) : '—'}
+                  {' · '}
+                  {editLine.productPartCondition ? partConditionLabel(editLine.productPartCondition) : '—'}
+                </Typography>
+              </>
+            ) : null}
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+              Vehículo
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end' }}>
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <InputLabel>Marca</InputLabel>
+                <Select
+                  label="Marca"
+                  value={dlgBrandId}
+                  onChange={(e) => {
+                    setDlgBrandId(e.target.value)
+                    setDlgModel('')
+                  }}
+                >
+                  <MenuItem value="">Sin especificar</MenuItem>
+                  {brands.map((b) => (
+                    <MenuItem key={b.id} value={b.id}>
+                      {b.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 200 }} disabled={!dlgBrandId}>
+                <InputLabel>Modelo</InputLabel>
+                <Select label="Modelo" value={dlgModel} onChange={(e) => setDlgModel(e.target.value)}>
+                  <MenuItem value="">Sin especificar</MenuItem>
+                  {dlgCarModels.map((m) => (
+                    <MenuItem key={m.id ?? m.name} value={m.name}>
+                      {m.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                label="Año"
+                size="small"
+                value={dlgYear}
+                onChange={(e) => setDlgYear(e.target.value)}
+                sx={{ width: 100 }}
+                inputProps={{ maxLength: 20 }}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeEditLineDialog}>Cancelar</Button>
+            <Button variant="contained" onClick={saveEditLineDialog} sx={{ bgcolor: '#7B2CBF', '&:hover': { bgcolor: '#6A26A8' } }}>
+              Guardar
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Dialog open={imageGallery.open} onClose={() => setImageGallery((g) => ({ ...g, open: false }))} maxWidth="md" fullWidth>
           <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
@@ -1698,6 +1988,7 @@ export default function CotizacionEditor() {
           </DialogActions>
         </Dialog>
         {permissionDeniedSnackbar}
+        {pushNotificationSnackbar}
       </Box>
     </Box>
   )

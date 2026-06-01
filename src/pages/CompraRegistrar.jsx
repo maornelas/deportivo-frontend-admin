@@ -27,6 +27,7 @@ import {
 import {
   ArrowBack as BackIcon,
   Add as AddIcon,
+  Close as CloseIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
   Remove as RemoveQtyIcon,
@@ -42,6 +43,7 @@ import { usePurchases } from '../contexts/PurchasesContext'
 import { createPurchase, getSalesOrderPurchaseLines } from '../api/purchases'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
+import { usePushNotification } from '../hooks/usePushNotification'
 import {
   formatLineVehicleLabel,
   summarizePurchaseHeaderVehicle,
@@ -158,6 +160,7 @@ export default function CompraRegistrar() {
   const { canDoAction, user } = useAuth()
   const { refreshPurchases } = usePurchases()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
+  const { notify, pushNotificationSnackbar } = usePushNotification()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -190,8 +193,11 @@ export default function CompraRegistrar() {
   const [draftYear, setDraftYear] = useState('')
   const [draftVersion, setDraftVersion] = useState('')
 
-  /** Editar vehículo de una línea ya en el resumen */
+  /** Editar línea del resumen (nombre, cantidad, precio, vehículo) */
   const [vehicleDialogKey, setVehicleDialogKey] = useState(null)
+  const [dlgProductName, setDlgProductName] = useState('')
+  const [dlgQuantity, setDlgQuantity] = useState('1')
+  const [dlgUnitPrice, setDlgUnitPrice] = useState('')
   const [dlgBrandId, setDlgBrandId] = useState('')
   const [dlgModel, setDlgModel] = useState('')
   const [dlgYear, setDlgYear] = useState('')
@@ -303,6 +309,9 @@ export default function CompraRegistrar() {
     const l = lines.find((x) => x.key === key)
     if (!l) return
     setVehicleDialogKey(key)
+    setDlgProductName(l.productName || '')
+    setDlgQuantity(String(Math.max(1, parseInt(l.quantity, 10) || 1)))
+    setDlgUnitPrice(String(l.unitPrice ?? ''))
     setDlgBrandId(l.vehicleBrandId || '')
     setDlgModel(l.vehicleModel || '')
     setDlgYear(l.vehicleYear || '')
@@ -315,15 +324,39 @@ export default function CompraRegistrar() {
 
   const saveVehicleDialog = () => {
     if (!vehicleDialogKey) return
-    const name = (brands.find((b) => b.id === dlgBrandId)?.name || '').trim()
+    const productName = safeTrim(dlgProductName)
+    if (!productName) {
+      setError('Indica el nombre de la pieza')
+      return
+    }
+    const qRaw = parseInt(String(dlgQuantity), 10)
+    const quantity = Number.isNaN(qRaw) ? 1 : Math.max(1, qRaw)
+    const unitPrice = Number(dlgUnitPrice)
+    if (Number.isNaN(unitPrice) || unitPrice < 0) {
+      setError('Indica un precio unitario válido')
+      return
+    }
+    if (unitPrice <= 0) {
+      setError('Indica el precio unitario de la pieza')
+      return
+    }
+    const brandName = (brands.find((b) => b.id === dlgBrandId)?.name || '').trim()
     updateLine(vehicleDialogKey, {
+      productName,
+      quantity,
+      unitPrice,
       vehicleBrandId: dlgBrandId || '',
-      vehicleBrand: name,
+      vehicleBrand: brandName,
       vehicleModel: dlgModel?.trim() || '',
       vehicleYear: dlgYear?.trim() || '',
       vehicleVersion: dlgVersion?.trim() || '',
     })
+    setError('')
     closeVehicleDialog()
+    notify('Pieza actualizada correctamente', {
+      browserTitle: 'Compra — pieza actualizada',
+      browserBody: productName,
+    })
   }
 
   const bumpQuantity = (key, delta) => {
@@ -878,7 +911,7 @@ export default function CompraRegistrar() {
                             <IconButton
                               size="small"
                               onClick={() => openVehicleDialog(l.key)}
-                              aria-label="Editar vehículo de la línea"
+                              aria-label="Editar pieza de la línea"
                               sx={{ position: 'absolute', top: 2, right: 30, p: 0.35 }}
                               color="primary"
                             >
@@ -1015,9 +1048,62 @@ export default function CompraRegistrar() {
         </Box>
         </Box>
         <Dialog open={vehicleDialogKey != null} onClose={closeVehicleDialog} maxWidth="sm" fullWidth>
-          <DialogTitle>Vehículo de esta línea</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, pt: 1, alignItems: 'flex-end' }}>
+          <DialogTitle
+            sx={{
+              bgcolor: '#7B2CBF',
+              color: '#fff',
+              fontWeight: 600,
+              py: 1,
+              px: 2,
+              pr: 0.75,
+              minHeight: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Typography component="span" variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+              Editar pieza
+            </Typography>
+            <IconButton size="small" onClick={closeVehicleDialog} sx={{ color: '#fff', p: 0.5 }} aria-label="Cerrar">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent sx={{ pt: 2.5 }}>
+            <TextField
+              label="Nombre de pieza"
+              size="small"
+              value={dlgProductName}
+              onChange={(e) => setDlgProductName(e.target.value)}
+              fullWidth
+              sx={{ mt: 1.5, mb: 2 }}
+              inputProps={{ maxLength: 255 }}
+            />
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end' }}>
+              <TextField
+                label="Cantidad"
+                size="small"
+                type="number"
+                value={dlgQuantity}
+                onChange={(e) => setDlgQuantity(e.target.value)}
+                inputProps={{ min: 1, step: 1 }}
+                sx={{ width: 110 }}
+              />
+              <TextField
+                label="Precio unitario"
+                size="small"
+                type="number"
+                value={dlgUnitPrice}
+                onChange={(e) => setDlgUnitPrice(e.target.value)}
+                inputProps={{ min: 0, step: 0.01 }}
+                sx={{ width: 160 }}
+              />
+            </Box>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+              Vehículo
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end' }}>
               <FormControl size="small" sx={{ minWidth: 180 }}>
                 <InputLabel>Marca</InputLabel>
                 <Select
@@ -1086,6 +1172,7 @@ export default function CompraRegistrar() {
         />
 
         {permissionDeniedSnackbar}
+        {pushNotificationSnackbar}
       </Box>
     </Box>
   )
