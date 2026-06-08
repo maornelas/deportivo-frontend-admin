@@ -24,6 +24,21 @@ const BORDER_GRID = {
   right: BORDER_THIN,
 }
 
+const VENTAS_COLUMN_WIDTHS = [
+  { width: 14 },
+  { width: 28 },
+  { width: 42 },
+  { width: 16 },
+  { width: 26 },
+  { width: 14 },
+  { width: 14 },
+  { width: 14 },
+  { width: 14 },
+  { width: 14 },
+  { width: 14 },
+  { width: 12 },
+]
+
 function moneyNumber(v) {
   if (v == null || v === '') return null
   const n = Number(v)
@@ -43,22 +58,23 @@ function statusFont(status) {
 }
 
 /**
+ * @param {ExcelJS.Workbook} wb
  * @param {{
+ *   sheetName?: string,
  *   title: string,
  *   lines: Array<Record<string, unknown>>,
- *   filename: string,
  *   totals?: { monto: number, montoNeto: number, seguro: number, seguroNeto: number, utilidad: number } | null,
+ *   titleColor?: string,
  * }} opts
  */
-export async function downloadVentasExcel({ title, lines, filename, totals = null }) {
-  const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet('Ventas', { views: [{ showGridLines: true }] })
+export function addVentasWorksheet(wb, { sheetName = 'Ventas', title, lines, totals = null, titleColor = 'FFF57C00' }) {
+  const ws = wb.addWorksheet(sheetName, { views: [{ showGridLines: true }] })
 
   ws.mergeCells('A1:L1')
   const titleCell = ws.getCell('A1')
   titleCell.value = title
   titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } }
-  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF57C00' } }
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: titleColor } }
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
   ws.getRow(1).height = 28
 
@@ -82,7 +98,6 @@ export async function downloadVentasExcel({ title, lines, filename, totals = nul
     c.value = 'Sin filas en el rango seleccionado.'
     c.alignment = { horizontal: 'center' }
     c.border = BORDER_GRID
-    r += 1
   } else {
     for (const line of lines) {
       const row = ws.getRow(r)
@@ -156,25 +171,13 @@ export async function downloadVentasExcel({ title, lines, filename, totals = nul
       const tail = row.getCell(11)
       tail.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCE93D8' } }
       tail.border = BORDER_GRID
-      r += 1
     }
   }
 
-  ws.columns = [
-    { width: 14 },
-    { width: 28 },
-    { width: 42 },
-    { width: 16 },
-    { width: 26 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 12 },
-  ]
+  ws.columns = VENTAS_COLUMN_WIDTHS
+}
 
+export async function downloadExcelWorkbook(wb, filename) {
   const buf = await wb.xlsx.writeBuffer()
   const blob = new Blob([buf], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -185,4 +188,18 @@ export async function downloadVentasExcel({ title, lines, filename, totals = nul
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+/**
+ * @param {{
+ *   title: string,
+ *   lines: Array<Record<string, unknown>>,
+ *   filename: string,
+ *   totals?: { monto: number, montoNeto: number, seguro: number, seguroNeto: number, utilidad: number } | null,
+ * }} opts
+ */
+export async function downloadVentasExcel({ title, lines, filename, totals = null }) {
+  const wb = new ExcelJS.Workbook()
+  addVentasWorksheet(wb, { title, lines, totals })
+  await downloadExcelWorkbook(wb, filename)
 }

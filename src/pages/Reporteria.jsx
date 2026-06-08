@@ -29,6 +29,7 @@ import { getSalesReport, getVentasAsesorNames, getIncomeStatement } from '../api
 import { getExpenseGastosReport, downloadExpenseReportCsv } from '../api/expenses'
 import { useAuth } from '../contexts/AuthContext'
 import { downloadVentasExcel } from '../utils/ventasReportExcel'
+import { downloadReporteriaAllExcel } from '../utils/reporteriaAllExcel'
 import { buildVentasTotals, enrichVentasLines, resolveLineUtilidad } from '../utils/ventasReportTotals'
 
 function money(n) {
@@ -172,6 +173,8 @@ export default function Reporteria() {
   const [gastosLoading, setGastosLoading] = useState(false)
   const [gastosError, setGastosError] = useState('')
   const [gastosData, setGastosData] = useState(null)
+  const [downloadingAll, setDownloadingAll] = useState(false)
+  const [downloadAllError, setDownloadAllError] = useState('')
 
   useEffect(() => {
     const now = new Date()
@@ -349,6 +352,20 @@ export default function Reporteria() {
     })
   }
 
+  const handleDownloadAll = async () => {
+    if (!startDate || !endDate) {
+      setDownloadAllError('Selecciona fecha inicio y fin.')
+      return
+    }
+    setDownloadAllError('')
+    setDownloadingAll(true)
+    const result = await downloadReporteriaAllExcel({ startDate, endDate })
+    setDownloadingAll(false)
+    if (!result.success) {
+      setDownloadAllError(result.error || 'Error al descargar el concentrado')
+    }
+  }
+
   if (!canViewPath('/reporteria')) {
     return null
   }
@@ -375,17 +392,43 @@ export default function Reporteria() {
           Reportería
         </Typography>
 
-        <Tabs
-          value={reportTab}
-          onChange={(_, v) => setReportTab(v)}
-          sx={{ mb: 2, borderBottom: 1, borderColor: 'divider', flexWrap: 'wrap', '& .MuiTab-root': { minHeight: 44 } }}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 1,
+            mb: 2,
+          }}
         >
-          <Tab label="Ventas locales" value="ventas_locales" />
-          <Tab label="Ventas foráneas" value="ventas_foraneas" />
-          <Tab label="Comisiones" value="comisiones" />
-          <Tab label="Gastos" value="gastos" />
-          <Tab label="Estado de resultados" value="income" />
-        </Tabs>
+          <Tabs
+            value={reportTab}
+            onChange={(_, v) => setReportTab(v)}
+            sx={{ borderBottom: 1, borderColor: 'divider', flex: 1, minWidth: 0, '& .MuiTab-root': { minHeight: 44 } }}
+          >
+            <Tab label="Ventas locales" value="ventas_locales" />
+            <Tab label="Ventas foráneas" value="ventas_foraneas" />
+            <Tab label="Comisiones" value="comisiones" />
+            <Tab label="Gastos" value="gastos" />
+            <Tab label="Estado de resultados" value="income" />
+          </Tabs>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={() => void handleDownloadAll()}
+            disabled={downloadingAll || !startDate || !endDate}
+            sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+          >
+            {downloadingAll ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Descargar todo'}
+          </Button>
+        </Box>
+
+        {downloadAllError && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDownloadAllError('')}>
+            {downloadAllError}
+          </Alert>
+        )}
 
         <Paper sx={{ p: 2, mb: 2, display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
           <TextField

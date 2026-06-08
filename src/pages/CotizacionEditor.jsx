@@ -258,6 +258,7 @@ export default function CotizacionEditor() {
   const [clientPhone, setClientPhone] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [clientAddress, setClientAddress] = useState('')
+  const [workshopName, setWorkshopName] = useState('')
   const [notes, setNotes] = useState('')
   const [claimNumber, setClaimNumber] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
@@ -385,6 +386,7 @@ export default function CotizacionEditor() {
       setClientPhone(q.clientPhone || '')
       setClientEmail(q.clientEmail || '')
       setClientAddress(q.clientAddress || '')
+      setWorkshopName(q.workshopName || '')
       setNotes(q.notes || '')
       setClaimNumber(q.claimNumber || '')
       setSerialNumber(q.serialNumber || '')
@@ -735,6 +737,7 @@ export default function CotizacionEditor() {
       clientPhone: clientPhone.trim() || undefined,
       clientEmail: clientEmail.trim() || undefined,
       clientAddress: clientAddress.trim() || undefined,
+      workshopName: workshopName.trim() || undefined,
       pdfAdvisorName:
         [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.email?.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -786,6 +789,13 @@ export default function CotizacionEditor() {
   const pickClient = async (u) => {
     if (!u) return
     setClientName(clientDisplayName(u))
+    const kind = u.customerAccountKind || 'person'
+    if (kind === 'company') {
+      const workshop = [u.firstName, u.lastName].filter(Boolean).join(' ').trim()
+      setWorkshopName(workshop)
+    } else {
+      setWorkshopName('')
+    }
     setClientEmail(u.email || '')
     setClientPhone(u.phone || '')
     if (!u.id) return
@@ -1040,6 +1050,15 @@ export default function CotizacionEditor() {
                       value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
                       sx={{ minWidth: 200, flex: 1 }}
+                    />
+                    <TextField
+                      label="Nombre del taller"
+                      size="small"
+                      value={workshopName}
+                      onChange={(e) => setWorkshopName(e.target.value)}
+                      placeholder="Razón social de entrega"
+                      sx={{ minWidth: 200, flex: 1 }}
+                      inputProps={{ maxLength: 255 }}
                     />
                     <TextField label="Teléfono" size="small" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} sx={{ width: 150 }} />
                     <TextField label="Email" size="small" type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} sx={{ minWidth: 200 }} />

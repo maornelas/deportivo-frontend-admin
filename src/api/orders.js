@@ -220,13 +220,56 @@ export async function getOrderById(id) {
  * URL del endpoint que redirige a la nota de venta (PDF en S3).
  * Abrir en nueva pestaña. Opcional: nombre del vendedor en el encabezado del PDF.
  */
-export function getOrderSaleNotePdfUrl(orderId, { seller, refresh = true } = {}) {
+export function getOrderSaleNotePdfUrl(orderId, { seller, refresh = true, hidePrices = false } = {}) {
   const baseUrl = getBaseUrl()
   const params = new URLSearchParams()
   if (seller && String(seller).trim()) params.set('seller', String(seller).trim())
-  if (refresh) params.set('refresh', '1')
+  if (hidePrices) {
+    params.set('hidePrices', '1')
+  } else if (refresh) {
+    params.set('refresh', '1')
+  }
   const q = params.toString() ? `?${params.toString()}` : ''
   return `${baseUrl}/order/pdf/${orderId}${q}`
+}
+
+function openBlobInNewTab(blob) {
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank', 'noopener,noreferrer')
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+/**
+ * Genera la nota de venta al vuelo (no se almacena en S3).
+ * @param {string} orderId
+ * @param {{ hidePrices?: boolean }} [options]
+ */
+async function fetchOrderSaleNotePdf(orderId, { hidePrices = false } = {}) {
+  const params = new URLSearchParams({ inline: '1' })
+  if (hidePrices) params.set('hidePrices', '1')
+  const res = await apiFetch(`/order/pdf/${encodeURIComponent(orderId)}?${params.toString()}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  const blob = await res.blob()
+  const contentType = res.headers.get('content-type') || blob.type || ''
+  if (!blob.size || (contentType && !contentType.includes('pdf'))) {
+    return { success: false, error: 'No se recibió un PDF válido' }
+  }
+  return { success: true, blob }
+}
+
+/**
+ * Regenera la nota de venta y la abre en una pestaña nueva (no S3).
+ * @param {string} orderId
+ * @param {{ hidePrices?: boolean }} [options]
+ */
+export async function openOrderSaleNotePdfInNewTab(orderId, { hidePrices = false } = {}) {
+  const result = await fetchOrderSaleNotePdf(orderId, { hidePrices })
+  if (!result.success) return result
+  openBlobInNewTab(result.blob)
+  return { success: true }
 }
 
 /**

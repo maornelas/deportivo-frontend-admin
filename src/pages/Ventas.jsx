@@ -30,11 +30,17 @@ import {
   ToggleButtonGroup,
   Chip,
 } from '@mui/material'
-import { Search as SearchIcon, PictureAsPdf as PdfIcon } from '@mui/icons-material'
+import { Search as SearchIcon, PictureAsPdf as PdfIcon, Edit as EditIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
-import { searchOrders, getOrderById, updateOrder, updateOrderSalesChannel, getOrderSaleNotePdfUrl } from '../api/orders'
+import {
+  searchOrders,
+  getOrderById,
+  updateOrder,
+  updateOrderSalesChannel,
+  openOrderSaleNotePdfInNewTab,
+} from '../api/orders'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
@@ -99,6 +105,113 @@ function getSalesChannelSubtitle(salesChannel) {
   return 'Venta directa (landing)'
 }
 
+function getDeliveryAddress(order) {
+  if (!order) return null
+  if (order.shippingAddress?.addressLine1) return order.shippingAddress
+  return order.billingAddress || null
+}
+
+function isPlaceholderAddressField(value) {
+  const s = String(value ?? '').trim()
+  return !s || s === '—' || s === '-' || s === '00000'
+}
+
+function needsAddressParse(addr) {
+  const line1 = String(addr?.addressLine1 ?? '').trim()
+  if (!line1.includes(',')) return false
+  return isPlaceholderAddressField(addr?.city) && isPlaceholderAddressField(addr?.state)
+}
+
+/** Órdenes desde cotización suelen guardar toda la dirección en addressLine1. */
+function parseConcatenatedAddress(addr) {
+  const raw = String(addr?.addressLine1 ?? '').trim()
+  const parts = raw.split(',').map((p) => p.trim()).filter(Boolean)
+
+  let country = isPlaceholderAddressField(addr?.country) ? 'México' : String(addr.country).trim()
+  if (parts.length && /^(méxico|mexico)$/i.test(parts[parts.length - 1])) {
+    country = parts.pop()
+  }
+
+  let postalCode = isPlaceholderAddressField(addr?.postalCode) ? '' : String(addr.postalCode).trim()
+  if (parts.length && /^\d{5}$/.test(parts[parts.length - 1])) {
+    postalCode = parts.pop()
+  }
+
+  let state = ''
+  if (parts.length) state = parts.pop()
+
+  let city = ''
+  if (parts.length) city = parts.pop()
+
+  let streetPart = parts.join(', ')
+  let addressLine1 = streetPart
+  let addressLine2 = isPlaceholderAddressField(addr?.addressLine2) ? '' : String(addr.addressLine2).trim()
+
+  const coloniaMatch = streetPart.match(/^(.+?)\s+COLONIA:\s*(.+)$/i)
+  if (coloniaMatch) {
+    addressLine1 = coloniaMatch[1].trim()
+    if (!addressLine2) addressLine2 = coloniaMatch[2].trim()
+  }
+
+  return { addressLine1, addressLine2, city, state, postalCode, country }
+}
+
+function formatDeliveryAddress(addr) {
+  if (!addr) return '—'
+  const form = addressToForm(addr)
+  const line = [form.addressLine1, form.addressLine2, form.city, form.state, form.postalCode, form.country]
+    .filter((p) => p && !isPlaceholderAddressField(p))
+    .join(', ')
+  return line || '—'
+}
+
+function addressToForm(addr) {
+  if (!addr) {
+    return { addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', country: 'México' }
+  }
+  if (needsAddressParse(addr)) {
+    return parseConcatenatedAddress(addr)
+  }
+  return {
+    addressLine1: isPlaceholderAddressField(addr.addressLine1) ? '' : String(addr.addressLine1).trim(),
+    addressLine2: isPlaceholderAddressField(addr.addressLine2) ? '' : String(addr.addressLine2).trim(),
+    city: isPlaceholderAddressField(addr.city) ? '' : String(addr.city).trim(),
+    state: isPlaceholderAddressField(addr.state) ? '' : String(addr.state).trim(),
+    postalCode: isPlaceholderAddressField(addr.postalCode) ? '' : String(addr.postalCode).trim(),
+    country: isPlaceholderAddressField(addr.country) ? 'México' : String(addr.country).trim(),
+  }
+}
+
+function buildShippingAddressUpdatePayload(order, shippingForm) {
+  const billing = order.billingAddress || {}
+  const existingShipping = order.shippingAddress?.addressLine1 ? order.shippingAddress : null
+  const nameSource = existingShipping?.firstName ? existingShipping : billing
+
+  return {
+    billingFirstName: billing.firstName,
+    billingLastName: billing.lastName,
+    billingCompany: billing.company,
+    billingRfc: billing.rfc,
+    billingEmail: billing.email,
+    billingPhone: billing.phone,
+    billingAddressLine1: billing.addressLine1,
+    billingAddressLine2: billing.addressLine2,
+    billingCity: billing.city,
+    billingState: billing.state,
+    billingPostalCode: billing.postalCode,
+    billingCountry: billing.country,
+    shippingFirstName: nameSource.firstName || billing.firstName || 'Cliente',
+    shippingLastName: nameSource.lastName || billing.lastName || '',
+    shippingCompany: existingShipping?.company || billing.company,
+    shippingAddressLine1: shippingForm.addressLine1.trim(),
+    shippingAddressLine2: shippingForm.addressLine2?.trim() || '',
+    shippingCity: shippingForm.city.trim(),
+    shippingState: shippingForm.state.trim(),
+    shippingPostalCode: shippingForm.postalCode.trim(),
+    shippingCountry: shippingForm.country.trim() || 'México',
+  }
+}
+
 const Ventas = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const { canDoAction, user } = useAuth()
@@ -122,6 +235,13 @@ const Ventas = () => {
   const [pendingCancelStatus, setPendingCancelStatus] = useState(null)
   const [channelFilter, setChannelFilter] = useState('all')
   const [channelSaving, setChannelSaving] = useState(false)
+  const [addressEditing, setAddressEditing] = useState(false)
+  const [addressForm, setAddressForm] = useState(addressToForm(null))
+  const [addressSaving, setAddressSaving] = useState(false)
+  const [addressFormError, setAddressFormError] = useState('')
+  const [pdfChoiceOpen, setPdfChoiceOpen] = useState(false)
+  const [pdfGenerating, setPdfGenerating] = useState(false)
+  const [pdfError, setPdfError] = useState('')
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -168,6 +288,8 @@ const Ventas = () => {
     }
     setDetailOrder(null)
     setDetailError('')
+    setAddressEditing(false)
+    setAddressFormError('')
     setDetailLoading(true)
     const result = await getOrderById(order.id)
     setDetailLoading(false)
@@ -183,7 +305,97 @@ const Ventas = () => {
     setDetailError('')
     setDetailLoading(false)
     setStatusSaving(false)
+    setAddressEditing(false)
+    setAddressFormError('')
     fetchOrders()
+  }
+
+  const handleStartAddressEdit = () => {
+    if (!canDoAction(ACTION.VENTAS_CAMBIAR_ESTADO_ORDEN)) {
+      showDenied()
+      return
+    }
+    setAddressForm(addressToForm(getDeliveryAddress(detailOrder)))
+    setAddressFormError('')
+    setAddressEditing(true)
+  }
+
+  const handleCancelAddressEdit = () => {
+    setAddressEditing(false)
+    setAddressFormError('')
+  }
+
+  const handleAddressFieldChange = (field) => (e) => {
+    setAddressForm((prev) => ({ ...prev, [field]: e.target.value }))
+  }
+
+  const handleOpenSaleNotePdfChoice = () => {
+    if (!(detailOrder?.items && detailOrder.items.length)) return
+    setPdfError('')
+    setPdfChoiceOpen(true)
+  }
+
+  const handleClosePdfChoice = () => {
+    if (pdfGenerating) return
+    setPdfChoiceOpen(false)
+    setPdfError('')
+  }
+
+  const handleDownloadSaleNotePdf = async (hidePrices) => {
+    if (!detailOrder?.id || pdfGenerating) return
+
+    setPdfGenerating(true)
+    setPdfError('')
+    const result = await openOrderSaleNotePdfInNewTab(detailOrder.id, { hidePrices })
+    setPdfGenerating(false)
+    if (!result.success) {
+      setPdfError(
+        result.error || (hidePrices ? 'No se pudo generar el PDF sin precios' : 'No se pudo generar la nota de venta'),
+      )
+      return
+    }
+    setPdfChoiceOpen(false)
+  }
+
+  const handleSaveAddress = async () => {
+    if (!canDoAction(ACTION.VENTAS_CAMBIAR_ESTADO_ORDEN)) {
+      showDenied()
+      return
+    }
+    if (!detailOrder?.id) return
+
+    const trimmed = {
+      addressLine1: addressForm.addressLine1.trim(),
+      addressLine2: addressForm.addressLine2.trim(),
+      city: addressForm.city.trim(),
+      state: addressForm.state.trim(),
+      postalCode: addressForm.postalCode.trim(),
+      country: addressForm.country.trim() || 'México',
+    }
+
+    if (!trimmed.addressLine1 || !trimmed.city || !trimmed.state) {
+      setAddressFormError('Calle, ciudad y estado son obligatorios.')
+      return
+    }
+
+    setAddressSaving(true)
+    setDetailError('')
+    setAddressFormError('')
+    const payload = buildShippingAddressUpdatePayload(detailOrder, trimmed)
+    const result = await updateOrder(detailOrder.id, payload)
+    setAddressSaving(false)
+    if (!result.success) {
+      setDetailError(result.error || 'Error al actualizar la dirección')
+      return
+    }
+
+    const refreshed = await getOrderById(detailOrder.id)
+    if (refreshed.success && refreshed.data) {
+      setDetailOrder(refreshed.data)
+    } else if (result.data) {
+      setDetailOrder(result.data)
+    }
+    setAddressEditing(false)
   }
 
   const handleStatusChange = async (newStatus, cancellationReason) => {
@@ -368,14 +580,7 @@ const Ventas = () => {
                     size="small"
                     startIcon={<PdfIcon />}
                     disabled={!(detailOrder.items && detailOrder.items.length)}
-                    onClick={() => {
-                      const seller = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
-                      window.open(
-                        getOrderSaleNotePdfUrl(detailOrder.id, { seller: seller || undefined }),
-                        '_blank',
-                        'noopener,noreferrer',
-                      )
-                    }}
+                    onClick={handleOpenSaleNotePdfChoice}
                   >
                     Nota de venta (PDF)
                   </Button>
@@ -408,7 +613,98 @@ const Ventas = () => {
                     <Typography variant="body2"><strong>Nombre:</strong> {[detailOrder.billingAddress.firstName, detailOrder.billingAddress.lastName].filter(Boolean).join(' ')} {detailOrder.billingAddress.company ? ` · ${detailOrder.billingAddress.company}` : ''}</Typography>
                     <Typography variant="body2"><strong>Email:</strong> {detailOrder.billingAddress.email || '—'}</Typography>
                     <Typography variant="body2"><strong>Teléfono:</strong> {detailOrder.billingAddress.phone || '—'}</Typography>
-                    <Typography variant="body2"><strong>Dirección de entrega:</strong> {detailOrder.shippingAddress ? [detailOrder.shippingAddress.addressLine1, detailOrder.shippingAddress.addressLine2, detailOrder.shippingAddress.city, detailOrder.shippingAddress.state, detailOrder.shippingAddress.postalCode, detailOrder.shippingAddress.country].filter(Boolean).join(', ') : [detailOrder.billingAddress.addressLine1, detailOrder.billingAddress.addressLine2, detailOrder.billingAddress.city, detailOrder.billingAddress.state, detailOrder.billingAddress.postalCode, detailOrder.billingAddress.country].filter(Boolean).join(', ') || '—'}</Typography>
+                    <Box>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+                        <Typography variant="body2" sx={{ flex: 1 }}>
+                          <strong>Dirección de entrega:</strong>{' '}
+                          {!addressEditing && formatDeliveryAddress(getDeliveryAddress(detailOrder))}
+                        </Typography>
+                        {!addressEditing && (
+                          <Button
+                            size="small"
+                            variant="text"
+                            startIcon={<EditIcon sx={{ fontSize: 16 }} />}
+                            onClick={handleStartAddressEdit}
+                            sx={{ minWidth: 0, flexShrink: 0, py: 0 }}
+                          >
+                            Editar
+                          </Button>
+                        )}
+                      </Box>
+                      {addressEditing && (
+                        <Box sx={{ mt: 1.5, display: 'grid', gap: 1.5 }}>
+                          <TextField
+                            label="Calle y número"
+                            size="small"
+                            fullWidth
+                            required
+                            value={addressForm.addressLine1}
+                            onChange={handleAddressFieldChange('addressLine1')}
+                            disabled={addressSaving}
+                          />
+                          <TextField
+                            label="Colonia / referencia"
+                            size="small"
+                            fullWidth
+                            value={addressForm.addressLine2}
+                            onChange={handleAddressFieldChange('addressLine2')}
+                            disabled={addressSaving}
+                          />
+                          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+                            <TextField
+                              label="Ciudad"
+                              size="small"
+                              required
+                              value={addressForm.city}
+                              onChange={handleAddressFieldChange('city')}
+                              disabled={addressSaving}
+                            />
+                            <TextField
+                              label="Estado"
+                              size="small"
+                              required
+                              value={addressForm.state}
+                              onChange={handleAddressFieldChange('state')}
+                              disabled={addressSaving}
+                            />
+                          </Box>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+                            <TextField
+                              label="Código postal"
+                              size="small"
+                              value={addressForm.postalCode}
+                              onChange={handleAddressFieldChange('postalCode')}
+                              disabled={addressSaving}
+                            />
+                            <TextField
+                              label="País"
+                              size="small"
+                              value={addressForm.country}
+                              onChange={handleAddressFieldChange('country')}
+                              disabled={addressSaving}
+                            />
+                          </Box>
+                          {addressFormError && (
+                            <Alert severity="warning" sx={{ py: 0.5 }}>
+                              {addressFormError}
+                            </Alert>
+                          )}
+                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                            <Button size="small" onClick={handleCancelAddressEdit} disabled={addressSaving}>
+                              Cancelar
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={() => void handleSaveAddress()}
+                              disabled={addressSaving}
+                            >
+                              {addressSaving ? 'Guardando…' : 'Guardar dirección'}
+                            </Button>
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
                   </Box>
                 ) : <Typography variant="body2">—</Typography>}
                 {detailOrder.shippingAddress && (detailOrder.shippingMethod || detailOrder.trackingNumber) && (
@@ -450,6 +746,40 @@ const Ventas = () => {
             )}
           </DialogContent>
           <DialogActions><Button onClick={handleCloseDetail} color="inherit">Cerrar</Button></DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={pdfChoiceOpen}
+          onClose={handleClosePdfChoice}
+          maxWidth="xs"
+          fullWidth
+          PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}
+        >
+          <ModalHeader title="Descargar nota de venta" onClose={handleClosePdfChoice} />
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary">
+              Elige si el PDF incluye los precios o los oculta con guiones (—) para compartir con talleres.
+            </Typography>
+            {pdfGenerating && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 2 }}>
+                <CircularProgress size={22} />
+                <Typography variant="body2">Generando nota de venta…</Typography>
+              </Box>
+            )}
+            {pdfError && (
+              <Alert severity="error" sx={{ mt: 2 }} onClose={() => setPdfError('')}>
+                {pdfError}
+              </Alert>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1, px: 3, pb: 2.5, pt: 0 }}>
+            <Button variant="contained" disabled={pdfGenerating} onClick={() => void handleDownloadSaleNotePdf(false)}>
+              Con precios
+            </Button>
+            <Button variant="outlined" disabled={pdfGenerating} onClick={() => void handleDownloadSaleNotePdf(true)}>
+              Sin precios (—)
+            </Button>
+          </DialogActions>
         </Dialog>
 
         <OrderCancellationDialog

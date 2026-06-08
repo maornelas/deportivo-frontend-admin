@@ -55,13 +55,104 @@ function fmtDate(v) {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('es-MX')
 }
 
-function formatPayload(p) {
-  if (p == null || (typeof p === 'object' && Object.keys(p).length === 0)) return null
-  try {
-    return JSON.stringify(p, null, 2)
-  } catch {
-    return String(p)
+function normalizePayloadObject(p) {
+  if (p == null) return null
+  if (typeof p === 'string') {
+    try {
+      const parsed = JSON.parse(p)
+      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed : null
+    } catch {
+      return null
+    }
   }
+  if (typeof p === 'object' && !Array.isArray(p)) return p
+  return null
+}
+
+const PAYLOAD_FIELD_LABELS = {
+  orderId: 'ID de orden',
+  orderNumber: 'Número de orden',
+  totalAmount: 'Monto total',
+  salesChannel: 'Canal de venta',
+  quotationId: 'ID de cotización',
+  quotationNumber: 'Número de cotización',
+  purchaseId: 'ID de compra',
+  purchaseNumber: 'Folio de compra',
+  userId: 'ID de usuario',
+  productId: 'ID de producto',
+  deliveryId: 'ID de entrega',
+  deliveryNumber: 'Folio de entrega',
+}
+
+function payloadFieldLabel(key) {
+  if (PAYLOAD_FIELD_LABELS[key]) return PAYLOAD_FIELD_LABELS[key]
+  const spaced = String(key)
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
+}
+
+function formatPayloadFieldValue(key, value) {
+  if (value == null) return '—'
+  if (key === 'totalAmount' && (typeof value === 'number' || (typeof value === 'string' && value.trim() !== ''))) {
+    const n = Number(value)
+    if (!Number.isNaN(n)) {
+      return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n)
+    }
+  }
+  if (key === 'salesChannel' && typeof value === 'string') {
+    const v = value.toLowerCase()
+    if (v === 'advisor') return 'Asesor'
+    if (v === 'online') return 'Online'
+  }
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No'
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value, null, 2)
+    } catch {
+      return String(value)
+    }
+  }
+  return String(value)
+}
+
+function payloadFieldEntries(p) {
+  const obj = normalizePayloadObject(p)
+  if (!obj || Object.keys(obj).length === 0) return []
+  return Object.entries(obj).map(([key, value]) => ({
+    key,
+    label: payloadFieldLabel(key),
+    value: formatPayloadFieldValue(key, value),
+    multiline: typeof value === 'object' && value !== null,
+  }))
+}
+
+function NotificationPayloadFields({ payload }) {
+  const fields = payloadFieldEntries(payload)
+  if (!fields.length) return null
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
+        Detalles
+      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        {fields.map(({ key, label, value, multiline }) => (
+          <TextField
+            key={key}
+            label={label}
+            value={value}
+            size="small"
+            fullWidth
+            InputProps={{ readOnly: true }}
+            inputProps={{ 'aria-readonly': true }}
+            multiline={multiline}
+            minRows={multiline ? 2 : 1}
+            maxRows={multiline ? 6 : 1}
+          />
+        ))}
+      </Box>
+    </Box>
+  )
 }
 
 function NotificationChips({ n, dense, onPurple }) {
@@ -241,7 +332,7 @@ export default function Notificaciones() {
     return null
   }
 
-  const payloadStr = detailNotif ? formatPayload(detailNotif.payload) : null
+  const hasPayloadFields = detailNotif ? payloadFieldEntries(detailNotif.payload).length > 0 : false
 
   return (
     <Box sx={{ minHeight: '100vh' }}>
@@ -514,27 +605,7 @@ export default function Notificaciones() {
                 <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                   {detailNotif.message}
                 </Typography>
-                {payloadStr ? (
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Datos adjuntos
-                    </Typography>
-                    <Box
-                      component="pre"
-                      sx={{
-                        m: 0,
-                        p: 1.5,
-                        borderRadius: 1,
-                        bgcolor: 'action.hover',
-                        fontSize: '0.75rem',
-                        overflow: 'auto',
-                        maxHeight: 200,
-                      }}
-                    >
-                      {payloadStr}
-                    </Box>
-                  </Box>
-                ) : null}
+                {hasPayloadFields ? <NotificationPayloadFields payload={detailNotif.payload} /> : null}
               </>
             ) : null}
           </DialogContent>
