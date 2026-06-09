@@ -96,6 +96,45 @@ function orderLinesToPayloadItems(salesOrderLines, selectedIds) {
     }))
 }
 
+function normalizePurchaseProductName(name) {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[.\-_]/g, ' ')
+    .replace(/\s+/g, ' ')
+}
+
+function purchaseProductNamesLooselyMatch(a, b) {
+  const na = normalizePurchaseProductName(a)
+  const nb = normalizePurchaseProductName(b)
+  if (!na || !nb) return false
+  if (na === nb) return true
+  return na.includes(nb) || nb.includes(na)
+}
+
+/** Copia precios de piezas manuales a líneas vinculadas de la nota de venta y evita duplicados. */
+function mergeOrderItemsWithManualPrices(orderItems, manualLines) {
+  const usedManualKeys = new Set()
+  const mergedOrderItems = orderItems.map((oi) => {
+    const manual = manualLines.find(
+      (m) => !usedManualKeys.has(m.key) && purchaseProductNamesLooselyMatch(m.productName, oi.productName),
+    )
+    if (manual && Number(manual.unitPrice) > 0) {
+      usedManualKeys.add(manual.key)
+      return {
+        ...oi,
+        unitPrice: Number(manual.unitPrice),
+        quantity: Math.max(1, parseInt(manual.quantity, 10) || oi.quantity || 1),
+        partType: manual.partType || oi.partType,
+        partCondition: manual.partCondition || oi.partCondition,
+      }
+    }
+    return oi
+  })
+  const remainingManualLines = manualLines.filter((m) => !usedManualKeys.has(m.key))
+  return { mergedOrderItems, remainingManualLines }
+}
+
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
   { value: 'paid', label: 'Pagado' },
@@ -435,28 +474,30 @@ export default function CompraRegistrar() {
     setSaving(true)
     try {
       const cleanLines = lines.filter((l) => safeTrim(l.productName))
-      const orderItems = orderLinesToPayloadItems(salesOrderLines, selectedSalesOrderItemIds)
-      const allItems = [
-        ...cleanLines.map((l) => ({
-          key: l.key,
-          productId: isValidUuid(l.productId) ? l.productId : null,
-          productName: l.productName.trim(),
-          sku: l.sku || '',
-          partType: l.partType,
-          partCondition: l.partCondition,
-          unitPrice: Number(l.unitPrice || 0),
-          quantity: Math.max(1, parseInt(l.quantity, 10) || 1),
-          vehicleBrandId: l.vehicleBrandId || undefined,
-          vehicleBrand: l.vehicleBrand || undefined,
-          vehicleModel: l.vehicleModel || undefined,
-          vehicleYear: l.vehicleYear || undefined,
-          vehicleVersion: l.vehicleVersion || undefined,
-        })),
-        ...orderItems,
-      ]
+      const orderItemsRaw = orderLinesToPayloadItems(salesOrderLines, selectedSalesOrderItemIds)
+      const { mergedOrderItems, remainingManualLines } = mergeOrderItemsWithManualPrices(
+        orderItemsRaw,
+        cleanLines,
+      )
+      const mapManualLine = (l) => ({
+        key: l.key,
+        productId: isValidUuid(l.productId) ? l.productId : null,
+        productName: l.productName.trim(),
+        sku: l.sku || '',
+        partType: l.partType,
+        partCondition: l.partCondition,
+        unitPrice: Number(l.unitPrice || 0),
+        quantity: Math.max(1, parseInt(l.quantity, 10) || 1),
+        vehicleBrandId: l.vehicleBrandId || undefined,
+        vehicleBrand: l.vehicleBrand || undefined,
+        vehicleModel: l.vehicleModel || undefined,
+        vehicleYear: l.vehicleYear || undefined,
+        vehicleVersion: l.vehicleVersion || undefined,
+      })
+      const allItems = [...remainingManualLines.map(mapManualLine), ...mergedOrderItems]
       const headerVeh = summarizePurchaseHeaderVehicle([
-        ...cleanLines,
-        ...orderItems.map((l) => ({
+        ...remainingManualLines,
+        ...mergedOrderItems.map((l) => ({
           vehicleBrandId: '',
           vehicleBrand: l.vehicleBrand,
           vehicleModel: l.vehicleModel,
