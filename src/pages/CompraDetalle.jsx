@@ -52,6 +52,7 @@ import {
   safeTrim,
   summarizePurchaseHeaderVehicle,
   vehicleLineFingerprint,
+  purchaseSummaryListScrollSx,
 } from '../compras/shared'
 import PurchaseSalesOrderPicker, { salesOrderFromPurchase } from '../compras/PurchaseSalesOrderPicker'
 
@@ -646,6 +647,7 @@ export default function CompraDetalle() {
               gap: 2,
               flex: 1,
               minHeight: 0,
+              overflow: 'hidden',
               alignItems: { xs: 'stretch', lg: 'stretch' },
             }}
           >
@@ -919,6 +921,7 @@ export default function CompraDetalle() {
                 <Box
                   sx={{
                     ...sectionHeaderSx,
+                    flexShrink: 0,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1.5,
@@ -956,11 +959,12 @@ export default function CompraDetalle() {
                     minHeight: 0,
                     display: 'flex',
                     flexDirection: 'column',
+                    overflow: 'hidden',
                     p: 1.5,
                     pt: 1.5,
                   }}
                 >
-                  <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', mb: 1 }}>
+                  <Box sx={purchaseSummaryListScrollSx}>
                     {lines.length === 0 ? (
                       <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center', px: 1 }}>
                         Vacío. Usa «Agregar pieza» para añadir líneas al resumen.

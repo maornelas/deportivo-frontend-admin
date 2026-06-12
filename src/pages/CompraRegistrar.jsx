@@ -38,6 +38,7 @@ import Header from '../components/Header'
 import { getBrands, getCarModelsByBrand } from '../api/products'
 import { createNotification } from '../api/notifications'
 import { downloadPurchaseNotePdf } from '../compras/purchaseNotePdf'
+import { purchaseSummaryListScrollSx } from '../compras/shared'
 import { useAuth } from '../contexts/AuthContext'
 import { usePurchases } from '../contexts/PurchasesContext'
 import { createPurchase, getSalesOrderPurchaseLines } from '../api/purchases'
@@ -605,6 +606,7 @@ export default function CompraRegistrar() {
             gap: 2,
             flex: 1,
             minHeight: 0,
+            overflow: 'hidden',
             alignItems: { xs: 'stretch', lg: 'stretch' },
           }}
         >
@@ -879,6 +881,7 @@ export default function CompraRegistrar() {
               <Box
                 sx={{
                   ...sectionHeaderSx,
+                  flexShrink: 0,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1.5,
@@ -916,11 +919,12 @@ export default function CompraRegistrar() {
                   minHeight: 0,
                   display: 'flex',
                   flexDirection: 'column',
+                  overflow: 'hidden',
                   p: 1.5,
                   pt: 1.5,
                 }}
               >
-                <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', mb: 1 }}>
+                <Box sx={purchaseSummaryListScrollSx}>
                   {lines.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center', px: 1 }}>
                       {selectedSalesOrderItemIds.size > 0

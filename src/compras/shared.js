@@ -104,3 +104,14 @@ export function computePurchaseTotal(items) {
   const t = (items || []).reduce((s, it) => s + Number(it.unitPrice || 0) * Math.max(1, Number(it.quantity || 1)), 0)
   return Math.round(t * 100) / 100
 }
+
+/** Lista de piezas del resumen: scroll interno para mantener totales visibles. */
+export const purchaseSummaryListScrollSx = {
+  flex: 1,
+  minHeight: 0,
+  overflowY: 'auto',
+  overflowX: 'hidden',
+  WebkitOverflowScrolling: 'touch',
+  mb: 1,
+  maxHeight: { xs: 'min(360px, 55vh)', md: 'calc(100vh - 430px)' },
+}
