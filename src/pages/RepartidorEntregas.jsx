@@ -523,8 +523,24 @@ export default function RepartidorEntregas() {
 
   useEffect(() => {
     const folioParam = searchParams.get('folio') || searchParams.get('orderNumber')
-    if (folioParam != null && String(folioParam).trim() !== '') {
-      loadByFolio(String(folioParam).trim())
+    const folio = folioParam != null ? String(folioParam).trim() : ''
+    if (folio) {
+      loadByFolio(folio)
+    } else {
+      setOrder(null)
+      setDelivery(null)
+      setDeliveryDest(null)
+      setDeliveredHandoffSummary(null)
+      setPhase('detail')
+      setLoadState({ loading: false, error: '' })
+      setFolioInput('')
+      setItemDeliveryChecks({})
+      setRouteSeed(null)
+      setLiveDriver(null)
+      setRoutePaused(false)
+      setTripStarted(false)
+      setMotoSplashOpen(false)
+      pathPointsRef.current = []
     }
   }, [searchParams, loadByFolio])
 
@@ -1130,8 +1146,8 @@ export default function RepartidorEntregas() {
   const canEditDestination = phase === 'detail' && !isDeliveryCompleted
 
   const folioFromUrl = String(searchParams.get('folio') || searchParams.get('orderNumber') || '').trim()
-  /** Listado de entregas cuando no hay nota cargada en la URL. */
-  const showDeliveriesList = !folioFromUrl && !order && phase === 'detail'
+  /** Listado de entregas cuando la URL no trae folio de nota/pedido. */
+  const showDeliveriesList = !folioFromUrl
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>

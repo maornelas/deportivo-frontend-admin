@@ -115,6 +115,7 @@ function mapItemsToLines(items, purchase) {
     vehicleModel: it.vehicleModel ?? fb.vehicleModel ?? '',
     vehicleYear: it.vehicleYear ?? fb.vehicleYear ?? '',
     vehicleVersion: it.vehicleVersion ?? fb.vehicleVersion ?? '',
+    orderItemId: it.orderItemId ?? null,
   }))
 }
 
@@ -440,6 +441,7 @@ export default function CompraDetalle() {
         vehicleModel: l.vehicleModel || '',
         vehicleYear: l.vehicleYear || '',
         vehicleVersion: l.vehicleVersion || '',
+        orderItemId: l.orderItemId || undefined,
       })),
     }
     payload.total = totals.total
@@ -481,6 +483,7 @@ export default function CompraDetalle() {
           vehicleModel: l.vehicleModel || undefined,
           vehicleYear: l.vehicleYear || undefined,
           vehicleVersion: l.vehicleVersion || undefined,
+          orderItemId: l.orderItemId || undefined,
         })),
       },
     }

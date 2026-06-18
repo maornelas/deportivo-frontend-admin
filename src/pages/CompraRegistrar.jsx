@@ -105,17 +105,44 @@ function normalizePurchaseProductName(name) {
     .replace(/\s+/g, ' ')
 }
 
+function compactPurchaseProductName(name) {
+  return normalizePurchaseProductName(name).replace(/\s/g, '')
+}
+
 function purchaseProductNamesLooselyMatch(a, b) {
   const na = normalizePurchaseProductName(a)
   const nb = normalizePurchaseProductName(b)
   if (!na || !nb) return false
   if (na === nb) return true
-  return na.includes(nb) || nb.includes(na)
+  if (na.includes(nb) || nb.includes(na)) return true
+  const ca = compactPurchaseProductName(a)
+  const cb = compactPurchaseProductName(b)
+  if (ca && cb && (ca === cb || ca.includes(cb) || cb.includes(ca))) return true
+  return false
 }
 
 /** Copia precios de piezas manuales a líneas vinculadas de la nota de venta y evita duplicados. */
 function mergeOrderItemsWithManualPrices(orderItems, manualLines) {
   const usedManualKeys = new Set()
+  if (orderItems.length === 1 && manualLines.length === 1) {
+    const manual = manualLines[0]
+    const oi = orderItems[0]
+    if (Number(manual.unitPrice) > 0) {
+      usedManualKeys.add(manual.key)
+      return {
+        mergedOrderItems: [
+          {
+            ...oi,
+            unitPrice: Number(manual.unitPrice),
+            quantity: Math.max(1, parseInt(manual.quantity, 10) || oi.quantity || 1),
+            partType: manual.partType || oi.partType,
+            partCondition: manual.partCondition || oi.partCondition,
+          },
+        ],
+        remainingManualLines: [],
+      }
+    }
+  }
   const mergedOrderItems = orderItems.map((oi) => {
     const manual = manualLines.find(
       (m) => !usedManualKeys.has(m.key) && purchaseProductNamesLooselyMatch(m.productName, oi.productName),
