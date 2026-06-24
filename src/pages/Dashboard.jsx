@@ -191,7 +191,10 @@ const Dashboard = () => {
 
   const totalComprasAmount = useMemo(() => {
     if (!Array.isArray(dailyPurchases)) return 0
-    return dailyPurchases.reduce((sum, d) => sum + Number(d.totalAmount ?? 0), 0)
+    return dailyPurchases.reduce(
+      (sum, d) => sum + Number(d.totalAmount ?? d.totalamount ?? d.total ?? 0),
+      0,
+    )
   }, [dailyPurchases])
 
   const totalComprasFormatted =

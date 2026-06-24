@@ -105,13 +105,24 @@ export function computePurchaseTotal(items) {
   return Math.round(t * 100) / 100
 }
 
-/** Lista de piezas del resumen: scroll interno para mantener totales visibles. */
+/** Solo la lista de piezas hace scroll; totales y botón quedan fijos abajo del panel. */
 export const purchaseSummaryListScrollSx = {
   flex: 1,
   minHeight: 0,
   overflowY: 'auto',
   overflowX: 'hidden',
   WebkitOverflowScrolling: 'touch',
-  mb: 1,
-  maxHeight: { xs: 'min(360px, 55vh)', md: 'calc(100vh - 430px)' },
+  px: 1.5,
+  pt: 1.5,
+}
+
+/** Pie del resumen: subtotal, IVA, total y acción principal siempre visibles. */
+export const purchaseSummaryStickyFooterSx = {
+  flexShrink: 0,
+  px: 1.5,
+  pt: 1,
+  pb: 1.5,
+  borderTop: '1px solid',
+  borderColor: 'divider',
+  bgcolor: 'background.paper',
 }

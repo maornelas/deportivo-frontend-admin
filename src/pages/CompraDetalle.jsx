@@ -53,6 +53,7 @@ import {
   summarizePurchaseHeaderVehicle,
   vehicleLineFingerprint,
   purchaseSummaryListScrollSx,
+  purchaseSummaryStickyFooterSx,
 } from '../compras/shared'
 import PurchaseSalesOrderPicker, { salesOrderFromPurchase } from '../compras/PurchaseSalesOrderPicker'
 
@@ -963,8 +964,6 @@ export default function CompraDetalle() {
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
-                    p: 1.5,
-                    pt: 1.5,
                   }}
                 >
                   <Box sx={purchaseSummaryListScrollSx}>
@@ -1089,8 +1088,8 @@ export default function CompraDetalle() {
                     )}
                   </Box>
 
-                  <Box sx={{ flexShrink: 0 }}>
-                    <Divider sx={{ my: 1 }} />
+                  <Box sx={purchaseSummaryStickyFooterSx}>
+                    <Divider sx={{ mb: 1 }} />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.75 }}>
                       <Typography variant="body2" color="text.secondary">
                         Subtotal
@@ -1114,31 +1113,31 @@ export default function CompraDetalle() {
                       16% × {formatMoney(totals.subtotal)} = {formatMoney(totals.tax)}
                     </Typography>
                     <Divider sx={{ my: 0.75 }} />
-                    <Typography variant="h6" color="primary" sx={{ fontSize: '1.05rem', lineHeight: 1.3 }}>
+                    <Typography variant="h6" color="primary" sx={{ fontSize: '1.05rem', lineHeight: 1.3, mb: 1.25 }}>
                       Total: {formatMoney(totals.total)}
                     </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <Button
+                        variant="contained"
+                        disabled={loading}
+                        onClick={handleGenerarCompra}
+                        sx={{
+                          width: '50%',
+                          minWidth: 160,
+                          py: 1.25,
+                          bgcolor: '#7B2CBF',
+                          '&:hover': { bgcolor: '#6A26A8' },
+                          textTransform: 'uppercase',
+                          fontWeight: 700,
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        {loading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Generar Compra'}
+                      </Button>
+                    </Box>
                   </Box>
                 </Box>
               </Paper>
-              <Box sx={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
-                <Button
-                  variant="contained"
-                  disabled={loading}
-                  onClick={handleGenerarCompra}
-                  sx={{
-                    width: '50%',
-                    minWidth: 160,
-                    py: 1.25,
-                    bgcolor: '#7B2CBF',
-                    '&:hover': { bgcolor: '#6A26A8' },
-                    textTransform: 'uppercase',
-                    fontWeight: 700,
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  {loading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Generar Compra'}
-                </Button>
-              </Box>
             </Box>
           </Box>
         </Box>

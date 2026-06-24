@@ -301,3 +301,24 @@ export async function uploadSignedOrderSaleNotePdf(orderId, payload) {
   }
   return { success: true, data: json.data }
 }
+
+/**
+ * Cancela una o varias piezas de una nota de venta (la nota permanece activa).
+ * @param {string[]} itemIds
+ * @param {string} cancellationReason
+ */
+export async function cancelOrderItems(itemIds, cancellationReason) {
+  const res = await apiFetch('/order-item/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ itemIds, cancellationReason }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: body.message || body.error || `Error ${res.status}` }
+  }
+  if (!body.success) {
+    return { success: false, error: body.message || 'No se pudieron cancelar las piezas' }
+  }
+  return { success: true, data: body.data }
+}

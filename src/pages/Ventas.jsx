@@ -29,8 +29,16 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Chip,
+  Checkbox,
+  IconButton,
+  Tooltip,
 } from '@mui/material'
-import { Search as SearchIcon, PictureAsPdf as PdfIcon, Edit as EditIcon } from '@mui/icons-material'
+import {
+  Search as SearchIcon,
+  PictureAsPdf as PdfIcon,
+  Edit as EditIcon,
+  CancelOutlined as CancelItemIcon,
+} from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import ModalHeader from '../components/ModalHeader'
@@ -40,6 +48,7 @@ import {
   updateOrder,
   updateOrderSalesChannel,
   openOrderSaleNotePdfInNewTab,
+  cancelOrderItems,
 } from '../api/orders'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
@@ -58,6 +67,21 @@ const ORDER_STATUS_OPTIONS = [
 
 const LIMIT = 15
 
+/** Leyendas de sección en el detalle de orden (misma paleta morada que ModalHeader). */
+const detailSectionTitleSx = {
+  color: 'secondary.main',
+  fontWeight: 600,
+}
+
+function isActiveOrderItem(item) {
+  return String(item?.status || 'active').toLowerCase() !== 'cancelled'
+}
+
+function canEditOrderItems(order) {
+  const st = String(order?.status || '').toLowerCase()
+  return st !== 'cancelled' && st !== 'refunded'
+}
+
 function formatDate(value) {
   if (!value) return '-'
   const d = typeof value === 'string' ? new Date(value) : value
@@ -73,6 +97,56 @@ function formatTime(value) {
 function formatCurrency(value, currency = 'MXN') {
   if (value == null) return '-'
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(Number(value))
+}
+
+function safeTrim(value) {
+  return String(value ?? '').trim()
+}
+
+function parseNoteTag(notes, label) {
+  if (!notes) return ''
+  const esc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`${esc}\\s*:\\s*([^·\\n;]+)`, 'i')
+  const m = String(notes).match(re)
+  return m?.[1]?.trim() || ''
+}
+
+/** Marca, modelo, año y siniestro (misma lógica que la nota de venta PDF). */
+function getOrderVehicleInfo(order) {
+  const firstItem = order?.items?.[0]
+  const unidad =
+    safeTrim(order?.vehicleBrand) || parseNoteTag(order?.notes, 'Marca') || safeTrim(firstItem?.carBrand)
+  const modelo =
+    safeTrim(order?.vehicleModel) || parseNoteTag(order?.notes, 'Modelo') || safeTrim(firstItem?.carModel)
+  const anio =
+    safeTrim(order?.vehicleYear) ||
+    parseNoteTag(order?.notes, 'Año') ||
+    parseNoteTag(order?.notes, 'Ano') ||
+    safeTrim(firstItem?.carYears)
+  const siniestro = safeTrim(order?.shippingReferences) || parseNoteTag(order?.notes, 'Siniestro')
+  return {
+    unidad: unidad || '—',
+    modelo: modelo || '—',
+    anio: anio || '—',
+    siniestro: siniestro || '—',
+  }
+}
+
+/** Marca · modelo · versión · año (campos de orden, notas o primera línea). */
+function getOrderVehicleDisplay(order) {
+  const firstItem = order?.items?.[0]
+  const brand =
+    safeTrim(order?.vehicleBrand) || parseNoteTag(order?.notes, 'Marca') || safeTrim(firstItem?.carBrand)
+  const model =
+    safeTrim(order?.vehicleModel) || parseNoteTag(order?.notes, 'Modelo') || safeTrim(firstItem?.carModel)
+  const version = parseNoteTag(order?.notes, 'Versión') || parseNoteTag(order?.notes, 'Version')
+  const year =
+    safeTrim(order?.vehicleYear) ||
+    parseNoteTag(order?.notes, 'Año') ||
+    parseNoteTag(order?.notes, 'Ano') ||
+    safeTrim(firstItem?.carYears)
+  const parts = [brand, model, version, year].filter(Boolean)
+  return parts.length ? parts.join(' · ') : '—'
 }
 
 function getClientDisplay(order) {
@@ -242,6 +316,11 @@ const Ventas = () => {
   const [pdfChoiceOpen, setPdfChoiceOpen] = useState(false)
   const [pdfGenerating, setPdfGenerating] = useState(false)
   const [pdfError, setPdfError] = useState('')
+  const [itemsEditMode, setItemsEditMode] = useState(false)
+  const [selectedItemIds, setSelectedItemIds] = useState(() => new Set())
+  const [itemCancelDialogOpen, setItemCancelDialogOpen] = useState(false)
+  const [pendingItemCancelIds, setPendingItemCancelIds] = useState([])
+  const [itemsCancelSaving, setItemsCancelSaving] = useState(false)
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -290,6 +369,10 @@ const Ventas = () => {
     setDetailError('')
     setAddressEditing(false)
     setAddressFormError('')
+    setItemsEditMode(false)
+    setSelectedItemIds(new Set())
+    setItemCancelDialogOpen(false)
+    setPendingItemCancelIds([])
     setDetailLoading(true)
     const result = await getOrderById(order.id)
     setDetailLoading(false)
@@ -307,6 +390,10 @@ const Ventas = () => {
     setStatusSaving(false)
     setAddressEditing(false)
     setAddressFormError('')
+    setItemsEditMode(false)
+    setSelectedItemIds(new Set())
+    setItemCancelDialogOpen(false)
+    setPendingItemCancelIds([])
     fetchOrders()
   }
 
@@ -452,6 +539,76 @@ const Ventas = () => {
     void handleStatusChange(pendingCancelStatus, cancellationReason)
   }
 
+  const resetItemsEditState = () => {
+    setItemsEditMode(false)
+    setSelectedItemIds(new Set())
+  }
+
+  const handleStartItemsEdit = () => {
+    if (!canDoAction(ACTION.VENTAS_CAMBIAR_ESTADO_ORDEN)) {
+      showDenied()
+      return
+    }
+    if (!canEditOrderItems(detailOrder)) return
+    setSelectedItemIds(new Set())
+    setItemsEditMode(true)
+  }
+
+  const toggleItemSelection = (itemId) => {
+    if (!itemId) return
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(itemId)) next.delete(itemId)
+      else next.add(itemId)
+      return next
+    })
+  }
+
+  const openItemCancelDialog = (itemIds) => {
+    if (!canDoAction(ACTION.VENTAS_CAMBIAR_ESTADO_ORDEN)) {
+      showDenied()
+      return
+    }
+    const ids = [...new Set(itemIds.filter(Boolean))]
+    if (!ids.length) return
+    setPendingItemCancelIds(ids)
+    setItemCancelDialogOpen(true)
+  }
+
+  const handleConfirmItemCancellation = async (cancellationReason) => {
+    if (!detailOrder?.id || !pendingItemCancelIds.length) return
+    setItemsCancelSaving(true)
+    setDetailError('')
+    const result = await cancelOrderItems(pendingItemCancelIds, cancellationReason)
+    setItemsCancelSaving(false)
+    if (!result.success) {
+      setDetailError(result.error || 'No se pudieron cancelar las piezas')
+      return
+    }
+    setItemCancelDialogOpen(false)
+    setPendingItemCancelIds([])
+    setSelectedItemIds(new Set())
+    setItemsEditMode(false)
+    const refreshed = await getOrderById(detailOrder.id)
+    if (refreshed.success && refreshed.data) {
+      setDetailOrder(refreshed.data)
+    }
+    fetchOrders()
+  }
+
+  const activeOrderItemsList = (detailOrder?.items || []).filter(isActiveOrderItem)
+  const allActiveItemIds = activeOrderItemsList.map((it) => it.id).filter(Boolean)
+  const allActiveSelected =
+    allActiveItemIds.length > 0 && allActiveItemIds.every((id) => selectedItemIds.has(id))
+
+  const handleToggleSelectAllItems = () => {
+    if (allActiveSelected) {
+      setSelectedItemIds(new Set())
+      return
+    }
+    setSelectedItemIds(new Set(allActiveItemIds))
+  }
+
   const handleChannelFilterChange = (_, value) => {
     if (value != null) {
       setChannelFilter(value)
@@ -532,6 +689,7 @@ const Ventas = () => {
                     <TableCell><strong>Nº Orden</strong></TableCell>
                     <TableCell><strong>Fecha</strong></TableCell>
                     <TableCell><strong>Hora</strong></TableCell>
+                    <TableCell><strong>Unidad</strong></TableCell>
                     <TableCell><strong>Cliente</strong></TableCell>
                     <TableCell><strong>Canal</strong></TableCell>
                     <TableCell><strong>Estado</strong></TableCell>
@@ -540,13 +698,16 @@ const Ventas = () => {
                 </TableHead>
                 <TableBody>
                   {orders.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4 }}>No hay ventas con los filtros seleccionados.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} align="center" sx={{ py: 4 }}>No hay ventas con los filtros seleccionados.</TableCell></TableRow>
                   ) : (
                     orders.map((order) => (
                       <TableRow key={order.id} hover onDoubleClick={() => handleRowDoubleClick(order)} sx={{ cursor: 'pointer' }}>
                         <TableCell>{order.orderNumber || '-'}</TableCell>
                         <TableCell>{formatDate(order.createdAt)}</TableCell>
                         <TableCell>{formatTime(order.createdAt)}</TableCell>
+                        <TableCell sx={{ maxWidth: 220, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                          {getOrderVehicleDisplay(order)}
+                        </TableCell>
                         <TableCell>{getClientDisplay(order)}</TableCell>
                         <TableCell>
                           <Chip
@@ -607,7 +768,7 @@ const Ventas = () => {
                 </Box>
                 <Typography variant="body2" color="text.secondary">Fecha: {formatDate(detailOrder.createdAt)}{detailOrder.currency && ` · ${detailOrder.currency}`}{' · '}Pago: {detailOrder.paymentStatus || '-'}</Typography>
                 <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Facturación</Typography>
+                <Typography variant="subtitle2" sx={{ ...detailSectionTitleSx, mb: 1 }}>Facturación</Typography>
                 {detailOrder.billingAddress ? (
                   <Box sx={{ mb: 2, display: 'grid', gap: 0.5 }}>
                     <Typography variant="body2"><strong>Nombre:</strong> {[detailOrder.billingAddress.firstName, detailOrder.billingAddress.lastName].filter(Boolean).join(' ')} {detailOrder.billingAddress.company ? ` · ${detailOrder.billingAddress.company}` : ''}</Typography>
@@ -710,18 +871,151 @@ const Ventas = () => {
                 {detailOrder.shippingAddress && (detailOrder.shippingMethod || detailOrder.trackingNumber) && (
                   <Box sx={{ mb: 2 }}>{detailOrder.shippingMethod && <Typography variant="body2">Método de envío: {detailOrder.shippingMethod}</Typography>}{detailOrder.trackingNumber && <Typography variant="body2">Seguimiento: {detailOrder.trackingNumber}</Typography>}</Box>
                 )}
-                <Typography variant="subtitle2" color="text.secondary">Productos</Typography>
+                {(() => {
+                  const vehicleInfo = getOrderVehicleInfo(detailOrder)
+                  return (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" sx={{ ...detailSectionTitleSx, mb: 1 }}>
+                        Información del vehículo
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                          gap: 0.75,
+                        }}
+                      >
+                        <Typography variant="body2"><strong>Unidad:</strong> {vehicleInfo.unidad}</Typography>
+                        <Typography variant="body2"><strong>Modelo:</strong> {vehicleInfo.modelo}</Typography>
+                        <Typography variant="body2"><strong>Año:</strong> {vehicleInfo.anio}</Typography>
+                        <Typography variant="body2"><strong>Siniestro:</strong> {vehicleInfo.siniestro}</Typography>
+                      </Box>
+                    </Box>
+                  )
+                })()}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+                  <Typography variant="subtitle2" sx={detailSectionTitleSx}>Productos</Typography>
+                  {canEditOrderItems(detailOrder) && activeOrderItemsList.length > 0 ? (
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {itemsEditMode ? (
+                        <>
+                          <Button size="small" onClick={resetItemsEditState} disabled={itemsCancelSaving}>
+                            Listo
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            disabled={itemsCancelSaving || selectedItemIds.size < 1}
+                            onClick={() => openItemCancelDialog([...selectedItemIds])}
+                          >
+                            Cancelar seleccionadas ({selectedItemIds.size})
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="text"
+                          startIcon={<EditIcon sx={{ fontSize: 16 }} />}
+                          onClick={handleStartItemsEdit}
+                        >
+                          Editar piezas
+                        </Button>
+                      )}
+                    </Box>
+                  ) : null}
+                </Box>
                 <Table size="small" sx={{ mb: 2 }}>
-                  <TableHead><TableRow><TableCell>Producto / SKU</TableCell><TableCell align="right">Cant.</TableCell><TableCell align="right">P. unit.</TableCell><TableCell align="right">Total</TableCell></TableRow></TableHead>
+                  <TableHead>
+                    <TableRow>
+                      {itemsEditMode ? (
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            size="small"
+                            checked={allActiveSelected}
+                            indeterminate={selectedItemIds.size > 0 && !allActiveSelected}
+                            onChange={handleToggleSelectAllItems}
+                            inputProps={{ 'aria-label': 'Seleccionar todas las piezas activas' }}
+                          />
+                        </TableCell>
+                      ) : null}
+                      <TableCell>Producto / SKU</TableCell>
+                      <TableCell align="right">Cant.</TableCell>
+                      <TableCell align="right">P. unit.</TableCell>
+                      <TableCell align="right">Total</TableCell>
+                      {itemsEditMode ? <TableCell align="center">Acción</TableCell> : null}
+                    </TableRow>
+                  </TableHead>
                   <TableBody>
-                    {(detailOrder.items || []).map((item) => (
-                      <TableRow key={item.id || item.productId}>
-                        <TableCell>{item.productName || '-'} {item.productSku && `(${item.productSku})`}</TableCell>
-                        <TableCell align="right">{item.quantity ?? '-'}</TableCell>
-                        <TableCell align="right">{formatCurrency(item.unitPrice, detailOrder.currency)}</TableCell>
-                        <TableCell align="right">{formatCurrency(item.totalPrice, detailOrder.currency)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {(detailOrder.items || []).map((item) => {
+                      const active = isActiveOrderItem(item)
+                      const itemId = item.id
+                      return (
+                        <TableRow
+                          key={itemId || item.productId}
+                          sx={{
+                            opacity: active ? 1 : 0.65,
+                            bgcolor: active ? 'inherit' : 'action.hover',
+                          }}
+                        >
+                          {itemsEditMode ? (
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                size="small"
+                                checked={Boolean(itemId && selectedItemIds.has(itemId))}
+                                disabled={!active || !itemId}
+                                onChange={() => toggleItemSelection(itemId)}
+                              />
+                            </TableCell>
+                          ) : null}
+                          <TableCell>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  textDecoration: active ? 'none' : 'line-through',
+                                  color: active ? 'inherit' : 'text.secondary',
+                                }}
+                              >
+                                {item.productName || '-'} {item.productSku && `(${item.productSku})`}
+                              </Typography>
+                              {!active ? (
+                                <Box>
+                                  <Chip label="Cancelada" size="small" color="error" variant="outlined" sx={{ height: 20 }} />
+                                  {item.cancellationReason ? (
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
+                                      {item.cancellationReason}
+                                    </Typography>
+                                  ) : null}
+                                </Box>
+                              ) : null}
+                            </Box>
+                          </TableCell>
+                          <TableCell align="right">{item.quantity ?? '-'}</TableCell>
+                          <TableCell align="right">{formatCurrency(item.unitPrice, detailOrder.currency)}</TableCell>
+                          <TableCell align="right">{formatCurrency(item.totalPrice, detailOrder.currency)}</TableCell>
+                          {itemsEditMode ? (
+                            <TableCell align="center">
+                              {active && itemId ? (
+                                <Tooltip title="Cancelar pieza">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    disabled={itemsCancelSaving}
+                                    onClick={() => openItemCancelDialog([itemId])}
+                                    aria-label={`Cancelar ${item.productName || 'pieza'}`}
+                                  >
+                                    <CancelItemIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              ) : (
+                                '—'
+                              )}
+                            </TableCell>
+                          ) : null}
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
                 <Divider sx={{ my: 2 }} />
@@ -732,7 +1026,7 @@ const Ventas = () => {
                   {detailOrder.discountAmount != null && Number(detailOrder.discountAmount) !== 0 && <Typography variant="body2">Descuento: {formatCurrency(detailOrder.discountAmount, detailOrder.currency)}</Typography>}
                   <Typography variant="subtitle1" fontWeight="bold">Total: {formatCurrency(detailOrder.totalAmount, detailOrder.currency)}</Typography>
                 </Box>
-                {detailOrder.notes && <><Divider sx={{ my: 2 }} /><Typography variant="subtitle2" color="text.secondary">Notas</Typography><Typography variant="body2">{detailOrder.notes}</Typography></>}
+                {detailOrder.notes && <><Divider sx={{ my: 2 }} /><Typography variant="subtitle2" sx={{ ...detailSectionTitleSx, mb: 1 }}>Notas</Typography><Typography variant="body2">{detailOrder.notes}</Typography></>}
                 {detailOrder.cancellationReason ? (
                   <>
                     <Divider sx={{ my: 2 }} />
@@ -792,6 +1086,24 @@ const Ventas = () => {
           onConfirm={handleConfirmCancellation}
           statusLabel={ORDER_STATUS_OPTIONS.find((o) => o.value === pendingCancelStatus)?.label || 'Cancelado'}
           saving={statusSaving}
+        />
+
+        <OrderCancellationDialog
+          open={itemCancelDialogOpen}
+          onClose={() => {
+            if (itemsCancelSaving) return
+            setItemCancelDialogOpen(false)
+            setPendingItemCancelIds([])
+          }}
+          onConfirm={(reason) => void handleConfirmItemCancellation(reason)}
+          title="Cancelar pieza(s)"
+          description={
+            pendingItemCancelIds.length > 1
+              ? `Se cancelarán ${pendingItemCancelIds.length} piezas de la nota. La nota seguirá activa con las piezas restantes y se actualizarán los totales.`
+              : 'La pieza quedará marcada como cancelada. La nota seguirá activa con las piezas restantes y se actualizarán los totales.'
+          }
+          confirmLabel="Confirmar cancelación de pieza(s)"
+          saving={itemsCancelSaving}
         />
 
         {permissionDeniedSnackbar}

@@ -117,13 +117,41 @@ function formatShortDate(isoDate) {
   return `${day}/${month}`
 }
 
+/** Normaliza fechas de series diarias a YYYY-MM-DD (alineado con filtros del dashboard). */
+function normalizeSeriesDateKey(raw) {
+  if (raw == null || raw === '') return ''
+  if (typeof raw === 'string') {
+    const iso = raw.match(/^(\d{4}-\d{2}-\d{2})/)
+    if (iso) return iso[1]
+  }
+  const d =
+    raw instanceof Date
+      ? raw
+      : new Date(typeof raw === 'string' && !String(raw).includes('T') ? `${raw}T12:00:00` : raw)
+  if (!Number.isNaN(d.getTime())) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  return ''
+}
+
 function mapSeriesToDateMap(series = []) {
   const m = new Map()
   for (const s of series) {
-    const raw = s.date ?? s.saleDate ?? ''
-    if (!raw) continue
-    const key = raw.slice(0, 10)
-    m.set(key, Number(s.totalAmount ?? s.totalamount ?? 0))
+    const raw =
+      s.date ??
+      s.purchaseDay ??
+      s.saleDate ??
+      s.purchaseDate ??
+      s.purchase_date ??
+      ''
+    const key = normalizeSeriesDateKey(raw)
+    if (!key) continue
+    const amt = Number(s.totalAmount ?? s.totalamount ?? s.total ?? 0)
+    if (Number.isNaN(amt)) continue
+    m.set(key, (m.get(key) || 0) + amt)
   }
   return m
 }

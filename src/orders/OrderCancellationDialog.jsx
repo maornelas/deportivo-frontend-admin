@@ -27,6 +27,9 @@ export default function OrderCancellationDialog({
   onClose,
   onConfirm,
   statusLabel = 'Cancelado',
+  title = 'Causa de cancelación',
+  description,
+  confirmLabel = 'Confirmar cancelación',
   saving = false,
 }) {
   const [reasonKey, setReasonKey] = useState('')
@@ -69,7 +72,7 @@ export default function OrderCancellationDialog({
         }}
       >
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Causa de cancelación
+          {title}
         </Typography>
         <IconButton size="small" onClick={onClose} disabled={saving} sx={{ color: '#fff', p: 0.5 }} aria-label="Cerrar">
           <CloseIcon fontSize="small" />
@@ -77,7 +80,11 @@ export default function OrderCancellationDialog({
       </Box>
       <DialogContent sx={{ pt: 2.5 }}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          La orden pasará a estado <strong>{statusLabel}</strong>. Indica el motivo para control interno.
+          {description ?? (
+            <>
+              La orden pasará a estado <strong>{statusLabel}</strong>. Indica el motivo para control interno.
+            </>
+          )}
         </Typography>
         <FormControl fullWidth size="small" sx={{ mb: 2 }}>
           <InputLabel>Causa</InputLabel>
@@ -113,7 +120,7 @@ export default function OrderCancellationDialog({
           Volver
         </Button>
         <Button variant="contained" color="error" onClick={handleConfirm} disabled={saving}>
-          {saving ? 'Guardando…' : 'Confirmar cancelación'}
+          {saving ? 'Guardando…' : confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>

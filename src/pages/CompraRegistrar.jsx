@@ -38,7 +38,7 @@ import Header from '../components/Header'
 import { getBrands, getCarModelsByBrand } from '../api/products'
 import { createNotification } from '../api/notifications'
 import { downloadPurchaseNotePdf } from '../compras/purchaseNotePdf'
-import { purchaseSummaryListScrollSx } from '../compras/shared'
+import { purchaseSummaryListScrollSx, purchaseSummaryStickyFooterSx } from '../compras/shared'
 import { useAuth } from '../contexts/AuthContext'
 import { usePurchases } from '../contexts/PurchasesContext'
 import { createPurchase, getSalesOrderPurchaseLines } from '../api/purchases'
@@ -947,8 +947,6 @@ export default function CompraRegistrar() {
                   display: 'flex',
                   flexDirection: 'column',
                   overflow: 'hidden',
-                  p: 1.5,
-                  pt: 1.5,
                 }}
               >
                 <Box sx={purchaseSummaryListScrollSx}>
@@ -1065,10 +1063,10 @@ export default function CompraRegistrar() {
                   )}
                 </Box>
 
-                <Box sx={{ flexShrink: 0 }}>
+                <Box sx={purchaseSummaryStickyFooterSx}>
                   {lines.length > 0 ? (
                     <>
-                      <Divider sx={{ my: 1 }} />
+                      <Divider sx={{ mb: 1 }} />
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.35 }}>
                         <Typography variant="body2" color="text.secondary">
                           Subtotal
@@ -1084,7 +1082,7 @@ export default function CompraRegistrar() {
                         </Typography>
                       </Box>
                       <Divider sx={{ my: 0.75 }} />
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1.25 }}>
                         <Typography variant="body2" color="text.secondary" fontWeight={600}>
                           Total
                         </Typography>
@@ -1094,28 +1092,28 @@ export default function CompraRegistrar() {
                       </Box>
                     </>
                   ) : null}
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      variant="contained"
+                      disabled={saving}
+                      onClick={handleSave}
+                      sx={{
+                        width: '50%',
+                        minWidth: 160,
+                        py: 1.25,
+                        bgcolor: '#7B2CBF',
+                        '&:hover': { bgcolor: '#6A26A8' },
+                        textTransform: 'uppercase',
+                        fontWeight: 700,
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      {saving ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Generar Compra'}
+                    </Button>
+                  </Box>
                 </Box>
               </Box>
             </Paper>
-            <Box sx={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
-              <Button
-                variant="contained"
-                disabled={saving}
-                onClick={handleSave}
-                sx={{
-                  width: '50%',
-                  minWidth: 160,
-                  py: 1.25,
-                  bgcolor: '#7B2CBF',
-                  '&:hover': { bgcolor: '#6A26A8' },
-                  textTransform: 'uppercase',
-                  fontWeight: 700,
-                  letterSpacing: 0.5,
-                }}
-              >
-                {saving ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Generar Compra'}
-              </Button>
-            </Box>
           </Box>
         </Box>
         </Box>

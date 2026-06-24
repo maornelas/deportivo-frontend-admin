@@ -1,4 +1,5 @@
 export const ORDER_CANCELLATION_REASONS = [
+  { value: 'aseguradora_rechazo', label: 'Aseguradora rechazó la pieza' },
   { value: 'cliente_desistio', label: 'Cliente desistió' },
   { value: 'pieza_no_disponible', label: 'Pieza no disponible' },
   { value: 'error_cotizacion', label: 'Error en cotización' },
