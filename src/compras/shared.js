@@ -105,7 +105,42 @@ export function computePurchaseTotal(items) {
   return Math.round(t * 100) / 100
 }
 
-/** Solo la lista de piezas hace scroll; totales y botón quedan fijos abajo del panel. */
+/** Columna derecha: card de resumen + botón de acción siempre visible. */
+export const purchaseSummaryColumnSx = {
+  width: { xs: '100%', lg: 520 },
+  minWidth: { lg: 480 },
+  flexShrink: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  height: { xs: 'auto', lg: '100%' },
+  maxHeight: { xs: 'none', lg: '100%' },
+  minHeight: { xs: 'auto', lg: 0 },
+  overflow: 'hidden',
+}
+
+/** Card del carrito: ocupa casi toda la altura de la columna; la lista hace scroll. */
+export const purchaseSummaryCardSx = (theme) => ({
+  width: '100%',
+  flex: 1,
+  minHeight: { xs: 360, lg: 0 },
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+  border: '1px solid',
+  borderColor: 'grey.300',
+  boxShadow: theme.shadows[2],
+  bgcolor: 'background.paper',
+})
+
+export const purchaseSummaryBodySx = {
+  flex: 1,
+  minHeight: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+}
+
+/** Solo la lista de piezas hace scroll dentro del card. */
 export const purchaseSummaryListScrollSx = {
   flex: 1,
   minHeight: 0,
@@ -116,8 +151,8 @@ export const purchaseSummaryListScrollSx = {
   pt: 1.5,
 }
 
-/** Pie del resumen: subtotal, IVA, total y acción principal siempre visibles. */
-export const purchaseSummaryStickyFooterSx = {
+/** Totales fijos al pie del card (sin botón de acción). */
+export const purchaseSummaryTotalsSx = {
   flexShrink: 0,
   px: 1.5,
   pt: 1,
@@ -125,4 +160,23 @@ export const purchaseSummaryStickyFooterSx = {
   borderTop: '1px solid',
   borderColor: 'divider',
   bgcolor: 'background.paper',
+}
+
+/** Botón principal fuera del card, siempre visible. */
+export const purchaseSummaryActionSx = {
+  flexShrink: 0,
+  display: 'flex',
+  justifyContent: 'flex-end',
+  pt: 1.5,
+}
+
+export const purchaseSummaryGenerateButtonSx = {
+  width: '50%',
+  minWidth: 160,
+  py: 1.25,
+  bgcolor: '#7B2CBF',
+  '&:hover': { bgcolor: '#6A26A8' },
+  textTransform: 'uppercase',
+  fontWeight: 700,
+  letterSpacing: 0.5,
 }

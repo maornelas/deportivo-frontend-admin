@@ -52,8 +52,13 @@ import {
   safeTrim,
   summarizePurchaseHeaderVehicle,
   vehicleLineFingerprint,
+  purchaseSummaryColumnSx,
+  purchaseSummaryCardSx,
+  purchaseSummaryBodySx,
   purchaseSummaryListScrollSx,
-  purchaseSummaryStickyFooterSx,
+  purchaseSummaryTotalsSx,
+  purchaseSummaryActionSx,
+  purchaseSummaryGenerateButtonSx,
 } from '../compras/shared'
 import PurchaseSalesOrderPicker, { salesOrderFromPurchase } from '../compras/PurchaseSalesOrderPicker'
 
@@ -597,6 +602,7 @@ export default function CompraDetalle() {
           pt: { xs: 2, sm: 3, md: 4 },
           pb: { xs: 2, sm: 3, md: 4 },
           minHeight: { xs: '100vh', lg: 'calc(100vh - 70px)' },
+          height: { xs: 'auto', lg: 'calc(100vh - 70px)' },
           maxHeight: { xs: 'none', lg: 'calc(100vh - 70px)' },
           backgroundColor: '#fafafa',
           display: 'flex',
@@ -652,7 +658,7 @@ export default function CompraDetalle() {
               flex: 1,
               minHeight: 0,
               overflow: 'hidden',
-              alignItems: { xs: 'stretch', lg: 'stretch' },
+              alignItems: { xs: 'flex-start', lg: 'stretch' },
             }}
           >
             <Box
@@ -895,33 +901,8 @@ export default function CompraDetalle() {
               </Paper>
             </Box>
 
-            <Box
-              sx={{
-                width: { xs: '100%', lg: 520 },
-                minWidth: { lg: 480 },
-                flexShrink: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                height: { xs: 'auto', lg: '100%' },
-                maxHeight: { xs: 'none', lg: '100%' },
-                minHeight: { xs: 'auto', lg: 0 },
-                overflow: 'hidden',
-              }}
-            >
-              <Paper
-                sx={(theme) => ({
-                  width: '100%',
-                  flex: 1,
-                  minHeight: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                  border: '1px solid',
-                  borderColor: 'grey.300',
-                  boxShadow: theme.shadows[2],
-                })}
-                elevation={0}
-              >
+            <Box sx={purchaseSummaryColumnSx}>
+              <Paper sx={purchaseSummaryCardSx} elevation={2}>
                 <Box
                   sx={{
                     ...sectionHeaderSx,
@@ -957,15 +938,7 @@ export default function CompraDetalle() {
                     </Typography>
                   ) : null}
                 </Box>
-                <Box
-                  sx={{
-                    flex: 1,
-                    minHeight: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                  }}
-                >
+                <Box sx={purchaseSummaryBodySx}>
                   <Box sx={purchaseSummaryListScrollSx}>
                     {lines.length === 0 ? (
                       <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center', px: 1 }}>
@@ -1088,7 +1061,7 @@ export default function CompraDetalle() {
                     )}
                   </Box>
 
-                  <Box sx={purchaseSummaryStickyFooterSx}>
+                  <Box sx={purchaseSummaryTotalsSx}>
                     <Divider sx={{ mb: 1 }} />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.75 }}>
                       <Typography variant="body2" color="text.secondary">
@@ -1113,31 +1086,22 @@ export default function CompraDetalle() {
                       16% × {formatMoney(totals.subtotal)} = {formatMoney(totals.tax)}
                     </Typography>
                     <Divider sx={{ my: 0.75 }} />
-                    <Typography variant="h6" color="primary" sx={{ fontSize: '1.05rem', lineHeight: 1.3, mb: 1.25 }}>
+                    <Typography variant="h6" color="primary" sx={{ fontSize: '1.05rem', lineHeight: 1.3 }}>
                       Total: {formatMoney(totals.total)}
                     </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <Button
-                        variant="contained"
-                        disabled={loading}
-                        onClick={handleGenerarCompra}
-                        sx={{
-                          width: '50%',
-                          minWidth: 160,
-                          py: 1.25,
-                          bgcolor: '#7B2CBF',
-                          '&:hover': { bgcolor: '#6A26A8' },
-                          textTransform: 'uppercase',
-                          fontWeight: 700,
-                          letterSpacing: 0.5,
-                        }}
-                      >
-                        {loading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Generar Compra'}
-                      </Button>
-                    </Box>
                   </Box>
                 </Box>
               </Paper>
+              <Box sx={purchaseSummaryActionSx}>
+                <Button
+                  variant="contained"
+                  disabled={loading}
+                  onClick={handleGenerarCompra}
+                  sx={purchaseSummaryGenerateButtonSx}
+                >
+                  {loading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Generar Compra'}
+                </Button>
+              </Box>
             </Box>
           </Box>
         </Box>
