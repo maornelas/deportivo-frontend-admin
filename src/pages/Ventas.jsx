@@ -894,7 +894,19 @@ const Ventas = () => {
                   )
                 })()}
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1, flexWrap: 'wrap' }}>
-                  <Typography variant="subtitle2" sx={detailSectionTitleSx}>Productos</Typography>
+                  <Typography variant="subtitle2" sx={detailSectionTitleSx}>
+                    Productos
+                    {detailOrder.items?.length ? (
+                      <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1, fontWeight: 400 }}>
+                        ({detailOrder.items.length}{' '}
+                        {detailOrder.items.length === 1 ? 'pieza' : 'piezas'}
+                        {detailOrder.items.some((it) => !isActiveOrderItem(it))
+                          ? ` · ${detailOrder.items.filter((it) => isActiveOrderItem(it)).length} activas`
+                          : ''}
+                        )
+                      </Typography>
+                    ) : null}
+                  </Typography>
                   {canEditOrderItems(detailOrder) && activeOrderItemsList.length > 0 ? (
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                       {itemsEditMode ? (
@@ -925,7 +937,7 @@ const Ventas = () => {
                     </Box>
                   ) : null}
                 </Box>
-                <Table size="small" sx={{ mb: 2 }}>
+                <Table size="small" sx={{ mb: 2, display: 'block', maxHeight: 360, overflowY: 'auto' }}>
                   <TableHead>
                     <TableRow>
                       {itemsEditMode ? (
@@ -947,12 +959,12 @@ const Ventas = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(detailOrder.items || []).map((item) => {
+                    {(detailOrder.items || []).map((item, itemIndex) => {
                       const active = isActiveOrderItem(item)
                       const itemId = item.id
                       return (
                         <TableRow
-                          key={itemId || item.productId}
+                          key={itemId || `line-${itemIndex}-${item.productSku || item.productName || 'item'}`}
                           sx={{
                             opacity: active ? 1 : 0.65,
                             bgcolor: active ? 'inherit' : 'action.hover',

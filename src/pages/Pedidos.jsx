@@ -465,8 +465,8 @@ const Pedidos = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(detailOrder.items || []).map((item) => (
-                      <TableRow key={item.id || item.productId}>
+                    {(detailOrder.items || []).map((item, itemIndex) => (
+                      <TableRow key={item.id || `line-${itemIndex}-${item.productSku || item.productName || 'item'}`}>
                         <TableCell>{item.productName || '-'} {item.productSku && `(${item.productSku})`}</TableCell>
                         <TableCell align="right">{item.quantity ?? '-'}</TableCell>
                         <TableCell align="right">{formatCurrency(item.unitPrice, detailOrder.currency)}</TableCell>
