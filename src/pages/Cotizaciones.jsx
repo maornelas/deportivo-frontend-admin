@@ -177,7 +177,7 @@ export default function Cotizaciones() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-              placeholder="Número de cotización"
+              placeholder="COT, cliente, siniestro, serie, asesor…"
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
               sx={{ minWidth: 200 }}
             />

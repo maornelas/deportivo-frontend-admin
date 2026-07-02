@@ -75,9 +75,18 @@ const Compras = () => {
       if (status && p.status !== status) return false
       if (ps && !(p.providerName || '').toLowerCase().includes(ps)) return false
       if (q) {
-        const provider = (p.providerName || '').toLowerCase().includes(q)
-        const id = String(p.id || '').toLowerCase().includes(q)
-        if (!provider && !id) return false
+        const hay = [
+          p.providerName,
+          p.id,
+          p.salesOrderNumber,
+          p.salesOrderClient,
+          p.notes,
+          ...(p.items || []).map((i) => [i.productName, i.sku].join(' ')),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!hay.includes(q)) return false
       }
       if (sDate) {
         const pd = new Date(p.purchaseDate)
@@ -173,7 +182,7 @@ const Compras = () => {
               size="small"
               value={searchApplied}
               onChange={(e) => setSearchApplied(e.target.value)}
-              placeholder="ID o proveedor"
+              placeholder="CMP, proveedor, ORD, cliente, pieza…"
               sx={{ minWidth: 240 }}
               InputProps={{
                 startAdornment: (

@@ -567,7 +567,7 @@ const Gastos = () => {
               <TextField
                 fullWidth
                 size="small"
-                label="Buscar (categoría, concepto, empleado, proveedor)"
+                label="Buscar (GST, categoría, concepto, empleado, proveedor)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}

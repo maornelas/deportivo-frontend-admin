@@ -11,6 +11,8 @@ import CompraRegistrar from './pages/CompraRegistrar'
 import Gastos from './pages/Gastos'
 import Cotizaciones from './pages/Cotizaciones'
 import CotizacionEditor from './pages/CotizacionEditor'
+import ExpedienteDigital from './pages/ExpedienteDigital'
+import ExpedienteDetalle from './pages/ExpedienteDetalle'
 import Clientes from './pages/Clientes'
 import Usuarios from './pages/Usuarios'
 import Catalogos from './pages/Catalogos'
@@ -144,6 +146,22 @@ function App() {
         }
       />
       <Route path="/cotizacion" element={<Navigate to="/cotizaciones" replace />} />
+      <Route
+        path="/expediente-digital/:ref"
+        element={
+          <ProtectedRoute>
+            <ExpedienteDetalle />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/expediente-digital"
+        element={
+          <ProtectedRoute>
+            <ExpedienteDigital />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/clientes"
         element={
