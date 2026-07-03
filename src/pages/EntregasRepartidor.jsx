@@ -140,6 +140,52 @@ function getDeliveryCardStatusVariant(row) {
   return 'default'
 }
 
+function deliveryStatusChipStyle(variant) {
+  if (variant === 'delivered') {
+    return {
+      color: 'success',
+      variant: 'filled',
+      sx: {
+        bgcolor: 'success.main',
+        color: 'success.contrastText',
+        fontWeight: 700,
+        '& .MuiChip-label': { color: 'inherit' },
+      },
+    }
+  }
+  if (variant === 'pending') {
+    return {
+      color: 'warning',
+      variant: 'outlined',
+      sx: {
+        borderColor: 'warning.main',
+        color: 'warning.dark',
+        bgcolor: 'rgba(237, 108, 2, 0.08)',
+        fontWeight: 600,
+      },
+    }
+  }
+  return {
+    color: 'primary',
+    variant: 'outlined',
+    sx: {},
+  }
+}
+
+function DeliveryStatusChip({ row, sx = {} }) {
+  const statusVariant = getDeliveryCardStatusVariant(row)
+  const chipStyle = deliveryStatusChipStyle(statusVariant)
+  return (
+    <Chip
+      size="small"
+      label={row.statusLabel || row.status}
+      color={chipStyle.color}
+      variant={chipStyle.variant}
+      sx={{ ...chipStyle.sx, ...sx }}
+    />
+  )
+}
+
 function formatDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -351,30 +397,7 @@ function DeliveryCompactCard({ row, showRepartidorColumn = true }) {
           >
             {row.deliveryNumber || '—'}
           </Typography>
-          <Chip
-            size="small"
-            label={row.statusLabel || row.status}
-            variant="outlined"
-            sx={{
-              ...chipSx,
-              ...(statusVariant === 'delivered'
-                ? {
-                    borderColor: '#16a34a',
-                    color: '#166534',
-                    bgcolor: 'rgba(22, 163, 74, 0.12)',
-                  }
-                : statusVariant === 'pending'
-                  ? {
-                      borderColor: '#c2410c',
-                      color: '#7c2d12',
-                      bgcolor: 'rgba(194, 65, 12, 0.12)',
-                    }
-                  : {
-                      borderColor: 'primary.main',
-                      color: 'primary.main',
-                    }),
-            }}
-          />
+          <DeliveryStatusChip row={row} sx={chipSx} />
         </Box>
         <Box sx={{ minWidth: 0, mt: { xs: 0.35, md: 'auto' } }}>
           {showRepartidorColumn ? (
@@ -1053,11 +1076,8 @@ export function RepartidorDeliveriesList({ embedded = false }) {
                           </Box>
                         </TableCell>
                         <TableCell sx={{ width: { xs: '18%', sm: 'auto' } }}>
-                          <Chip
-                            size="small"
-                            label={r.statusLabel || r.status}
-                            color="primary"
-                            variant="outlined"
+                          <DeliveryStatusChip
+                            row={r}
                             sx={{
                               height: { xs: 18, sm: 24 },
                               maxWidth: '100%',

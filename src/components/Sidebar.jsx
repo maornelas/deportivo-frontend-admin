@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { SIDEBAR_WIDTH } from '../config/layout'
+import { APP_VERSION, formatAppDate } from '../config/app'
 import {
   Box,
   List,
@@ -133,7 +134,7 @@ const Sidebar = ({ isOpen = true, onClose }) => {
         </Typography>
       </Box>
 
-      <List dense sx={{ flex: 1, py: 0.5, px: 0 }}>
+      <List dense sx={{ flex: 1, py: 0.5, px: 0, overflowY: 'auto' }}>
         {visibleMenu.map((item, index) => {
           if (item.type === 'divider') {
             return (
@@ -194,6 +195,52 @@ const Sidebar = ({ isOpen = true, onClose }) => {
           )
         })}
       </List>
+
+      <Box
+        sx={{
+          mt: 'auto',
+          px: 1.25,
+          py: 1.25,
+          borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+          textAlign: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <Typography
+          sx={{
+            color: 'rgba(255, 255, 255, 0.6)',
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            lineHeight: 1.3,
+          }}
+        >
+          {APP_VERSION}
+        </Typography>
+        <Typography
+          sx={{
+            color: 'rgba(255, 255, 255, 0.18)',
+            fontSize: '0.62rem',
+            fontWeight: 500,
+            mt: 0.4,
+            lineHeight: 1.2,
+            letterSpacing: '0.02em',
+          }}
+        >
+          {formatAppDate()}
+        </Typography>
+        <Typography
+          sx={{
+            color: 'rgba(255, 255, 255, 0.32)',
+            fontSize: '0.58rem',
+            fontWeight: 400,
+            mt: 0.65,
+            lineHeight: 1.35,
+          }}
+        >
+          Derechos reservados &quot;El Deportivo&quot;
+        </Typography>
+      </Box>
       </Box>
     </>
   )
