@@ -41,6 +41,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import ModalHeader from '../components/ModalHeader'
 import {
   searchOrders,
@@ -54,6 +55,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
 import OrderCancellationDialog from '../orders/OrderCancellationDialog'
+import { defaultPeriodRangeYmd } from '../utils/datePeriod'
 
 const ORDER_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
@@ -297,8 +299,9 @@ const Ventas = () => {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
   const [limit] = useState(LIMIT)
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const defaultRange = defaultPeriodRangeYmd()
+  const [startDate, setStartDate] = useState(defaultRange.start)
+  const [endDate, setEndDate] = useState(defaultRange.end)
   const [search, setSearch] = useState('')
   const [searchApplied, setSearchApplied] = useState('')
   const [detailOrder, setDetailOrder] = useState(null)
@@ -637,44 +640,62 @@ const Ventas = () => {
   return (
     <Box sx={{ minHeight: '100vh' }}>
       <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
-      <Box sx={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', marginTop: { xs: 0, md: '70px' }, pt: { xs: '16px', sm: '24px', md: '32px' }, pr: { xs: '16px', sm: '24px', md: '32px' }, pb: { xs: '16px', sm: '24px', md: '32px' }, pl: { xs: '16px', sm: '24px', md: `${SIDEBAR_WIDTH + 32}px` }, minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' } }}>
+      <Box sx={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', marginTop: { xs: 0, md: '70px' }, pt: { xs: '8px', sm: '12px', md: '16px' }, pr: { xs: '16px', sm: '24px', md: '32px' }, pb: { xs: '16px', sm: '24px', md: '32px' }, pl: { xs: '16px', sm: '24px', md: `${SIDEBAR_WIDTH + 32}px` }, minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' } }}>
         <Header onMenuClick={handleMenuClick} />
-        <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', marginBottom: 2, fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
-          Ventas
-        </Typography>
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Canal de venta</Typography>
-          <ToggleButtonGroup
-            value={channelFilter}
-            exclusive
-            onChange={handleChannelFilterChange}
-            size="small"
+        <PageTitle>Ventas</PageTitle>
+        <Paper sx={{ px: 1.5, py: 1.25, mb: 1.5 }}>
+          <Box
             sx={{
-              mb: 2,
+              display: 'flex',
               flexWrap: 'wrap',
-              '& .MuiToggleButton-root.Mui-selected': {
-                backgroundColor: '#7B2CBF',
-                color: '#fff',
-                borderColor: '#7B2CBF',
-                '&:hover': {
-                  backgroundColor: '#6A26A8',
-                  color: '#fff',
-                },
-              },
+              gap: 1.5,
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
           >
-            <ToggleButton value="all">Todos</ToggleButton>
-            <ToggleButton value="online">Online</ToggleButton>
-            <ToggleButton value="advisor">Asesor</ToggleButton>
-          </ToggleButtonGroup>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-            Online = venta directa (landing). Asesor = vendedores de piezas para aseguradoras.
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>
-            <TextField label="Fecha inicio" type="date" size="small" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
-            <TextField label="Fecha fin" type="date" size="small" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
-            <TextField placeholder="ORD, cliente, siniestro, serie, rastreo, pieza…" size="small" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={handleKeyDownSearch} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }} sx={{ minWidth: 260, flex: 1 }} />
-            <Typography component="button" type="button" onClick={handleApplyFilters} sx={{ px: 2, py: 1, borderRadius: 1, border: '1px solid #424242', backgroundColor: '#424242', color: 'white', cursor: 'pointer', fontSize: 14, '&:hover': { backgroundColor: '#616161' } }}>Buscar</Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 1.5,
+                alignItems: 'center',
+                flex: '1 1 320px',
+                minWidth: 0,
+              }}
+            >
+              <TextField label="Fecha inicio" type="date" size="small" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 150 }} />
+              <TextField label="Fecha fin" type="date" size="small" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 150 }} />
+              <TextField placeholder="ORD, cliente, siniestro, serie, rastreo, pieza…" size="small" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={handleKeyDownSearch} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" fontSize="small" /></InputAdornment> }} sx={{ minWidth: 200, flex: '1 1 180px' }} />
+              <Typography component="button" type="button" onClick={handleApplyFilters} sx={{ px: 1.5, py: 0.75, borderRadius: 1, border: '1px solid #424242', backgroundColor: '#424242', color: 'white', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap', '&:hover': { backgroundColor: '#616161' } }}>Buscar</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                Canal
+              </Typography>
+              <ToggleButtonGroup
+                value={channelFilter}
+                exclusive
+                onChange={handleChannelFilterChange}
+                size="small"
+                sx={{
+                  flexWrap: 'nowrap',
+                  '& .MuiToggleButton-root': { px: 1.25, py: 0.35, fontSize: 13 },
+                  '& .MuiToggleButton-root.Mui-selected': {
+                    backgroundColor: '#7B2CBF',
+                    color: '#fff',
+                    borderColor: '#7B2CBF',
+                    '&:hover': {
+                      backgroundColor: '#6A26A8',
+                      color: '#fff',
+                    },
+                  },
+                }}
+              >
+                <ToggleButton value="all">Todos</ToggleButton>
+                <ToggleButton value="online">Online</ToggleButton>
+                <ToggleButton value="advisor">Asesor</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
           </Box>
         </Paper>
         {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}

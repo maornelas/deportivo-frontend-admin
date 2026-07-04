@@ -36,6 +36,7 @@ import {
 import { LocalShipping, ViewList, ViewModule, ExpandMore, FilterList } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import ModalHeader from '../components/ModalHeader'
 import { SIDEBAR_WIDTH } from '../config/layout'
 import { useAuth } from '../contexts/AuthContext'
@@ -622,9 +623,7 @@ export function RepartidorDeliveriesList({ embedded = false }) {
           {!embedded ? (
             <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
               <LocalShipping color="primary" sx={{ fontSize: { xs: 28, sm: 32 }, flexShrink: 0 }} />
-              <Typography variant="h5" sx={{ fontWeight: 700, fontSize: { xs: '1.15rem', sm: '1.5rem' } }}>
-                Repartidor — entregas
-              </Typography>
+              <PageTitle sx={{ mb: 0 }}>Repartidor — entregas</PageTitle>
             </Stack>
           ) : null}
           {!isCompact && (

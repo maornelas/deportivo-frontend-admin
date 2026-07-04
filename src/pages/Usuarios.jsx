@@ -42,6 +42,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import ModalHeader from '../components/ModalHeader'
 import { getUsers, getUserById, updateUser, createUser, deleteUser } from '../api/user'
 import { getRoles as getRbacRoles } from '../api/rbac'
@@ -428,7 +429,7 @@ const Usuarios = () => {
     Boolean(createForm.confirmPassword) && createForm.passwordHash !== createForm.confirmPassword
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
       <Box
         sx={{
@@ -440,22 +441,12 @@ const Usuarios = () => {
           pr: { xs: '16px', sm: '24px', md: '32px' },
           pb: { xs: '16px', sm: '24px', md: '32px' },
           pl: { xs: '16px', sm: '24px', md: `${SIDEBAR_WIDTH + 32}px` },
-          backgroundColor: '#fafafa',
+          bgcolor: 'background.default',
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}
       >
         <Header onMenuClick={handleMenuClick} />
-        <Typography
-          variant="h4"
-          sx={{
-            color: '#424242',
-            fontWeight: 'bold',
-            marginBottom: { xs: '24px', sm: '28px', md: '32px' },
-            fontSize: { xs: '24px', sm: '28px', md: '32px' },
-          }}
-        >
-          Usuarios
-        </Typography>
+        <PageTitle>Usuarios</PageTitle>
 
         <Box sx={{ marginBottom: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
           <TextField
@@ -500,7 +491,7 @@ const Usuarios = () => {
             <TableContainer>
               <Table size="small" stickyHeader>
                 <TableHead>
-                  <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                  <TableRow sx={{ bgcolor: 'action.hover' }}>
                     <TableCell sx={{ fontWeight: 600, width: 56 }} />
                     <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Nombre</TableCell>

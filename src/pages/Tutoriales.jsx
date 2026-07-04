@@ -18,6 +18,7 @@ import {
 import { Close as CloseIcon, OndemandVideo as VideoIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 
 export default function Tutoriales() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -76,9 +77,7 @@ export default function Tutoriales() {
         }}
       >
         <Header onMenuClick={() => setSidebarOpen((o) => !o)} />
-        <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', mb: 1 }}>
-          Tutoriales
-        </Typography>
+        <PageTitle>Tutoriales</PageTitle>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
           Videos de ayuda para el equipo. La reproducción es solo en el navegador; se oculta la opción de descarga en
           los controles compatibles (no impide copiar la URL desde herramientas de desarrollo).

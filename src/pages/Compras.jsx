@@ -26,12 +26,14 @@ import {
 import { Add as AddIcon, Search as SearchIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { usePurchases } from '../contexts/PurchasesContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
 import { usePushNotification } from '../hooks/usePushNotification'
 import { STATUS_OPTIONS, formatDateValue, formatMoney, getStatusChip, safeTrim } from '../compras/shared'
+import { defaultPeriodRangeYmd, ymdRangeToMexicoBounds } from '../utils/datePeriod'
 
 function formatTimeValue(v) {
   if (!v) return '-'
@@ -59,8 +61,9 @@ const Compras = () => {
   const [page, setPage] = useState(0)
   const [limit] = useState(10)
 
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const defaultRange = defaultPeriodRangeYmd()
+  const [startDate, setStartDate] = useState(defaultRange.start)
+  const [endDate, setEndDate] = useState(defaultRange.end)
   const [status, setStatus] = useState('')
   const [providerSearch, setProviderSearch] = useState('')
   const [searchApplied, setSearchApplied] = useState('')
@@ -68,8 +71,7 @@ const Compras = () => {
   const computedPurchases = useMemo(() => {
     const q = safeTrim(searchApplied).toLowerCase()
     const ps = safeTrim(providerSearch).toLowerCase()
-    const sDate = startDate ? new Date(startDate + 'T00:00:00.000Z') : null
-    const eDate = endDate ? new Date(endDate + 'T23:59:59.999Z') : null
+    const { start: sDate, end: eDate } = ymdRangeToMexicoBounds(startDate, endDate)
 
     const filtered = purchases.filter((p) => {
       if (status && p.status !== status) return false
@@ -130,7 +132,7 @@ const Compras = () => {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
@@ -138,19 +140,17 @@ const Compras = () => {
           maxWidth: '100%',
           boxSizing: 'border-box',
           marginTop: { xs: 0, md: '70px' },
-          pt: { xs: '16px', sm: '24px', md: '32px' },
+          pt: { xs: '8px', sm: '12px', md: '16px' },
           pr: { xs: '16px', sm: '24px', md: '32px' },
           pb: { xs: '16px', sm: '24px', md: '32px' },
           pl: { xs: '16px', sm: '24px', md: `${SIDEBAR_WIDTH + 32}px` },
-          backgroundColor: '#fafafa',
+          bgcolor: 'background.default',
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}
       >
         <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
 
-        <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', marginBottom: 2, fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
-          Compras
-        </Typography>
+        <PageTitle>Compras</PageTitle>
 
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -158,10 +158,10 @@ const Compras = () => {
           </Alert>
         )}
 
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end' }}>
-            <TextField label="Fecha inicio" type="date" size="small" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
-            <TextField label="Fecha fin" type="date" size="small" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
+        <Paper sx={{ px: 1.5, py: 1.25, mb: 1.5 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+            <TextField label="Fecha inicio" type="date" size="small" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 150 }} />
+            <TextField label="Fecha fin" type="date" size="small" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 150 }} />
 
             <FormControl size="small" sx={{ minWidth: 180 }}>
               <InputLabel>Estado</InputLabel>

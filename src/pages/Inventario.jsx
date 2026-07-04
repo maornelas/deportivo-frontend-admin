@@ -45,6 +45,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import ModalHeader from '../components/ModalHeader'
 import { getBrands, getCategories, getCarModelsByBrand, createProduct, createProductWithImages, searchProducts, uploadProductImages, deleteProductImage, getProductById, updateProduct, deleteProduct } from '../api/products'
 import { useAuth } from '../contexts/AuthContext'
@@ -659,7 +660,7 @@ const Inventario = () => {
   const canAddMoreImages = NEW_PRODUCT_ALLOW_IMAGE_UPLOAD && imageFiles.length < MAX_FOTOS
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
       <Box
         sx={{
@@ -671,7 +672,7 @@ const Inventario = () => {
           pr: { xs: '16px', sm: '24px', md: '32px' },
           pb: { xs: '16px', sm: '24px', md: '32px' },
           pl: { xs: '16px', sm: '24px', md: `${SIDEBAR_WIDTH + 32}px` },
-          backgroundColor: '#fafafa',
+          bgcolor: 'background.default',
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}
       >
@@ -686,9 +687,7 @@ const Inventario = () => {
             gap: { xs: 2, sm: 0 },
           }}
         >
-          <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
-            Inventario
-          </Typography>
+          <PageTitle sx={{ mb: 0 }}>Inventario</PageTitle>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <Button
               variant="outlined"
@@ -780,7 +779,7 @@ const Inventario = () => {
                 loadProducts()
               }}
               disabled={listLoading}
-              sx={{ textTransform: 'none', borderColor: '#757575', color: '#757575' }}
+              sx={{ textTransform: 'none', borderColor: '#757575', color: 'text.secondary' }}
             >
               Limpiar
             </Button>
@@ -839,20 +838,20 @@ const Inventario = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#757575', width: 56 }} align="center">Vista</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Pieza</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Marca</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Modelo</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Año</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Estado</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }}>Tipo</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }} align="center">
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary', width: 56 }} align="center">Vista</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Pieza</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Marca</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Modelo</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Año</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Estado</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Tipo</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }} align="center">
                       Inventario
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }} align="center">
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }} align="center">
                       Piezas disp.
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#757575' }} align="right">
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }} align="right">
                       Precio
                     </TableCell>
                   </TableRow>
@@ -862,7 +861,7 @@ const Inventario = () => {
                     <TableRow>
                       <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
                         <CircularProgress size={40} sx={{ color: '#7b1fa2' }} aria-label="Cargando inventario" />
-                        <Typography variant="body2" sx={{ color: '#757575', mt: 2, display: 'block' }}>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2, display: 'block' }}>
                           Cargando productos…
                         </Typography>
                       </TableCell>
@@ -870,7 +869,7 @@ const Inventario = () => {
                   ) : products.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={10} align="center" sx={{ padding: '40px' }}>
-                        <Typography variant="body2" sx={{ color: '#757575' }}>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                           {inventoryListFilter === 'sold'
                             ? 'No hay piezas vendidas con estos filtros.'
                             : inventoryListFilter === 'all'
@@ -943,12 +942,12 @@ const Inventario = () => {
               {listLoading ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8 }}>
                   <CircularProgress size={40} sx={{ color: '#7b1fa2' }} aria-label="Cargando inventario" />
-                  <Typography variant="body2" sx={{ color: '#757575', mt: 2 }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
                     Cargando productos…
                   </Typography>
                 </Box>
               ) : products.length === 0 ? (
-                <Typography variant="body2" sx={{ color: '#757575', textAlign: 'center', py: 6 }}>
+                <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 6 }}>
                   {inventoryListFilter === 'sold'
                     ? 'No hay piezas vendidas con estos filtros.'
                     : inventoryListFilter === 'all'
@@ -1064,7 +1063,7 @@ const Inventario = () => {
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, mb: 3 }}>
               {/* Columna izquierda: Nombre, Marca|Modelo, Año desde|hasta, Estado|Tipo */}
               <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600 }}>Nombre de la pieza</Typography>
+                <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600 }}>Nombre de la pieza</Typography>
                 <TextField fullWidth label="Nombre pieza" name="nombrePieza" value={producto.nombrePieza} onChange={handleInputChange} variant="outlined" size="small" required sx={{ maxWidth: '100%' }} />
 
                 {/* Marca y Modelo en dos columnas */}
@@ -1139,7 +1138,7 @@ const Inventario = () => {
                 {NEW_PRODUCT_ALLOW_IMAGE_UPLOAD && (
                   <input type="file" hidden accept="image/*" multiple onChange={handleImageFiles} />
                 )}
-                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Vista previa</Typography>
+                <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1.5 }}>Vista previa</Typography>
                 <Avatar
                   src={NEW_PRODUCT_ALLOW_IMAGE_UPLOAD ? avatarPreviewUrl : undefined}
                   variant="rounded"
@@ -1216,7 +1215,7 @@ const Inventario = () => {
             {/* Fotos al crear (solo si NEW_PRODUCT_ALLOW_IMAGE_UPLOAD) */}
             {NEW_PRODUCT_ALLOW_IMAGE_UPLOAD && (
               <>
-                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1.5 }}>
                   Fotos de la pieza (hasta {MAX_FOTOS})
                 </Typography>
                 {canAddMoreImages && (
@@ -1326,8 +1325,8 @@ const Inventario = () => {
               </DialogActions>
             </Dialog>
           </DialogContent>
-          <DialogActions sx={{ padding: '16px 24px', borderTop: '1px solid #e0e0e0', backgroundColor: '#fafafa' }}>
-            <Button onClick={handleCloseDialog} sx={{ textTransform: 'none', color: '#757575' }} disabled={loading}>Cancelar</Button>
+          <DialogActions sx={{ padding: '16px 24px', borderTop: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
+            <Button onClick={handleCloseDialog} sx={{ textTransform: 'none', color: 'text.secondary' }} disabled={loading}>Cancelar</Button>
             <Button onClick={handleSubmit} variant="contained" disabled={loading} sx={{ textTransform: 'none', backgroundColor: '#7b1fa2', '&:hover': { backgroundColor: '#6a1b9a' } }}>
               {loading ? 'Guardando…' : 'Guardar Producto'}
             </Button>
@@ -1375,7 +1374,7 @@ const Inventario = () => {
 
                 <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, mb: 3 }}>
                   <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600 }}>Nombre de la pieza</Typography>
+                    <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600 }}>Nombre de la pieza</Typography>
                     <TextField fullWidth label="Nombre pieza" name="nombrePieza" value={detailProduct.nombrePieza} onChange={handleDetailInputChange} variant="outlined" size="small" required sx={{ maxWidth: '100%' }} disabled={!detailEditing} />
                     <Box sx={{ display: 'flex', gap: 2 }}>
                       <FormControl fullWidth required size="small" variant="outlined" sx={{ minWidth: 0, '& .MuiSelect-select': { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }}>
@@ -1445,7 +1444,7 @@ const Inventario = () => {
                     {DETAIL_ALLOW_IMAGE_UPLOAD && detailEditing && (
                       <input type="file" hidden accept="image/*" multiple onChange={handleDetailImageFiles} />
                     )}
-                    <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>Vista previa</Typography>
+                    <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1.5 }}>Vista previa</Typography>
                     <Avatar
                       src={detailEditAvatarSrc || undefined}
                       variant="rounded"
@@ -1529,7 +1528,7 @@ const Inventario = () => {
                   </Box>
                 </Box>
 
-                <Typography variant="subtitle2" sx={{ color: '#757575', fontWeight: 600, mb: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1.5 }}>
                   {DETAIL_ALLOW_IMAGE_UPLOAD ? `Fotos de la pieza (hasta ${MAX_FOTOS})` : 'Fotos del producto'}
                 </Typography>
                 {DETAIL_ALLOW_IMAGE_UPLOAD && detailEditing && detailCanAddMoreImages && (
@@ -1706,8 +1705,8 @@ const Inventario = () => {
               </>
             )}
           </DialogContent>
-          <DialogActions sx={{ padding: '16px 24px', borderTop: '1px solid #e0e0e0', backgroundColor: '#fafafa' }}>
-            <Button onClick={closeDetailModal} sx={{ textTransform: 'none', color: '#757575' }} disabled={detailLoading}>Cerrar</Button>
+          <DialogActions sx={{ padding: '16px 24px', borderTop: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
+            <Button onClick={closeDetailModal} sx={{ textTransform: 'none', color: 'text.secondary' }} disabled={detailLoading}>Cerrar</Button>
             {detailEditing ? (
               <Button onClick={handleDetailSave} variant="contained" disabled={detailLoading} sx={{ textTransform: 'none', backgroundColor: '#7b1fa2', '&:hover': { backgroundColor: '#6a1b9a' } }}>
                 {detailLoading ? 'Guardando…' : 'Guardar'}
@@ -1735,8 +1734,8 @@ const Inventario = () => {
               ¿Está seguro que desea eliminar el producto <strong>{detailProduct.nombrePieza || '(sin nombre)'}</strong>? Esta acción no se puede deshacer.
             </Typography>
           </DialogContent>
-          <DialogActions sx={{ padding: '16px 24px', borderTop: '1px solid #e0e0e0', backgroundColor: '#fafafa' }}>
-            <Button onClick={closeDeleteConfirm} sx={{ textTransform: 'none', color: '#757575' }} disabled={detailLoading}>
+          <DialogActions sx={{ padding: '16px 24px', borderTop: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
+            <Button onClick={closeDeleteConfirm} sx={{ textTransform: 'none', color: 'text.secondary' }} disabled={detailLoading}>
               Cancelar
             </Button>
             <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={detailLoading} sx={{ textTransform: 'none' }}>

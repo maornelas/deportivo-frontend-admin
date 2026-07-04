@@ -22,7 +22,6 @@ import Historial from './pages/Historial'
 import Notificaciones from './pages/Notificaciones'
 import Reporteria from './pages/Reporteria'
 import RepartidorEntregas from './pages/RepartidorEntregas'
-import Tutoriales from './pages/Tutoriales'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading, user, canViewPath } = useAuth()
@@ -202,14 +201,7 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/tutoriales"
-        element={
-          <ProtectedRoute>
-            <Tutoriales />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/tutoriales" element={<Navigate to="/dashboard" replace />} />
       <Route path="/" element={<Navigate to="/login" replace />} />
     </Routes>
   )

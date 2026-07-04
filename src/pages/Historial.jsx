@@ -26,6 +26,7 @@ import {
 import { Close as CloseIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import { getActivityLog, listActivityLogs } from '../api/activityLogs'
 import { useAuth } from '../contexts/AuthContext'
 import { activityMethodLabel, activityModuleLabel } from '../utils/activityLogDisplay'
@@ -165,7 +166,7 @@ export default function Historial() {
   const dialogStatusCode = detail ? pickResponseStatusCode(detail.metadata) : null
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
@@ -177,14 +178,12 @@ export default function Historial() {
           pr: { xs: 2, sm: 3, md: 4 },
           pb: { xs: 2, sm: 3, md: 4 },
           pl: { xs: 2, sm: 3, md: `${SIDEBAR_WIDTH + 32}px` },
-          backgroundColor: '#fafafa',
+          bgcolor: 'background.default',
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}
       >
         <Header onMenuClick={() => setSidebarOpen((o) => !o)} />
-        <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', mb: 2 }}>
-          Historial
-        </Typography>
+        <PageTitle sx={{ mb: 2 }}>Historial</PageTitle>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
           Registro de acciones de escritura en la API (POST, PUT, PATCH, DELETE) con contexto del usuario del panel cuando
           la petición incluye las cabeceras de administrador. Doble clic en una fila para ver el detalle de la acción y el

@@ -35,6 +35,10 @@ export function uploadPanelBg(theme) {
   return theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#FAFAFA'
 }
 
+export function cardHoverBg(theme) {
+  return theme.palette.mode === 'dark' ? 'rgba(107, 91, 149, 0.18)' : '#F3EEFC'
+}
+
 export function cardHoverShadow(theme) {
   return theme.palette.mode === 'dark'
     ? '0 6px 18px rgba(0,0,0,0.35)'

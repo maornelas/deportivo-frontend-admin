@@ -39,6 +39,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import {
   listNotifications,
   markNotificationRead,
@@ -335,7 +336,7 @@ export default function Notificaciones() {
   const hasPayloadFields = detailNotif ? payloadFieldEntries(detailNotif.payload).length > 0 : false
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
@@ -347,15 +348,13 @@ export default function Notificaciones() {
           pr: { xs: 2, sm: 3, md: 4 },
           pb: { xs: 2, sm: 3, md: 4 },
           pl: { xs: 2, sm: 3, md: `${SIDEBAR_WIDTH + 32}px` },
-          backgroundColor: '#fafafa',
+          bgcolor: 'background.default',
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}
       >
         <Header onMenuClick={() => setSidebarOpen((o) => !o)} />
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-          <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold' }}>
-            Notificaciones
-          </Typography>
+          <PageTitle sx={{ mb: 0 }}>Notificaciones</PageTitle>
           <Button variant="outlined" onClick={onReadAll} disabled={loading || total === 0}>
             Marcar todas como leídas
           </Button>

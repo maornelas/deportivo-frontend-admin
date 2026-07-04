@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import ModalHeader from '../components/ModalHeader'
 import {
   listExpenses,
@@ -526,7 +527,7 @@ const Gastos = () => {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
@@ -538,16 +539,14 @@ const Gastos = () => {
           pr: { xs: '16px', sm: '24px', md: '32px' },
           pb: { xs: '16px', sm: '24px', md: '32px' },
           pl: { xs: '16px', sm: '24px', md: `${SIDEBAR_WIDTH + 32}px` },
-          backgroundColor: '#fafafa',
+          bgcolor: 'background.default',
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}
       >
         <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}>
           <Box>
-            <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
-              Gastos
-            </Typography>
+            <PageTitle sx={{ mb: 0.5 }}>Gastos</PageTitle>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               Elige la categoría del gasto y las líneas de monto. El registro queda a nombre del usuario conectado; el
               proveedor se guarda como DEPORTIVO. Doble clic para ver el detalle.
@@ -665,7 +664,7 @@ const Gastos = () => {
           <TableContainer>
             <Table size="small">
               <TableHead>
-                <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                <TableRow sx={{ bgcolor: 'action.hover' }}>
                   <TableCell>ID gasto</TableCell>
                   <TableCell>Fecha</TableCell>
                   <TableCell>Hora</TableCell>

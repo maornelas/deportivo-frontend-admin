@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import { SIDEBAR_WIDTH } from '../config/layout'
 import { useAuth } from '../contexts/AuthContext'
 import { useExpedienteFavorites } from '../hooks/useExpedienteFavorites'
@@ -332,9 +333,7 @@ export default function ExpedienteDetalle() {
             <ArrowBackIcon sx={{ color: EXPEDIENTE_ACCENT }} />
           </IconButton>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography sx={{ fontWeight: 800, fontSize: { xs: '1.15rem', md: '1.4rem' }, color: 'text.primary' }}>
-              Expediente digital
-            </Typography>
+            <PageTitle sx={{ mb: 0 }}>Expediente digital</PageTitle>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>
               <Button
                 size="small"

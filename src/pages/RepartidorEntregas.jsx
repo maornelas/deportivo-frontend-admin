@@ -50,6 +50,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import DeliveryDestinationPicker from '../repartidor/DeliveryDestinationPicker'
 import { loadGoogleMaps } from '../repartidor/googleMapsHelpers'
 import SignaturePad from '../components/SignaturePad'
@@ -1184,9 +1185,7 @@ export default function RepartidorEntregas() {
             </Button>
           ) : null}
           <LocalShipping color="primary" sx={{ fontSize: { xs: 28, sm: 32 } }} />
-          <Typography variant="h5" sx={{ fontWeight: 700, fontSize: { xs: '1.15rem', sm: '1.5rem' } }}>
-            Repartidor — entregas
-          </Typography>
+          <PageTitle sx={{ mb: 0 }}>Repartidor — entregas</PageTitle>
         </Stack>
 
         {showDeliveriesList ? (

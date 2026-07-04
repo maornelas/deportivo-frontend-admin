@@ -25,6 +25,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import ModalHeader from '../components/ModalHeader'
 
 const Productos = () => {
@@ -116,16 +117,7 @@ const Productos = () => {
             gap: { xs: 2, sm: 0 },
           }}
         >
-          <Typography
-            variant="h4"
-            sx={{
-              color: '#424242',
-              fontWeight: 'bold',
-              fontSize: { xs: '24px', sm: '28px', md: '32px' },
-            }}
-          >
-            Productos
-          </Typography>
+          <PageTitle sx={{ mb: 0 }}>Productos</PageTitle>
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"

@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserById, updateUser } from '../api/user'
 
@@ -135,17 +136,7 @@ const Perfil = () => {
         }}
       >
         <Header onMenuClick={handleMenuClick} />
-        <Typography
-          variant="h4"
-          sx={{
-            color: '#424242',
-            fontWeight: 'bold',
-            marginBottom: 2,
-            fontSize: { xs: '24px', sm: '28px', md: '32px' },
-          }}
-        >
-          Mi perfil
-        </Typography>
+        <PageTitle>Mi perfil</PageTitle>
 
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>

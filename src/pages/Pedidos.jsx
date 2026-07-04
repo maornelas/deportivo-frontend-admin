@@ -29,6 +29,7 @@ import {
 import { Search as SearchIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import ModalHeader from '../components/ModalHeader'
 import { searchOrders, getOrderById, updateOrder } from '../api/orders'
 import { useAuth } from '../contexts/AuthContext'
@@ -238,17 +239,7 @@ const Pedidos = () => {
         }}
       >
         <Header onMenuClick={handleMenuClick} />
-        <Typography
-          variant="h4"
-          sx={{
-            color: '#424242',
-            fontWeight: 'bold',
-            marginBottom: 2,
-            fontSize: { xs: '24px', sm: '28px', md: '32px' },
-          }}
-        >
-          Pedidos
-        </Typography>
+        <PageTitle>Pedidos</PageTitle>
 
         <Paper sx={{ p: 2, mb: 2 }}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>

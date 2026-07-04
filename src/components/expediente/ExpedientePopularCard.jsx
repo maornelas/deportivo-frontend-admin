@@ -3,25 +3,27 @@ import { Star as StarIcon, StarBorder as StarBorderIcon } from '@mui/icons-mater
 import { EXPEDIENTE_ACCENT, EXPEDIENTE_ACCENT_HOVER } from '../../utils/expedienteTheme'
 import { formatExpedienteDateTime } from '../../utils/expedienteDisplay'
 
-export default function ExpedientePopularCard({ row, label, isFavorite, onOpen, onToggleFavorite }) {
+export default function ExpedientePopularCard({ row, label, isFavorite, onOpen, onToggleFavorite, layout = 'carousel' }) {
+  const isSidebar = layout === 'sidebar'
   return (
     <Box
       sx={{
         position: 'relative',
-        minWidth: { xs: 128, lg: 138, xl: 148 },
-        maxWidth: { xs: 128, lg: 138, xl: 148 },
-        flex: '0 0 auto',
+        minWidth: isSidebar ? '100%' : { xs: 100, lg: 106, xl: 112 },
+        maxWidth: isSidebar ? '100%' : { xs: 100, lg: 106, xl: 112 },
+        flex: isSidebar ? '0 0 auto' : '0 0 auto',
+        width: isSidebar ? '100%' : 'auto',
       }}
     >
       <Box
         sx={{
           position: 'absolute',
-          top: { xs: 8, lg: 10 },
-          left: { xs: 10, lg: 12 },
-          width: { xs: 38, lg: 42, xl: 44 },
-          height: { xs: 10, lg: 11, xl: 12 },
+          top: { xs: 6, lg: 7 },
+          left: { xs: 8, lg: 9 },
+          width: { xs: 30, lg: 32, xl: 34 },
+          height: { xs: 8, lg: 8, xl: 9 },
           bgcolor: EXPEDIENTE_ACCENT_HOVER,
-          borderRadius: '6px 6px 0 0',
+          borderRadius: '5px 5px 0 0',
           zIndex: 0,
         }}
       />
@@ -39,9 +41,9 @@ export default function ExpedientePopularCard({ row, label, isFavorite, onOpen, 
           position: 'relative',
           zIndex: 1,
           bgcolor: EXPEDIENTE_ACCENT,
-          borderRadius: '9px',
-          minHeight: { xs: 138, lg: 148, xl: 158 },
-          p: { xs: 1.35, lg: 1.5, xl: 1.65 },
+          borderRadius: '7px',
+          minHeight: isSidebar ? { xs: 96, lg: 100 } : { xs: 108, lg: 112, xl: 116 },
+          p: { xs: 1, lg: 1.1, xl: 1.15 },
           cursor: 'pointer',
           display: 'flex',
           flexDirection: 'column',
@@ -63,15 +65,15 @@ export default function ExpedientePopularCard({ row, label, isFavorite, onOpen, 
           sx={{
             alignSelf: 'flex-start',
             color: isFavorite ? '#F5C842' : 'rgba(255,255,255,0.75)',
-            p: 0.25,
-            ml: -0.5,
-            mt: -0.5,
+            p: 0.15,
+            ml: -0.35,
+            mt: -0.35,
           }}
         >
           {isFavorite ? (
-            <StarIcon sx={{ fontSize: { xs: 17, lg: 18, xl: 20 } }} />
+            <StarIcon sx={{ fontSize: { xs: 14, lg: 15, xl: 16 } }} />
           ) : (
-            <StarBorderIcon sx={{ fontSize: { xs: 17, lg: 18, xl: 20 } }} />
+            <StarBorderIcon sx={{ fontSize: { xs: 14, lg: 15, xl: 16 } }} />
           )}
         </IconButton>
 
@@ -79,9 +81,9 @@ export default function ExpedientePopularCard({ row, label, isFavorite, onOpen, 
           <Typography
             sx={{
               color: 'rgba(255,255,255,0.75)',
-              fontSize: { xs: '0.65rem', lg: '0.68rem', xl: '0.72rem' },
-              lineHeight: 1.25,
-              mb: 0.4,
+              fontSize: { xs: '0.58rem', lg: '0.6rem', xl: '0.62rem' },
+              lineHeight: 1.2,
+              mb: 0.3,
             }}
           >
             {formatExpedienteDateTime(row.operationDate ?? row.createdAt)}
@@ -90,8 +92,8 @@ export default function ExpedientePopularCard({ row, label, isFavorite, onOpen, 
             sx={{
               color: '#fff',
               fontWeight: 600,
-              fontSize: { xs: '0.74rem', lg: '0.78rem', xl: '0.82rem' },
-              lineHeight: 1.22,
+              fontSize: { xs: '0.66rem', lg: '0.68rem', xl: '0.72rem' },
+              lineHeight: 1.2,
               wordBreak: 'break-word',
               display: '-webkit-box',
               WebkitLineClamp: 2,

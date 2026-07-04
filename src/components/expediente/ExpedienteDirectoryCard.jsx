@@ -1,6 +1,7 @@
 import { Box, Typography, IconButton } from '@mui/material'
 import { Star as StarIcon, StarBorder as StarBorderIcon } from '@mui/icons-material'
-import { EXPEDIENTE_ACCENT, cardHoverShadow } from '../../utils/expedienteTheme'
+import { EXPEDIENTE_ACCENT, cardHoverBg, cardHoverShadow, timelineActiveBorder } from '../../utils/expedienteTheme'
+import { formatExpedienteDate } from '../../utils/expedienteDisplay'
 
 export default function ExpedienteDirectoryCard({
   row,
@@ -25,21 +26,22 @@ export default function ExpedienteDirectoryCard({
         bgcolor: 'background.paper',
         border: 1,
         borderColor: 'divider',
-        borderRadius: '9px',
-        minHeight: { xs: 128, lg: 140, xl: 152 },
-        p: { xs: 1.75, lg: 2, xl: 2.25 },
+        borderRadius: '7px',
+        minHeight: { xs: 108, lg: 112, xl: 116 },
+        p: { xs: 1.1, lg: 1.2, xl: 1.25 },
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-end',
         textAlign: 'left',
         position: 'relative',
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-        '&:hover': {
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease',
+        '&:hover': (theme) => ({
+          bgcolor: cardHoverBg(theme),
           transform: 'scale(1.02)',
-          borderColor: 'text.disabled',
-          boxShadow: cardHoverShadow,
-        },
+          borderColor: timelineActiveBorder(theme),
+          boxShadow: cardHoverShadow(theme),
+        }),
       }}
     >
       <IconButton
@@ -51,27 +53,27 @@ export default function ExpedienteDirectoryCard({
         }}
         sx={{
           position: 'absolute',
-          top: { xs: 8, lg: 10 },
-          left: { xs: 8, lg: 10 },
+          top: { xs: 5, lg: 6 },
+          left: { xs: 5, lg: 6 },
           color: isFavorite ? '#F5A623' : 'action.disabled',
-          p: 0.25,
+          p: 0.15,
         }}
       >
         {isFavorite ? (
-          <StarIcon sx={{ fontSize: { xs: 17, lg: 18, xl: 20 } }} />
+          <StarIcon sx={{ fontSize: { xs: 14, lg: 15, xl: 16 } }} />
         ) : (
-          <StarBorderIcon sx={{ fontSize: { xs: 17, lg: 18, xl: 20 } }} />
+          <StarBorderIcon sx={{ fontSize: { xs: 14, lg: 15, xl: 16 } }} />
         )}
       </IconButton>
 
-      <Box sx={{ flex: 1, minHeight: { xs: 18, lg: 22 } }} />
+      <Box sx={{ flex: 1, minHeight: { xs: 12, lg: 14 } }} />
 
       <Typography
         sx={{
           color: 'text.secondary',
-          fontSize: { xs: '0.68rem', lg: '0.72rem', xl: '0.75rem' },
-          lineHeight: 1.25,
-          mb: 0.4,
+          fontSize: { xs: '0.6rem', lg: '0.62rem', xl: '0.64rem' },
+          lineHeight: 1.2,
+          mb: 0.25,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -83,8 +85,8 @@ export default function ExpedienteDirectoryCard({
         sx={{
           color: 'text.primary',
           fontWeight: 700,
-          fontSize: { xs: '0.82rem', lg: '0.86rem', xl: '0.92rem' },
-          lineHeight: 1.28,
+          fontSize: { xs: '0.72rem', lg: '0.74rem', xl: '0.78rem' },
+          lineHeight: 1.22,
           wordBreak: 'break-word',
           display: '-webkit-box',
           WebkitLineClamp: 2,
@@ -93,6 +95,16 @@ export default function ExpedienteDirectoryCard({
         }}
       >
         {label}
+      </Typography>
+      <Typography
+        sx={{
+          color: 'text.disabled',
+          fontSize: { xs: '0.55rem', lg: '0.57rem', xl: '0.58rem' },
+          lineHeight: 1.15,
+          mt: 0.3,
+        }}
+      >
+        Creado: {formatExpedienteDate(row.createdAt)}
       </Typography>
     </Box>
   )

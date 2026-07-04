@@ -4,6 +4,7 @@ import { SIDEBAR_WIDTH } from '../config/layout'
 import { Box, Typography, Paper } from '@mui/material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 
 const Cotizacion = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -26,9 +27,7 @@ const Cotizacion = () => {
         }}
       >
         <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-        <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', marginBottom: { xs: '24px', sm: '28px', md: '32px' }, fontSize: { xs: '24px', sm: '28px', md: '32px' } }}>
-          Cotización
-        </Typography>
+        <PageTitle>Cotización</PageTitle>
         <Paper elevation={2} sx={{ padding: { xs: '16px', sm: '24px' }, borderRadius: '12px' }}>
           <Typography variant="body1" sx={{ color: '#757575' }}>
             Esta sección estará disponible próximamente.

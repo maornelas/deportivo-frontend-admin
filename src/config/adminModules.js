@@ -45,14 +45,14 @@ export const ADMIN_NAV_PATHS_ORDER = [
   '/ventas',
   '/compras',
   '/gastos',
-  '/historial',
-  '/notificaciones',
   '/reporteria',
   '/expediente-digital',
+  '/notificaciones',
   '/clientes',
   '/usuarios',
   '/catalogos',
   '/roles',
+  '/historial',
 ]
 
 export function canViewPathFromRbac(rbac, pathname) {

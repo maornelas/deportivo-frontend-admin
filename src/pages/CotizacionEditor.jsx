@@ -51,6 +51,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import {
   getQuotation,
   createQuotation,
@@ -908,9 +909,9 @@ export default function CotizacionEditor() {
           <IconButton onClick={() => navigate('/cotizaciones')} size="small" aria-label="Volver">
             <BackIcon />
           </IconButton>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#424242', flex: 1, fontSize: { xs: '22px', md: '28px' } }}>
+          <PageTitle sx={{ flex: 1, mb: 0 }}>
             {isNew ? 'Nueva cotización' : `Cotización ${quotationNumber || '…'}`}
-          </Typography>
+          </PageTitle>
           {quotationId && (
             <>
               {!isNew && (

@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import { getBrands, getCarModelsByBrand } from '../api/products'
 import { downloadPurchaseNotePdf } from '../compras/purchaseNotePdf'
 import { useAuth } from '../contexts/AuthContext'
@@ -589,7 +590,7 @@ export default function CompraDetalle() {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
@@ -604,7 +605,7 @@ export default function CompraDetalle() {
           minHeight: { xs: '100vh', lg: 'calc(100vh - 70px)' },
           height: { xs: 'auto', lg: 'calc(100vh - 70px)' },
           maxHeight: { xs: 'none', lg: 'calc(100vh - 70px)' },
-          backgroundColor: '#fafafa',
+          bgcolor: 'background.default',
           display: 'flex',
           flexDirection: 'column',
           overflow: { xs: 'visible', lg: 'hidden' },
@@ -616,9 +617,7 @@ export default function CompraDetalle() {
           <IconButton onClick={() => navigate('/compras')} size="small" aria-label="Volver">
             <BackIcon />
           </IconButton>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#424242', flex: 1, fontSize: { xs: '22px', md: '28px' } }}>
-            Nota de compra
-          </Typography>
+          <PageTitle sx={{ flex: 1, mb: 0 }}>Nota de compra</PageTitle>
           {canDoAction(ACTION.COMPRAS_ELIMINAR) ? (
             <Button
               onClick={openCancelCompraModal}

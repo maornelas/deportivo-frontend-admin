@@ -29,7 +29,6 @@ import {
   Group as GroupIcon,
   MenuBook as CatalogosIcon,
   AdminPanelSettings as RolesIcon,
-  OndemandVideo as TutorialesIcon,
 } from '@mui/icons-material'
 
 const menuItems = [
@@ -42,10 +41,9 @@ const menuItems = [
   { type: 'divider' },
   { text: 'Repartidor', icon: <RepartidorIcon />, path: '/repartidor' },
   { type: 'divider' },
-  { text: 'Historial', icon: <HistoryIcon />, path: '/historial' },
-  { text: 'Notificaciones', icon: <NotificationsIcon />, path: '/notificaciones' },
   { text: 'Reportería', icon: <ReporteriaIcon />, path: '/reporteria' },
   { text: 'Expediente digital', icon: <ExpedienteIcon />, path: '/expediente-digital' },
+  { text: 'Notificaciones', icon: <NotificationsIcon />, path: '/notificaciones' },
   { type: 'divider' },
   { text: 'Clientes', icon: <PeopleIcon />, path: '/clientes' },
   { text: 'Usuarios', icon: <GroupIcon />, path: '/usuarios' },
@@ -53,7 +51,7 @@ const menuItems = [
   { text: 'Catálogos', icon: <CatalogosIcon />, path: '/catalogos' },
   { text: 'Roles y permisos', icon: <RolesIcon />, path: '/roles' },
   { type: 'divider' },
-  { text: 'Tutoriales', icon: <TutorialesIcon />, path: '/tutoriales' },
+  { text: 'Historial', icon: <HistoryIcon />, path: '/historial' },
 ]
 
 const Sidebar = ({ isOpen = true, onClose }) => {

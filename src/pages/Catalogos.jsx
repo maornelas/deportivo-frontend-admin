@@ -36,6 +36,7 @@ import {
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import ModalHeader from '../components/ModalHeader'
 import {
   getBrands,
@@ -280,7 +281,7 @@ const Catalogos = () => {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: '#fafafa' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
@@ -309,9 +310,7 @@ const Catalogos = () => {
           )}
           <CarIcon sx={{ fontSize: 36, color: '#7b1fa2' }} />
           <Box>
-            <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', fontSize: { xs: '22px', md: '28px' } }}>
-              Catálogos
-            </Typography>
+            <PageTitle sx={{ mb: 0.5 }}>Catálogos</PageTitle>
             <Typography variant="body2" color="text.secondary">
               Marcas y modelos de auto, y tipos de gasto para el módulo de Gastos.
             </Typography>

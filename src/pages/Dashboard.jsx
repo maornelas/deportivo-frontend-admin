@@ -7,6 +7,7 @@ import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import {
   SummaryCard,
   SalesChart,
@@ -235,16 +236,7 @@ const Dashboard = () => {
             marginBottom: { xs: '24px', sm: '28px', md: '32px' },
           }}
         >
-          <Typography
-            variant="h5"
-            sx={{
-              color: 'text.primary',
-              fontWeight: 'bold',
-              fontSize: { xs: '24px', sm: '28px', md: '32px' },
-            }}
-          >
-            Dashboard
-          </Typography>
+          <PageTitle sx={{ mb: 0 }}>Dashboard</PageTitle>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <TextField
               label="Fecha inicio"

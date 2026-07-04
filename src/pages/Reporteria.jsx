@@ -24,6 +24,7 @@ import {
 } from '@mui/material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import { SummaryCard } from '../components/DashboardWidgets'
 import { getSalesReport, getVentasAsesorNames, getIncomeStatement } from '../api/salesReports'
 import { getExpenseGastosReport, downloadExpenseReportCsv } from '../api/expenses'
@@ -371,7 +372,7 @@ export default function Reporteria() {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Box
         sx={{
@@ -383,14 +384,12 @@ export default function Reporteria() {
           pr: { xs: 2, sm: 3, md: 4 },
           pb: { xs: 2, sm: 3, md: 4 },
           pl: { xs: 2, sm: 3, md: `${SIDEBAR_WIDTH + 32}px` },
-          backgroundColor: '#fafafa',
+          bgcolor: 'background.default',
           minHeight: { xs: '100vh', md: 'calc(100vh - 70px)' },
         }}
       >
         <Header onMenuClick={() => setSidebarOpen((o) => !o)} />
-        <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', mb: 2 }}>
-          Reportería
-        </Typography>
+        <PageTitle sx={{ mb: 2 }}>Reportería</PageTitle>
 
         <Box
           sx={{
@@ -589,7 +588,7 @@ export default function Reporteria() {
               <TableBody>
                 {lines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} align="center" sx={{ py: 3, border: '1px solid #e0e0e0' }}>
+                    <TableCell colSpan={12} align="center" sx={{ py: 3, border: 1, borderColor: 'divider' }}>
                       Sin filas en el rango seleccionado.
                     </TableCell>
                   </TableRow>
@@ -599,36 +598,36 @@ export default function Reporteria() {
                       const lineUtilidad = resolveLineUtilidad(row.monto, row.seguro)
                       return (
                       <TableRow key={`${row.orderId}-${row.lineId}`}>
-                        <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.siniestro || '—'}</TableCell>
-                        <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.unidad || '—'}</TableCell>
-                        <TableCell sx={{ border: '1px solid #e0e0e0', maxWidth: 280 }}>{row.concepto || '—'}</TableCell>
-                        <TableCell sx={{ border: '1px solid #e0e0e0', whiteSpace: 'nowrap' }}>
+                        <TableCell sx={{ border: 1, borderColor: 'divider' }}>{row.siniestro || '—'}</TableCell>
+                        <TableCell sx={{ border: 1, borderColor: 'divider' }}>{row.unidad || '—'}</TableCell>
+                        <TableCell sx={{ border: 1, borderColor: 'divider', maxWidth: 280 }}>{row.concepto || '—'}</TableCell>
+                        <TableCell sx={{ border: 1, borderColor: 'divider', whiteSpace: 'nowrap' }}>
                           {row.canalVenta || '—'}
                         </TableCell>
-                        <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.proveedor || '—'}</TableCell>
-                        <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                        <TableCell sx={{ border: 1, borderColor: 'divider' }}>{row.proveedor || '—'}</TableCell>
+                        <TableCell align="right" sx={{ border: 1, borderColor: 'divider' }}>
                           {moneyOrDash(row.monto)}
                         </TableCell>
-                        <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                        <TableCell align="right" sx={{ border: 1, borderColor: 'divider' }}>
                           {moneyOrDash(row.montoNeto)}
                         </TableCell>
-                        <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                        <TableCell align="right" sx={{ border: 1, borderColor: 'divider' }}>
                           {moneyOrDash(row.seguro)}
                         </TableCell>
-                        <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                        <TableCell align="right" sx={{ border: 1, borderColor: 'divider' }}>
                           {moneyOrDash(row.seguroNeto)}
                         </TableCell>
                         <TableCell
                           align="right"
                           sx={{
-                            border: '1px solid #e0e0e0',
+                            border: 1, borderColor: 'divider',
                             ...utilidadCellSx(lineUtilidad),
                           }}
                         >
                           {moneyOrDash(lineUtilidad)}
                         </TableCell>
-                        <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.vendedor || '—'}</TableCell>
-                        <TableCell align="center" sx={{ border: '1px solid #e0e0e0', ...statusCellSx(row.status) }}>
+                        <TableCell sx={{ border: 1, borderColor: 'divider' }}>{row.vendedor || '—'}</TableCell>
+                        <TableCell align="center" sx={{ border: 1, borderColor: 'divider', ...statusCellSx(row.status) }}>
                           {row.status || '—'}
                         </TableCell>
                       </TableRow>
@@ -869,17 +868,17 @@ export default function Reporteria() {
                     <TableRow
                       key={`${row.expenseId}-${row.expenseDate}-${row.concept}-${row.unitAmount}-${li}`}
                     >
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.expenseDate}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0', fontFamily: 'monospace' }}>
+                      <TableCell sx={{ border: 1, borderColor: 'divider' }}>{row.expenseDate}</TableCell>
+                      <TableCell sx={{ border: 1, borderColor: 'divider', fontFamily: 'monospace' }}>
                         {row.expenseNumber || '—'}
                       </TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.employeeOrUnit || '—'}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.concept || '—'}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.supplier || '—'}</TableCell>
-                      <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                      <TableCell sx={{ border: 1, borderColor: 'divider' }}>{row.employeeOrUnit || '—'}</TableCell>
+                      <TableCell sx={{ border: 1, borderColor: 'divider' }}>{row.concept || '—'}</TableCell>
+                      <TableCell sx={{ border: 1, borderColor: 'divider' }}>{row.supplier || '—'}</TableCell>
+                      <TableCell align="right" sx={{ border: 1, borderColor: 'divider' }}>
                         {money(row.lineSubtotal)}
                       </TableCell>
-                      <TableCell align="right" sx={{ border: '1px solid #e0e0e0' }}>
+                      <TableCell align="right" sx={{ border: 1, borderColor: 'divider' }}>
                         {money(row.netLineSubtotal)}
                       </TableCell>
                     </TableRow>

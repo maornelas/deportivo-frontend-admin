@@ -28,6 +28,7 @@ import {
 import { Search as SearchIcon, Add as AddIcon } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import PageTitle from '../components/PageTitle'
 import { listQuotations } from '../api/quotations'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
@@ -136,9 +137,7 @@ export default function Cotizaciones() {
       >
         <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}>
-          <Typography variant="h4" sx={{ color: '#424242', fontWeight: 'bold', fontSize: { xs: '24px', md: '32px' } }}>
-            Cotizaciones
-          </Typography>
+          <PageTitle sx={{ mb: 0 }}>Cotizaciones</PageTitle>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
