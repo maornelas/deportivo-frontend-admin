@@ -246,21 +246,45 @@ export default function ExpedienteDetalle() {
   }
 
   const handleUpload = async (e) => {
-    const file = e.target.files?.[0]
+    const isPhotoBatch = docType === 'fotografia'
+    const files = isPhotoBatch
+      ? Array.from(e.target.files || []).filter((f) => f.type.startsWith('image/'))
+      : [e.target.files?.[0]].filter(Boolean)
     e.target.value = ''
-    if (!file || !ref) return
+    if (!files.length || !ref) return
+
     setUploading(true)
     setUploadError('')
-    const r = await uploadExpedienteDocument(ref, file, {
-      documentType: docType,
-      title: docTitle.trim() || undefined,
-      uploadedByUserId: user?.id,
-    })
+
+    const title = docTitle.trim() || undefined
+    let uploaded = 0
+    const failures = []
+
+    for (const file of files) {
+      const r = await uploadExpedienteDocument(ref, file, {
+        documentType: docType,
+        title: files.length === 1 ? title : undefined,
+        uploadedByUserId: user?.id,
+      })
+      if (r.success) uploaded += 1
+      else failures.push(`${file.name}: ${r.error || 'Error'}`)
+    }
+
     setUploading(false)
-    if (!r.success) {
-      setUploadError(r.error || 'Error al subir')
+
+    if (failures.length > 0) {
+      const summary =
+        uploaded > 0
+          ? `${uploaded} de ${files.length} archivo(s) subido(s). `
+          : ''
+      setUploadError(`${summary}${failures.join('; ')}`)
+      if (uploaded > 0) {
+        setDocTitle('')
+        await load()
+      }
       return
     }
+
     setDocTitle('')
     await load()
   }
@@ -638,7 +662,8 @@ export default function ExpedienteDetalle() {
                       ref={fileInputRef}
                       type="file"
                       hidden
-                      accept="image/*,.pdf,.doc,.docx"
+                      multiple={docType === 'fotografia'}
+                      accept={docType === 'fotografia' ? 'image/*' : 'image/*,.pdf,.doc,.docx'}
                       onChange={handleUpload}
                     />
                     <Button
@@ -648,9 +673,20 @@ export default function ExpedienteDetalle() {
                       onClick={() => fileInputRef.current?.click()}
                       sx={{ bgcolor: EXPEDIENTE_ACCENT, textTransform: 'none', '&:hover': { bgcolor: EXPEDIENTE_ACCENT_HOVER } }}
                     >
-                      Subir archivo
+                      {uploading
+                        ? docType === 'fotografia'
+                          ? 'Subiendo fotos…'
+                          : 'Subiendo…'
+                        : docType === 'fotografia'
+                          ? 'Subir fotos'
+                          : 'Subir archivo'}
                     </Button>
                   </Box>
+                  {docType === 'fotografia' && (
+                    <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                      Puedes seleccionar varias imágenes a la vez.
+                    </Typography>
+                  )}
                 </Box>
                 <Divider sx={{ mb: 2 }} />
                 <TableContainer sx={{ overflowX: 'auto' }}>
