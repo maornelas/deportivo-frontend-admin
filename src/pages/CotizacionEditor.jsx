@@ -291,6 +291,7 @@ export default function CotizacionEditor() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [markSoldConfirmOpen, setMarkSoldConfirmOpen] = useState(false)
   const [markSoldLoading, setMarkSoldLoading] = useState(false)
+  const [linkedOrderNumber, setLinkedOrderNumber] = useState('')
   const [quotationPdfUrl, setQuotationPdfUrl] = useState(null)
   const [imageGallery, setImageGallery] = useState({ open: false, urls: [], index: 0, title: '' })
   const [busyModal, setBusyModal] = useState({ open: false, message: '' })
@@ -366,6 +367,7 @@ export default function CotizacionEditor() {
     [editLineKey, cartLines],
   )
   const cartReadOnly = status === 'sold'
+  const soldMissingOrder = status === 'sold' && !linkedOrderNumber
 
   useEffect(() => {
     if (isNew) return
@@ -392,6 +394,7 @@ export default function CotizacionEditor() {
       setClaimNumber(q.claimNumber || '')
       setSerialNumber(q.serialNumber || '')
       setStatus(q.status || 'draft')
+      setLinkedOrderNumber(q.linkedOrder?.orderNumber || '')
       const brandsRes = await getBrands({ activeOnly: true })
       const brandList = brandsRes.success ? brandsRes.data || [] : []
       if (brandsRes.success) setBrands(brandList)
@@ -832,7 +835,8 @@ export default function CotizacionEditor() {
   }
 
   const openMarkSoldConfirm = () => {
-    if (!quotationId || status === 'sold') return
+    if (!quotationId) return
+    if (status === 'sold' && linkedOrderNumber) return
     if (!canDoAction(ACTION.COTIZACIONES_EDITAR)) {
       showDenied()
       return
@@ -841,7 +845,8 @@ export default function CotizacionEditor() {
   }
 
   const confirmMarkAsSold = async () => {
-    if (!quotationId || status === 'sold') return
+    if (!quotationId) return
+    if (status === 'sold' && linkedOrderNumber) return
     if (!canDoAction(ACTION.COTIZACIONES_EDITAR)) {
       showDenied()
       return
@@ -862,10 +867,13 @@ export default function CotizacionEditor() {
     if (r.data?.quotation?.status) setStatus(r.data.quotation.status)
     else setStatus('sold')
     const ord = r.data?.order
+    if (ord?.orderNumber) setLinkedOrderNumber(ord.orderNumber)
     const extra = ord?.orderNumber ? ` Orden ${ord.orderNumber}.` : ''
+    const exp = r.data?.expediente?.expedienteNumber
+    const expExtra = exp ? ` Expediente ${exp}.` : ''
     setSnackbar({
       open: true,
-      message: `Venta registrada (canal Asesor).${extra} Redirigiendo a Ventas…`,
+      message: `Venta registrada (canal Asesor).${extra}${expExtra} Redirigiendo a Ventas…`,
       severity: 'success',
     })
     navigate('/ventas?canal=asesor')
@@ -911,16 +919,33 @@ export default function CotizacionEditor() {
           </IconButton>
           <PageTitle sx={{ flex: 1, mb: 0 }}>
             {isNew ? 'Nueva cotización' : `Cotización ${quotationNumber || '…'}`}
+            {linkedOrderNumber && (
+              <Typography component="span" sx={{ ml: 1.5, fontSize: '0.82rem', fontWeight: 500, color: 'text.secondary' }}>
+                → {linkedOrderNumber}
+              </Typography>
+            )}
           </PageTitle>
           {quotationId && (
             <>
-              {!isNew && (
+              {!isNew && soldMissingOrder && (
+                <Button
+                  variant="contained"
+                  color="warning"
+                  size="small"
+                  startIcon={<CheckCircleIcon />}
+                  disabled={busyModal.open || markSoldLoading}
+                  onClick={openMarkSoldConfirm}
+                >
+                  Completar nota de venta
+                </Button>
+              )}
+              {!isNew && status !== 'sold' && (
                 <Button
                   variant="contained"
                   color="success"
                   size="small"
                   startIcon={<CheckCircleIcon />}
-                  disabled={busyModal.open || status === 'sold' || markSoldLoading}
+                  disabled={busyModal.open || markSoldLoading}
                   onClick={openMarkSoldConfirm}
                 >
                   Marcar como vendido
@@ -982,6 +1007,12 @@ export default function CotizacionEditor() {
             {error && (
               <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }} onClose={() => setError('')}>
                 {error}
+              </Alert>
+            )}
+            {soldMissingOrder && (
+              <Alert severity="warning" sx={{ mb: 2, flexShrink: 0 }}>
+                Esta cotización está vendida pero no tiene nota de venta ni expediente digital. Use{' '}
+                <strong>Completar nota de venta</strong> para registrarla en Ventas y Expediente digital.
               </Alert>
             )}
 
@@ -1953,13 +1984,21 @@ export default function CotizacionEditor() {
           disableEscapeKeyDown={markSoldLoading}
           PaperProps={{ sx: { position: 'relative', minWidth: 320, maxWidth: 440 } }}
         >
-          <DialogTitle>Marcar como vendido</DialogTitle>
+          <DialogTitle>{soldMissingOrder ? 'Completar nota de venta' : 'Marcar como vendido'}</DialogTitle>
           <DialogContent>
             {markSoldLoading ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2, minHeight: 56 }}>
                 <CircularProgress size={32} />
-                <Typography color="text.secondary">Registrando venta en el sistema…</Typography>
+                <Typography color="text.secondary">
+                  {soldMissingOrder ? 'Creando nota de venta y expediente…' : 'Registrando venta en el sistema…'}
+                </Typography>
               </Box>
+            ) : soldMissingOrder ? (
+              <Typography color="text.secondary" variant="body2">
+                Esta cotización está marcada como <strong>vendida</strong> pero no tiene nota de venta ni expediente
+                digital. Se creará el registro en <strong>Ventas</strong> (canal Asesor) y su expediente. ¿Desea
+                continuar?
+              </Typography>
             ) : (
               <Typography color="text.secondary" variant="body2">
                 Se creará un registro en <strong>Ventas</strong> con tipo <strong>Asesor</strong> (mismas piezas y
