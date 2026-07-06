@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { SIDEBAR_WIDTH } from '../config/layout'
-import { APP_VERSION, formatAppDate } from '../config/app'
+import { APP_VERSION, getAppBuildDateLabel } from '../config/app'
 import {
   Box,
   List,
@@ -225,7 +225,7 @@ const Sidebar = ({ isOpen = true, onClose }) => {
             letterSpacing: '0.02em',
           }}
         >
-          {formatAppDate()}
+          {getAppBuildDateLabel()}
         </Typography>
         <Typography
           sx={{

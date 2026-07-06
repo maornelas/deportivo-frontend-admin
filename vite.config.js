@@ -3,21 +3,26 @@ import { resolve } from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
-function readAppVersion() {
+function readAppVersionFile() {
   try {
     const file = resolve(process.cwd(), 'src/config/version.js')
     const source = readFileSync(file, 'utf8')
-    const match = source.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/)
-    return match?.[1] ?? 'v0.0.0'
+    const versionMatch = source.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/)
+    const buildDateMatch = source.match(/APP_BUILD_DATE\s*=\s*['"]([^'"]+)['"]/)
+    return {
+      version: versionMatch?.[1] ?? 'v0.0.0',
+      buildDate: buildDateMatch?.[1] ?? null,
+    }
   } catch {
-    return 'v0.0.0'
+    return { version: 'v0.0.0', buildDate: null }
   }
 }
 
-function versionJsonPlugin({ appVersion, buildId }) {
+function versionJsonPlugin({ appVersion, buildId, buildDate }) {
+  const builtAt = buildDate ? `${buildDate}T12:00:00.000Z` : new Date().toISOString()
   const payload = () =>
     JSON.stringify(
-      { version: appVersion, buildId, builtAt: new Date().toISOString() },
+      { version: appVersion, buildId, builtAt },
       null,
       0,
     )
@@ -48,11 +53,11 @@ export default defineConfig(({ mode }) => {
   const proxyTarget =
     env.VITE_DEV_PROXY_TARGET?.trim() || 'http://localhost:3000'
 
-  const appVersion = readAppVersion()
+  const { version: appVersion, buildDate } = readAppVersionFile()
   const buildId = `${Date.now()}`
 
   return {
-    plugins: [react(), versionJsonPlugin({ appVersion, buildId })],
+    plugins: [react(), versionJsonPlugin({ appVersion, buildId, buildDate })],
     define: {
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
       'import.meta.env.VITE_BUILD_ID': JSON.stringify(buildId),
