@@ -12,11 +12,25 @@ export function resolveLineUtilidad(monto, seguro) {
   return Math.round(((sn ?? 0) - (mn ?? 0)) * 100) / 100
 }
 
+/** Líneas canceladas no deben restar de totales: montos en $0. */
+export function normalizeVentasLineForTotals(row) {
+  if (String(row?.status || '').toUpperCase() !== 'CANCELADA') return row
+  return {
+    ...row,
+    monto: 0,
+    montoNeto: 0,
+    seguro: 0,
+    seguroNeto: 0,
+    utilidad: 0,
+  }
+}
+
 /** Asegura utilidad = seguro − monto en cada línea. */
 export function enrichVentasLines(lines) {
   return (lines || []).map((row) => {
-    const utilidad = resolveLineUtilidad(row.monto, row.seguro)
-    return row.utilidad === utilidad ? row : { ...row, utilidad }
+    const normalized = normalizeVentasLineForTotals(row)
+    const utilidad = resolveLineUtilidad(normalized.monto, normalized.seguro)
+    return normalized.utilidad === utilidad ? normalized : { ...normalized, utilidad }
   })
 }
 
