@@ -303,6 +303,35 @@ export async function uploadSignedOrderSaleNotePdf(orderId, payload) {
 }
 
 /**
+ * Actualiza un ítem de la orden (p. ej. precio unitario al cambiar origen de pieza).
+ * Recalcula totales de la nota en el backend.
+ * @param {string} itemId
+ * @param {{ unitPrice?: number, quantity?: number, productName?: string, productSku?: string }} payload
+ */
+export async function updateOrderItem(itemId, payload = {}) {
+  const id = String(itemId || '').trim()
+  if (!id) return { success: false, error: 'ID de pieza requerido' }
+  const body = {}
+  if (payload.unitPrice != null) body.unitPrice = Number(payload.unitPrice)
+  if (payload.quantity != null) body.quantity = Number(payload.quantity)
+  if (payload.productName != null) body.productName = String(payload.productName)
+  if (payload.productSku != null) body.productSku = String(payload.productSku)
+  const res = await apiFetch(`/order-item/update/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: json.message || json.error || `Error ${res.status}` }
+  }
+  if (!json.success) {
+    return { success: false, error: json.message || 'No se pudo actualizar la pieza' }
+  }
+  return { success: true, data: json.data }
+}
+
+/**
  * Cancela una o varias piezas de una nota de venta (la nota permanece activa).
  * @param {string[]} itemIds
  * @param {string} cancellationReason

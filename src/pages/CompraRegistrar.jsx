@@ -168,7 +168,17 @@ function mergeOrderItemsWithManualPrices(orderItems, manualLines) {
     }
     return oi
   })
-  const remainingManualLines = manualLines.filter((m) => !usedManualKeys.has(m.key))
+  // Piezas manuales que aún coinciden con alguna línea de la nota (aunque sin precio usable
+  // en el merge anterior) no deben enviarse sueltas: el backend las re-vincularía y
+  // marcaría "pieza repetida" en facturas grandes.
+  const linkedOrderNames = orderItems.map((oi) => oi.productName)
+  const remainingManualLines = manualLines.filter((m) => {
+    if (usedManualKeys.has(m.key)) return false
+    const matchesLinked = linkedOrderNames.some((name) =>
+      purchaseProductNamesLooselyMatch(m.productName, name),
+    )
+    return !matchesLinked
+  })
   return { mergedOrderItems, remainingManualLines }
 }
 

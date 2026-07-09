@@ -38,6 +38,7 @@ import {
   PictureAsPdf as PdfIcon,
   Edit as EditIcon,
   CancelOutlined as CancelItemIcon,
+  Check as CheckIcon,
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
@@ -50,6 +51,7 @@ import {
   updateOrderSalesChannel,
   openOrderSaleNotePdfInNewTab,
   cancelOrderItems,
+  updateOrderItem,
 } from '../api/orders'
 import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
@@ -324,6 +326,9 @@ const Ventas = () => {
   const [itemCancelDialogOpen, setItemCancelDialogOpen] = useState(false)
   const [pendingItemCancelIds, setPendingItemCancelIds] = useState([])
   const [itemsCancelSaving, setItemsCancelSaving] = useState(false)
+  /** Borradores de precio unitario por itemId mientras se edita */
+  const [itemPriceDrafts, setItemPriceDrafts] = useState(() => ({}))
+  const [itemPriceSavingId, setItemPriceSavingId] = useState(null)
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -395,6 +400,8 @@ const Ventas = () => {
     setAddressFormError('')
     setItemsEditMode(false)
     setSelectedItemIds(new Set())
+    setItemPriceDrafts({})
+    setItemPriceSavingId(null)
     setItemCancelDialogOpen(false)
     setPendingItemCancelIds([])
     fetchOrders()
@@ -545,6 +552,8 @@ const Ventas = () => {
   const resetItemsEditState = () => {
     setItemsEditMode(false)
     setSelectedItemIds(new Set())
+    setItemPriceDrafts({})
+    setItemPriceSavingId(null)
   }
 
   const handleStartItemsEdit = () => {
@@ -554,7 +563,64 @@ const Ventas = () => {
     }
     if (!canEditOrderItems(detailOrder)) return
     setSelectedItemIds(new Set())
+    const drafts = {}
+    for (const it of detailOrder?.items || []) {
+      if (it?.id && isActiveOrderItem(it)) {
+        drafts[it.id] = String(Number(it.unitPrice ?? 0))
+      }
+    }
+    setItemPriceDrafts(drafts)
     setItemsEditMode(true)
+  }
+
+  const handleItemPriceDraftChange = (itemId, value) => {
+    if (!itemId) return
+    setItemPriceDrafts((prev) => ({ ...prev, [itemId]: value }))
+  }
+
+  const handleSaveItemUnitPrice = async (item) => {
+    if (!canDoAction(ACTION.VENTAS_CAMBIAR_ESTADO_ORDEN)) {
+      showDenied()
+      return
+    }
+    const itemId = item?.id
+    if (!itemId || !detailOrder?.id) return
+    if (!isActiveOrderItem(item)) return
+
+    const raw = itemPriceDrafts[itemId]
+    const parsed = Number(String(raw ?? '').replace(/,/g, '').trim())
+    if (Number.isNaN(parsed) || parsed < 0) {
+      setDetailError('Indica un precio unitario válido (0 o mayor).')
+      return
+    }
+    const nextPrice = Math.round(parsed * 100) / 100
+    const currentPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100
+    if (nextPrice === currentPrice) return
+
+    setItemPriceSavingId(itemId)
+    setDetailError('')
+    const result = await updateOrderItem(itemId, { unitPrice: nextPrice })
+    if (!result.success) {
+      setItemPriceSavingId(null)
+      setDetailError(result.error || 'No se pudo actualizar el precio de la pieza')
+      return
+    }
+    const refreshed = await getOrderById(detailOrder.id)
+    setItemPriceSavingId(null)
+    if (refreshed.success && refreshed.data) {
+      setDetailOrder(refreshed.data)
+      setItemPriceDrafts((prev) => ({
+        ...prev,
+        [itemId]: String(
+          Number(
+            (refreshed.data.items || []).find((it) => it.id === itemId)?.unitPrice ?? nextPrice,
+          ),
+        ),
+      }))
+    } else {
+      setItemPriceDrafts((prev) => ({ ...prev, [itemId]: String(nextPrice) }))
+    }
+    fetchOrders()
   }
 
   const toggleItemSelection = (itemId) => {
@@ -929,17 +995,20 @@ const Ventas = () => {
                     ) : null}
                   </Typography>
                   {canEditOrderItems(detailOrder) && activeOrderItemsList.length > 0 ? (
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                       {itemsEditMode ? (
                         <>
-                          <Button size="small" onClick={resetItemsEditState} disabled={itemsCancelSaving}>
+                          <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                            Edita el precio y pulsa ✓ para guardar
+                          </Typography>
+                          <Button size="small" onClick={resetItemsEditState} disabled={itemsCancelSaving || Boolean(itemPriceSavingId)}>
                             Listo
                           </Button>
                           <Button
                             size="small"
                             variant="outlined"
                             color="error"
-                            disabled={itemsCancelSaving || selectedItemIds.size < 1}
+                            disabled={itemsCancelSaving || Boolean(itemPriceSavingId) || selectedItemIds.size < 1}
                             onClick={() => openItemCancelDialog([...selectedItemIds])}
                           >
                             Cancelar seleccionadas ({selectedItemIds.size})
@@ -1025,7 +1094,70 @@ const Ventas = () => {
                             </Box>
                           </TableCell>
                           <TableCell align="right">{item.quantity ?? '-'}</TableCell>
-                          <TableCell align="right">{formatCurrency(item.unitPrice, detailOrder.currency)}</TableCell>
+                          <TableCell align="right" sx={{ minWidth: itemsEditMode && active ? 140 : undefined }}>
+                            {itemsEditMode && active && itemId ? (
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'flex-end',
+                                  gap: 0.5,
+                                }}
+                              >
+                                <TextField
+                                  size="small"
+                                  type="number"
+                                  inputProps={{
+                                    min: 0,
+                                    step: '0.01',
+                                    'aria-label': `Precio unitario ${item.productName || ''}`,
+                                  }}
+                                  value={itemPriceDrafts[itemId] ?? String(Number(item.unitPrice ?? 0))}
+                                  onChange={(e) => handleItemPriceDraftChange(itemId, e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      void handleSaveItemUnitPrice(item)
+                                    }
+                                  }}
+                                  disabled={itemPriceSavingId === itemId || itemsCancelSaving}
+                                  sx={{
+                                    width: 110,
+                                    '& .MuiInputBase-input': {
+                                      textAlign: 'right',
+                                      py: 0.75,
+                                      fontSize: '0.875rem',
+                                    },
+                                  }}
+                                />
+                                <Tooltip title="Guardar precio">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      disabled={
+                                        itemPriceSavingId === itemId ||
+                                        itemsCancelSaving ||
+                                        Math.round(Number(itemPriceDrafts[itemId] ?? item.unitPrice) * 100) /
+                                          100 ===
+                                          Math.round(Number(item.unitPrice || 0) * 100) / 100
+                                      }
+                                      onClick={() => void handleSaveItemUnitPrice(item)}
+                                      aria-label={`Guardar precio de ${item.productName || 'pieza'}`}
+                                    >
+                                      {itemPriceSavingId === itemId ? (
+                                        <CircularProgress size={16} />
+                                      ) : (
+                                        <CheckIcon fontSize="small" />
+                                      )}
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </Box>
+                            ) : (
+                              formatCurrency(item.unitPrice, detailOrder.currency)
+                            )}
+                          </TableCell>
                           <TableCell align="right">{formatCurrency(item.totalPrice, detailOrder.currency)}</TableCell>
                           {itemsEditMode ? (
                             <TableCell align="center">
@@ -1034,7 +1166,7 @@ const Ventas = () => {
                                   <IconButton
                                     size="small"
                                     color="error"
-                                    disabled={itemsCancelSaving}
+                                    disabled={itemsCancelSaving || Boolean(itemPriceSavingId)}
                                     onClick={() => openItemCancelDialog([itemId])}
                                     aria-label={`Cancelar ${item.productName || 'pieza'}`}
                                   >
