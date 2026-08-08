@@ -5,6 +5,22 @@ function formatLocalYmd(date) {
   return `${y}-${m}-${d}`
 }
 
+/** Zona horaria de negocio (México). Evita el salto de día tras las 18:00 con UTC. */
+export const BUSINESS_TIMEZONE = 'America/Mexico_City'
+
+/**
+ * Día calendario actual en hora de México (YYYY-MM-DD).
+ * Usar para defaults de fecha (compras, gastos, etc.): no usar toISOString().slice(0,10).
+ */
+export function todayYmdMexico(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date instanceof Date ? date : new Date(date))
+}
+
 /** Periodo por defecto: desde el sábado anterior hasta hoy. */
 export function defaultPeriodRangeYmd() {
   const today = new Date()

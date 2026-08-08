@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { SIDEBAR_WIDTH } from '../config/layout'
 
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import {
   Box,
   Typography,
@@ -241,13 +241,21 @@ function parseManualLineFromApi(productName, sku, productId) {
   return { productName: m[1].trim(), partType, partCondition }
 }
 
+function resolveReturnTo(location, fallback) {
+  const r = location.state?.returnTo
+  if (typeof r === 'string' && r.startsWith('/') && !r.startsWith('//')) return r
+  return fallback
+}
+
 export default function CotizacionEditor() {
   const { id } = useParams()
   const isNew = !id || id === 'nueva'
   const navigate = useNavigate()
+  const location = useLocation()
   const { canDoAction, user } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const { notify, pushNotificationSnackbar } = usePushNotification()
+  const goBack = () => navigate(resolveReturnTo(location, '/cotizaciones'))
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -758,7 +766,7 @@ export default function CotizacionEditor() {
       if (isNew || !quotationId) {
         r = await createQuotation(body)
         if (r.success && r.data?.id) {
-          navigate(`/cotizaciones/${r.data.id}`, { replace: true })
+          navigate(`/cotizaciones/${r.data.id}`, { replace: true, state: location.state })
           setQuotationId(r.data.id)
           setQuotationNumber(r.data.quotationNumber || '')
           if (r.data.pdfUrl) setQuotationPdfUrl(r.data.pdfUrl)
@@ -914,7 +922,7 @@ export default function CotizacionEditor() {
       >
         <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 2, flexShrink: 0 }}>
-          <IconButton onClick={() => navigate('/cotizaciones')} size="small" aria-label="Volver">
+          <IconButton onClick={goBack} size="small" aria-label="Volver">
             <BackIcon />
           </IconButton>
           <PageTitle sx={{ flex: 1, mb: 0 }}>

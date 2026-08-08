@@ -173,7 +173,8 @@ function drawMinimalTwoColumnTable(doc, x, y, w, subsectionTitle, rows, labelCol
  * Genera y descarga el PDF de nota de compra (formato alineado a cotización).
  * @param {object} purchase — objeto guardado en contexto (id, providerName, purchaseDate, items, …)
  * @param {{ subtotal: number, tax: number, total: number }} totals
- * @param {{ registeredByDisplayName?: string }} [options]
+ * @param {{ registeredByDisplayName?: string, returnBlobUrl?: boolean }} [options]
+ * @returns {string|null} blob URL si `returnBlobUrl`, si no null tras descargar
  */
 export function downloadPurchaseNotePdf(purchase, totals, options = {}) {
   const doc = new jsPDF({ unit: 'pt', format: 'letter', compress: true })
@@ -425,6 +426,11 @@ export function downloadPurchaseNotePdf(purchase, totals, options = {}) {
 
   drawFooterAnchoredBottom(doc, MARGIN, CONTENT_W, MARGIN)
 
+  if (options.returnBlobUrl) {
+    return doc.output('bloburl')
+  }
+
   const safeFile = `nota-compra-${folio}`.replace(/[^\w.-]+/g, '_')
   doc.save(`${safeFile}.pdf`)
+  return null
 }

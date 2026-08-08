@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { SIDEBAR_WIDTH } from '../config/layout'
 
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import {
   Alert,
   Badge,
@@ -126,14 +126,22 @@ function mapItemsToLines(items, purchase) {
   }))
 }
 
+function resolveReturnTo(location, fallback) {
+  const r = location.state?.returnTo
+  if (typeof r === 'string' && r.startsWith('/') && !r.startsWith('//')) return r
+  return fallback
+}
+
 export default function CompraDetalle() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { refreshPurchases } = usePurchases()
   const { canDoAction, user } = useAuth()
   const { showDenied, permissionDeniedSnackbar } = usePermissionDenied()
   const { notify, pushNotificationSnackbar } = usePushNotification()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const goBack = () => navigate(resolveReturnTo(location, '/compras'))
 
   const [loading, setLoading] = useState(false)
   const [fetchLoading, setFetchLoading] = useState(true)
@@ -582,8 +590,8 @@ export default function CompraDetalle() {
         <Alert severity="error" sx={{ mb: 2 }}>
           {error || 'Compra no encontrada.'}
         </Alert>
-        <Button variant="contained" onClick={() => navigate('/compras')}>
-          Volver al listado
+        <Button variant="contained" onClick={goBack}>
+          Volver
         </Button>
       </Box>
     )
@@ -614,7 +622,7 @@ export default function CompraDetalle() {
         <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
 
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 1, flexShrink: 0 }}>
-          <IconButton onClick={() => navigate('/compras')} size="small" aria-label="Volver">
+          <IconButton onClick={goBack} size="small" aria-label="Volver">
             <BackIcon />
           </IconButton>
           <PageTitle sx={{ flex: 1, mb: 0 }}>Nota de compra</PageTitle>

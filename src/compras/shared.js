@@ -28,9 +28,16 @@ export function formatMoney(n, currency = 'MXN') {
 
 export function formatDateValue(v) {
   if (!v) return ''
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) return v.trim()
   const d = v instanceof Date ? v : new Date(v)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toISOString().slice(0, 10)
+  // Día en America/Mexico_City (evita +1 día después de las 18:00 con UTC).
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
 }
 
 export function safeTrim(s) {

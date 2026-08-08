@@ -134,7 +134,11 @@ export async function searchProducts(params = {}) {
   if (params.limit != null) searchParams.set('limit', String(params.limit))
   if (params.sortBy) searchParams.set('sortBy', params.sortBy)
   if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder)
-  if (params.inventoryAvailability === 'sold' || params.inventoryAvailability === 'all') {
+  if (
+    params.inventoryAvailability === 'available' ||
+    params.inventoryAvailability === 'sold' ||
+    params.inventoryAvailability === 'all'
+  ) {
     searchParams.set('inventoryAvailability', params.inventoryAvailability)
   }
 

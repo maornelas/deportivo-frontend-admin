@@ -61,6 +61,7 @@ import {
 } from '../compras/shared'
 import PurchaseSalesOrderPicker, { salesOrderOptionLabel } from '../compras/PurchaseSalesOrderPicker'
 import PurchaseOrderLinesModal from '../compras/PurchaseOrderLinesModal'
+import { todayYmdMexico } from '../utils/datePeriod'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 function isValidUuid(s) {
@@ -210,9 +211,12 @@ function formatMoney(n, currency = 'MXN') {
 }
 
 function formatDateValue(d) {
+  if (d == null || d === '') return ''
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.trim())) return d.trim()
   const x = d instanceof Date ? d : new Date(d)
   if (Number.isNaN(x.getTime())) return ''
-  return x.toISOString().slice(0, 10)
+  // Día calendario en México (no UTC: tras las 18:00 ISO ya es el día siguiente).
+  return todayYmdMexico(x)
 }
 
 function safeTrim(s) {
@@ -252,7 +256,7 @@ export default function CompraRegistrar() {
   const [error, setError] = useState('')
 
   const [editorProvider, setEditorProvider] = useState('')
-  const [editorPurchaseDate, setEditorPurchaseDate] = useState(formatDateValue(new Date()))
+  const [editorPurchaseDate, setEditorPurchaseDate] = useState(() => todayYmdMexico())
   const [editorPaymentMethod, setEditorPaymentMethod] = useState('transfer')
   const [editorStatus, setEditorStatus] = useState('pending')
   const [editorNotes, setEditorNotes] = useState('')

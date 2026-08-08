@@ -22,6 +22,10 @@ import {
   IconButton,
   Chip,
   Divider,
+  Dialog,
+  DialogContent,
+  DialogActions,
+  Tooltip,
 } from '@mui/material'
 import {
   ArrowBack as ArrowBackIcon,
@@ -31,6 +35,11 @@ import {
   Star as StarIcon,
   StarBorder as StarBorderIcon,
   ChevronRight as ChevronRightIcon,
+  InsertDriveFile as FileIcon,
+  PictureAsPdf as PdfIcon,
+  Close as CloseIcon,
+  BrokenImage as BrokenImageIcon,
+  Image as ImageIcon,
 } from '@mui/icons-material'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
@@ -45,6 +54,8 @@ import {
   uploadExpedienteDocument,
   deleteExpedienteDocument,
 } from '../api/expediente'
+import { getPurchase } from '../api/purchases'
+import { downloadPurchaseNotePdf } from '../compras/purchaseNotePdf'
 import {
   EXPEDIENTE_ACCENT,
   EXPEDIENTE_ACCENT_HOVER,
@@ -70,6 +81,99 @@ function formatDate(v) {
   if (!v) return '—'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function isImageDocument(doc) {
+  if (!doc) return false
+  const mime = String(doc.mimeType || '').toLowerCase()
+  if (mime.startsWith('image/')) return true
+  const type = String(doc.documentType || '').toLowerCase()
+  if (type === 'fotografia') return true
+  const name = String(doc.fileName || doc.fileUrl || '').toLowerCase()
+  return /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/i.test(name)
+}
+
+function isPdfDocument(doc) {
+  if (!doc) return false
+  const mime = String(doc.mimeType || '').toLowerCase()
+  if (mime === 'application/pdf') return true
+  const name = String(doc.fileName || doc.fileUrl || '').toLowerCase()
+  return name.endsWith('.pdf')
+}
+
+/** Miniatura clicable para revisar la foto sin abrir el archivo completo. */
+function DocumentThumb({ doc, size = 64, onPreview }) {
+  const [failed, setFailed] = useState(false)
+  const image = isImageDocument(doc)
+  const pdf = isPdfDocument(doc)
+  const url = doc?.fileUrl
+  const showImg = Boolean(image && url && !failed)
+
+  const frameSx = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: size,
+    height: size,
+    p: 0,
+    border: '1px solid',
+    borderColor: 'divider',
+    borderRadius: 1,
+    overflow: 'hidden',
+    bgcolor: 'action.hover',
+    color: 'text.secondary',
+    flexShrink: 0,
+  }
+
+  if (showImg) {
+    return (
+      <Tooltip title="Ver previsualización">
+        <Box
+          component="button"
+          type="button"
+          onClick={() => onPreview?.(doc)}
+          sx={{
+            ...frameSx,
+            cursor: 'pointer',
+            '&:hover': { borderColor: EXPEDIENTE_ACCENT, boxShadow: 1 },
+          }}
+        >
+          <Box
+            component="img"
+            src={url}
+            alt={doc.fileName || 'Vista previa'}
+            loading="lazy"
+            sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            onError={() => setFailed(true)}
+          />
+        </Box>
+      </Tooltip>
+    )
+  }
+
+  return (
+    <Box
+      component={image && url ? 'button' : 'div'}
+      type={image && url ? 'button' : undefined}
+      onClick={image && url ? () => onPreview?.(doc) : undefined}
+      sx={{
+        ...frameSx,
+        cursor: image && url ? 'pointer' : 'default',
+        font: 'inherit',
+      }}
+      aria-hidden={!image}
+    >
+      {failed && image ? (
+        <BrokenImageIcon fontSize="small" />
+      ) : pdf ? (
+        <PdfIcon fontSize="small" color="error" />
+      ) : image ? (
+        <ImageIcon fontSize="small" />
+      ) : (
+        <FileIcon fontSize="small" />
+      )}
+    </Box>
+  )
 }
 
 function money(n, c = 'MXN') {
@@ -215,6 +319,62 @@ export default function ExpedienteDetalle() {
   const [docTitle, setDocTitle] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  /** Documento seleccionado para previsualización ampliada */
+  const [previewDoc, setPreviewDoc] = useState(null)
+  /** Vista previa de PDF (cotización, nota de venta o compra) sin salir del expediente */
+  const [pdfPreview, setPdfPreview] = useState(null)
+
+  const expedienteReturnPath = ref ? `/expediente-digital/${encodeURIComponent(ref)}` : '/expediente-digital'
+
+  const closePdfPreview = useCallback(() => {
+    setPdfPreview((prev) => {
+      if (prev?.revokeOnClose && prev?.url) {
+        try {
+          URL.revokeObjectURL(prev.url)
+        } catch {
+          /* ignore */
+        }
+      }
+      return null
+    })
+  }, [])
+
+  const openRemotePdfPreview = useCallback((title, url, extras = {}) => {
+    if (!url) return
+    setPdfPreview({ title, url, ...extras })
+  }, [])
+
+  const openPurchasePdfPreview = useCallback(async (folio) => {
+    if (!folio) return
+    setPdfPreview({ title: `Compra ${folio}`, loading: true })
+    const r = await getPurchase(folio)
+    if (!r.success) {
+      setPdfPreview({ title: `Compra ${folio}`, error: r.error || 'No se pudo cargar la compra' })
+      return
+    }
+    const purchase = r.data
+    const items = purchase.items || []
+    const gross = items.reduce(
+      (s, it) => s + Number(it.unitPrice || 0) * Math.max(1, parseInt(it.quantity, 10) || 1),
+      0,
+    )
+    const subtotal = Math.round(gross * 100) / 100
+    const tax = Math.round(subtotal * 0.16 * 100) / 100
+    const total = Math.round((subtotal + tax) * 100) / 100
+    try {
+      const url = downloadPurchaseNotePdf(purchase, { subtotal, tax, total }, { returnBlobUrl: true })
+      const purchaseRef = purchase.folio || folio
+      setPdfPreview({
+        title: `Compra ${purchaseRef}`,
+        url,
+        revokeOnClose: true,
+        modulePath: `/compras/${encodeURIComponent(purchaseRef)}`,
+        moduleLabel: 'Abrir en Compras',
+      })
+    } catch {
+      setPdfPreview({ title: `Compra ${folio}`, error: 'No se pudo generar la vista previa del PDF' })
+    }
+  }, [])
 
   const load = useCallback(async () => {
     if (!ref) return
@@ -485,13 +645,25 @@ export default function ExpedienteDetalle() {
                       <Link
                         component={RouterLink}
                         to={`/cotizaciones/${data.quotation.id}`}
+                        state={{ returnTo: expedienteReturnPath }}
                         sx={{ fontSize: '0.82rem', mt: 1, display: 'inline-block', fontWeight: 600 }}
                       >
                         Ver cotización
                       </Link>
                       {data.quotation.pdfUrl && (
-                        <Link href={data.quotation.pdfUrl} target="_blank" rel="noopener" sx={{ fontSize: '0.82rem', mt: 1, ml: 2, display: 'inline-block' }}>
-                          Ver PDF <OpenInNewIcon sx={{ fontSize: 14, verticalAlign: 'middle' }} />
+                        <Link
+                          component="button"
+                          type="button"
+                          underline="hover"
+                          onClick={() =>
+                            openRemotePdfPreview(`Cotización ${data.quotation.quotationNumber || ''}`, data.quotation.pdfUrl, {
+                              modulePath: `/cotizaciones/${data.quotation.id}`,
+                              moduleLabel: 'Abrir cotización',
+                            })
+                          }
+                          sx={{ fontSize: '0.82rem', mt: 1, ml: 2, display: 'inline-block', verticalAlign: 'baseline' }}
+                        >
+                          Ver PDF
                         </Link>
                       )}
                     </>
@@ -517,8 +689,16 @@ export default function ExpedienteDetalle() {
                       <InfoRow label="Rastreo" value={data.order.trackingNumber} />
                       <InfoRow label="Creada" value={formatDate(data.order.createdAt)} />
                       {data.order.pdfUrl && (
-                        <Link href={data.order.pdfUrl} target="_blank" rel="noopener" sx={{ fontSize: '0.82rem', mt: 1, display: 'inline-block' }}>
-                          Ver PDF <OpenInNewIcon sx={{ fontSize: 14, verticalAlign: 'middle' }} />
+                        <Link
+                          component="button"
+                          type="button"
+                          underline="hover"
+                          onClick={() =>
+                            openRemotePdfPreview(`Nota de venta ${data.order.orderNumber || ''}`, data.order.pdfUrl)
+                          }
+                          sx={{ fontSize: '0.82rem', mt: 1, display: 'inline-block', verticalAlign: 'baseline' }}
+                        >
+                          Ver PDF
                         </Link>
                       )}
                     </>
@@ -556,19 +736,49 @@ export default function ExpedienteDetalle() {
                             <TableCell sx={{ whiteSpace: 'nowrap' }}>Folio</TableCell>
                             <TableCell>Proveedor</TableCell>
                             <TableCell sx={{ whiteSpace: 'nowrap' }}>Total</TableCell>
+                            <TableCell align="right">Acciones</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {data.purchases.map((p) => (
-                            <TableRow
-                              key={p.folio}
-                              hover
-                              sx={{ cursor: 'pointer' }}
-                              onClick={() => navigate(`/compras/${p.folio}`)}
-                            >
-                              <TableCell sx={{ fontWeight: 600 }}>{p.folio}</TableCell>
+                            <TableRow key={p.folio} hover>
+                              <TableCell sx={{ fontWeight: 600 }}>
+                                <Link
+                                  component="button"
+                                  type="button"
+                                  underline="hover"
+                                  onClick={() => openPurchasePdfPreview(p.folio)}
+                                  sx={{ fontWeight: 600, fontSize: 'inherit', textAlign: 'left' }}
+                                >
+                                  {p.folio}
+                                </Link>
+                              </TableCell>
                               <TableCell>{p.providerName}</TableCell>
                               <TableCell>{money(p.total)}</TableCell>
+                              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                <Tooltip title="Vista previa PDF">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => openPurchasePdfPreview(p.folio)}
+                                    aria-label={`Vista previa ${p.folio}`}
+                                  >
+                                    <PdfIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Abrir en Compras">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      navigate(`/compras/${encodeURIComponent(p.folio)}`, {
+                                        state: { returnTo: expedienteReturnPath },
+                                      })
+                                    }
+                                    aria-label={`Abrir ${p.folio} en Compras`}
+                                  >
+                                    <OpenInNewIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -693,6 +903,7 @@ export default function ExpedienteDetalle() {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
+                        <TableCell sx={{ width: 88 }}>Vista</TableCell>
                         <TableCell>Tipo</TableCell>
                         <TableCell>Archivo</TableCell>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>Fecha</TableCell>
@@ -702,27 +913,73 @@ export default function ExpedienteDetalle() {
                     <TableBody>
                       {(data?.documents || []).length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4} align="center" sx={{ color: 'text.secondary', py: 3 }}>
+                          <TableCell colSpan={5} align="center" sx={{ color: 'text.secondary', py: 3 }}>
                             Sin documentos adicionales
                           </TableCell>
                         </TableRow>
                       ) : (
-                        data.documents.map((doc) => (
-                          <TableRow key={doc.id}>
-                            <TableCell>{doc.documentTypeLabel || doc.documentType}</TableCell>
-                            <TableCell>
-                              <Link href={doc.fileUrl} target="_blank" rel="noopener">
-                                {doc.fileName}
-                              </Link>
-                            </TableCell>
-                            <TableCell>{formatDate(doc.createdAt)}</TableCell>
-                            <TableCell align="right">
-                              <IconButton size="small" color="error" onClick={() => handleDeleteDoc(doc.id)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        data.documents.map((doc) => {
+                          const image = isImageDocument(doc)
+                          return (
+                            <TableRow key={doc.id} hover>
+                              <TableCell sx={{ py: 1 }}>
+                                <DocumentThumb
+                                  key={doc.fileUrl || doc.id}
+                                  doc={doc}
+                                  size={64}
+                                  onPreview={setPreviewDoc}
+                                />
+                              </TableCell>
+                              <TableCell>{doc.documentTypeLabel || doc.documentType}</TableCell>
+                              <TableCell>
+                                {image ? (
+                                  <Link
+                                    component="button"
+                                    type="button"
+                                    underline="hover"
+                                    onClick={() => setPreviewDoc(doc)}
+                                    sx={{
+                                      textAlign: 'left',
+                                      cursor: 'pointer',
+                                      color: 'primary.main',
+                                      fontSize: 'inherit',
+                                      maxWidth: 280,
+                                      display: 'inline-block',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      verticalAlign: 'middle',
+                                    }}
+                                  >
+                                    {doc.fileName}
+                                  </Link>
+                                ) : (
+                                  <Link href={doc.fileUrl} target="_blank" rel="noopener">
+                                    {doc.fileName}
+                                  </Link>
+                                )}
+                              </TableCell>
+                              <TableCell>{formatDate(doc.createdAt)}</TableCell>
+                              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                <Tooltip title="Abrir en pestaña nueva">
+                                  <IconButton
+                                    size="small"
+                                    component="a"
+                                    href={doc.fileUrl}
+                                    target="_blank"
+                                    rel="noopener"
+                                    aria-label={`Abrir ${doc.fileName || 'archivo'}`}
+                                  >
+                                    <OpenInNewIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <IconButton size="small" color="error" onClick={() => handleDeleteDoc(doc.id)}>
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })
                       )}
                     </TableBody>
                   </Table>
@@ -732,6 +989,173 @@ export default function ExpedienteDetalle() {
           </Box>
         )}
       </Box>
+
+      <Dialog
+        open={Boolean(previewDoc)}
+        onClose={() => setPreviewDoc(null)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2, overflow: 'hidden' } }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+            px: 2,
+            py: 1.25,
+            bgcolor: EXPEDIENTE_ACCENT,
+            color: '#fff',
+          }}
+        >
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, pr: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {previewDoc?.fileName || 'Previsualización'}
+          </Typography>
+          <IconButton size="small" onClick={() => setPreviewDoc(null)} sx={{ color: '#fff' }} aria-label="Cerrar">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        <DialogContent sx={{ p: 2, bgcolor: 'background.default', textAlign: 'center' }}>
+          {previewDoc?.fileUrl ? (
+            <Box
+              component="img"
+              src={previewDoc.fileUrl}
+              alt={previewDoc.fileName || 'Documento'}
+              sx={{
+                maxWidth: '100%',
+                maxHeight: '70vh',
+                objectFit: 'contain',
+                borderRadius: 1,
+                boxShadow: 2,
+              }}
+            />
+          ) : null}
+          {previewDoc ? (
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
+              {previewDoc.documentTypeLabel || previewDoc.documentType}
+              {previewDoc.createdAt ? ` · ${formatDate(previewDoc.createdAt)}` : ''}
+            </Typography>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button onClick={() => setPreviewDoc(null)} color="inherit">
+            Cerrar
+          </Button>
+          {previewDoc?.fileUrl ? (
+            <Button
+              variant="contained"
+              startIcon={<OpenInNewIcon />}
+              href={previewDoc.fileUrl}
+              target="_blank"
+              rel="noopener"
+              sx={{ bgcolor: EXPEDIENTE_ACCENT, textTransform: 'none', '&:hover': { bgcolor: EXPEDIENTE_ACCENT_HOVER } }}
+            >
+              Abrir original
+            </Button>
+          ) : null}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pdfPreview)}
+        onClose={closePdfPreview}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            overflow: 'hidden',
+            height: '90vh',
+            maxHeight: 900,
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+            px: 2,
+            py: 1.25,
+            bgcolor: EXPEDIENTE_ACCENT,
+            color: '#fff',
+            flexShrink: 0,
+          }}
+        >
+          <Typography
+            variant="subtitle1"
+            sx={{ fontWeight: 700, pr: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {pdfPreview?.title || 'Vista previa'}
+          </Typography>
+          <IconButton size="small" onClick={closePdfPreview} sx={{ color: '#fff' }} aria-label="Cerrar">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        <DialogContent
+          sx={{
+            p: 0,
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            bgcolor: 'grey.100',
+            overflow: 'hidden',
+          }}
+        >
+          {pdfPreview?.loading ? (
+            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+              <CircularProgress size={36} />
+            </Box>
+          ) : pdfPreview?.error ? (
+            <Box sx={{ p: 3 }}>
+              <Alert severity="error">{pdfPreview.error}</Alert>
+            </Box>
+          ) : pdfPreview?.url ? (
+            <Box
+              component="iframe"
+              title={pdfPreview.title || 'PDF'}
+              src={pdfPreview.url}
+              sx={{ border: 0, width: '100%', height: '100%', flex: 1, minHeight: 480, bgcolor: '#fff' }}
+            />
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button onClick={closePdfPreview} color="inherit">
+            Cerrar
+          </Button>
+          {pdfPreview?.url && !pdfPreview?.loading ? (
+            <Button
+              variant="outlined"
+              startIcon={<OpenInNewIcon />}
+              href={pdfPreview.url}
+              target="_blank"
+              rel="noopener"
+              sx={{ textTransform: 'none' }}
+            >
+              Abrir en pestaña
+            </Button>
+          ) : null}
+          {pdfPreview?.modulePath ? (
+            <Button
+              variant="contained"
+              startIcon={<OpenInNewIcon />}
+              onClick={() => {
+                const path = pdfPreview.modulePath
+                closePdfPreview()
+                navigate(path, { state: { returnTo: expedienteReturnPath } })
+              }}
+              sx={{ bgcolor: EXPEDIENTE_ACCENT, textTransform: 'none', '&:hover': { bgcolor: EXPEDIENTE_ACCENT_HOVER } }}
+            >
+              {pdfPreview.moduleLabel || 'Abrir módulo'}
+            </Button>
+          ) : null}
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

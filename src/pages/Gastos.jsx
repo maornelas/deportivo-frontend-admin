@@ -54,6 +54,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { ACTION } from '../config/actionPermissions'
 import { usePermissionDenied } from '../hooks/usePermissionDenied'
 import { usePushNotification } from '../hooks/usePushNotification'
+import { todayYmdMexico } from '../utils/datePeriod'
 
 const LIMIT = 15
 
@@ -69,15 +70,27 @@ function categoryOptionsForSelect(catalogNames, currentValue) {
   return catalogNames
 }
 
-function isEmpleadoRbacRole(role) {
+/**
+ * Roles del panel que pueden figurar en un gasto SUELDO.
+ * Antes solo se aceptaba «empleado»; en operación real los perfiles son Vendedor / Repartidor.
+ */
+const SUELDO_ELIGIBLE_ROLE_SLUGS = new Set(['empleado', 'vendedor', 'repartidor'])
+
+function normalizeRoleKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function isSueldoEligibleRole(role) {
   if (!role) return false
-  const slug = String(role.slug || '')
-    .toLowerCase()
-    .trim()
-  const name = String(role.name || '')
-    .toLowerCase()
-    .trim()
-  return slug === 'empleado' || name === 'empleado'
+  const slug = normalizeRoleKey(role.slug)
+  const name = normalizeRoleKey(role.name)
+  if (SUELDO_ELIGIBLE_ROLE_SLUGS.has(slug) || SUELDO_ELIGIBLE_ROLE_SLUGS.has(name)) return true
+  // Compatibilidad: nombre «EMPLEADO», «Vendedor piezas», etc.
+  return [...SUELDO_ELIGIBLE_ROLE_SLUGS].some((key) => slug.includes(key) || name.includes(key))
 }
 
 function formatUserLabel(u) {
@@ -266,12 +279,13 @@ const Gastos = () => {
         setPendingSueldoLabelForEdit('')
         return
       }
-      const empleadoRole = (rr.data || []).find(isEmpleadoRbacRole)
-      if (!empleadoRole) {
+      const eligibleRoles = (rr.data || []).filter(isSueldoEligibleRole)
+      const eligibleRoleIds = new Set(eligibleRoles.map((r) => r.id).filter(Boolean))
+      if (!eligibleRoleIds.size) {
         setEmpleadosLoading(false)
         setEmpleadoUsers([])
         setEmpleadosListMessage(
-          'No existe un rol «Empleado» en Roles y permisos. Crea uno con nombre o slug «empleado» y asígnalo a los usuarios.',
+          'No hay roles de nómina (Empleado, Vendedor o Repartidor) en Roles y permisos. Asigna uno de esos roles a los usuarios.',
         )
         setPendingSueldoLabelForEdit('')
         return
@@ -285,12 +299,16 @@ const Gastos = () => {
         setPendingSueldoLabelForEdit('')
         return
       }
-      const list = (ru.data || []).filter(
-        (u) => u.adminRoleId === empleadoRole.id && u.isActive !== false,
-      )
+      const roleById = new Map(eligibleRoles.map((r) => [r.id, r]))
+      const list = (ru.data || [])
+        .filter((u) => u.adminRoleId && eligibleRoleIds.has(u.adminRoleId) && u.isActive !== false)
+        .map((u) => ({ ...u, _sueldoRoleLabel: roleById.get(u.adminRoleId)?.name || '' }))
+        .sort((a, b) => formatUserLabel(a).localeCompare(formatUserLabel(b), 'es', { sensitivity: 'base' }))
       setEmpleadoUsers(list)
       if (list.length === 0) {
-        setEmpleadosListMessage('No hay usuarios activos con el rol Empleado.')
+        setEmpleadosListMessage(
+          'No hay usuarios activos con rol Empleado, Vendedor o Repartidor. Asigna uno de esos roles en Usuarios.',
+        )
         setPendingSueldoLabelForEdit('')
       }
     })()
@@ -323,7 +341,7 @@ const Gastos = () => {
     }
     setFormMode('create')
     setEditingId(null)
-    setExpenseDate(new Date().toISOString().slice(0, 10))
+    setExpenseDate(todayYmdMexico())
     setFormCategory('')
     setSelectedSueldoUserId('')
     setPendingSueldoLabelForEdit('')
@@ -805,14 +823,16 @@ const Gastos = () => {
                           {empleadoUsers.map((u) => (
                             <MenuItem key={u.id} value={u.id}>
                               {formatUserLabel(u)}
+                              {u._sueldoRoleLabel ? ` · ${u._sueldoRoleLabel}` : ''}
                               {u.email ? ` · ${u.email}` : ''}
                             </MenuItem>
                           ))}
                         </Select>
                       </FormControl>
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                        Lista de usuarios activos con rol RBAC «Empleado» (nombre o slug <strong>empleado</strong> en Roles y
-                        permisos). Se guarda en cada línea del gasto como empleado / unidad.
+                        Elige al colaborador al que corresponde el sueldo. Incluye usuarios activos con rol{' '}
+                        <strong>Empleado</strong>, <strong>Vendedor</strong> o <strong>Repartidor</strong>. El nombre se
+                        guarda en cada línea del gasto.
                       </Typography>
                     </Grid>
                   )}

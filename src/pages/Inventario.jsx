@@ -15,6 +15,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   Dialog,
   DialogContent,
   DialogActions,
@@ -68,6 +69,9 @@ const ESTATUS_OPCIONES = [
 ]
 
 const MAX_FOTOS = 15
+/** Filas por página en el listado general de inventario */
+const LIST_LIMIT = 25
+const LIST_ROWS_PER_PAGE_OPTIONS = [25, 50, 100]
 
 /** En "Detalle del producto": al editar, subir fotos a S3 (`images-products/{productId}/`) vía API. */
 const DETAIL_ALLOW_IMAGE_UPLOAD = true
@@ -118,10 +122,13 @@ function stockUnitsFromApi(p) {
   return Math.max(0, n)
 }
 
+/** Vendida si tiene soldAt o el estatus del panel está en Vendido (isActive=false). */
 function productMarkedSoldFromApi(p) {
   if (!p || typeof p !== 'object') return false
   const t = p.soldAt ?? p.sold_at
-  return t != null && t !== ''
+  if (t != null && t !== '') return true
+  if (p.isActive === false || p.is_active === false) return true
+  return false
 }
 
 const Inventario = () => {
@@ -134,6 +141,9 @@ const Inventario = () => {
   const [categories, setCategories] = useState([])
   const [carModels, setCarModels] = useState([])
   const [products, setProducts] = useState([])
+  const [listTotal, setListTotal] = useState(0)
+  const [listPage, setListPage] = useState(0)
+  const [listLimit, setListLimit] = useState(LIST_LIMIT)
   const [listLoading, setListLoading] = useState(true)
   const [loading, setLoading] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -203,34 +213,68 @@ const Inventario = () => {
     if (res.success) setCategories(res.data || [])
   }, [])
 
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (pageOverride) => {
     setListLoading(true)
     setListError('')
     try {
       const f = filtersRef.current
+      const pageToLoad = typeof pageOverride === 'number' ? pageOverride : listPage
       const res = await searchProducts({
-        limit: 100,
+        page: pageToLoad + 1,
+        limit: listLimit,
+        sortBy: 'createdAt',
+        sortOrder: 'DESC',
         search: (f.filterPieza || '').trim() || undefined,
         brandId: f.filterMarca || undefined,
         modelSearch: (f.filterModelo || '').trim() || undefined,
         year: (f.filterAño || '').trim() || undefined,
-        inventoryAvailability: inventoryListFilter === 'available' ? undefined : inventoryListFilter,
+        inventoryAvailability: inventoryListFilter,
       })
       if (res.success && res.data) {
         setProducts(res.data.products || [])
+        setListTotal(Number(res.data.total) || 0)
       } else {
         setListError(res.error || 'Error al cargar productos')
+        setProducts([])
+        setListTotal(0)
       }
     } finally {
       setListLoading(false)
     }
-  }, [inventoryListFilter])
+  }, [inventoryListFilter, listPage, listLimit])
 
   useEffect(() => {
     loadBrands()
     loadCategories()
+  }, [loadBrands, loadCategories])
+
+  useEffect(() => {
     loadProducts()
-  }, [loadBrands, loadCategories, loadProducts])
+  }, [loadProducts])
+
+  const handleListPageChange = (_event, newPage) => {
+    setListPage(newPage)
+  }
+
+  const handleListRowsPerPageChange = (event) => {
+    setListLimit(parseInt(event.target.value, 10))
+    setListPage(0)
+  }
+
+  const handleSearchProducts = () => {
+    setListPage(0)
+    void loadProducts(0)
+  }
+
+  const handleClearFilters = () => {
+    setFilterPieza('')
+    setFilterMarca('')
+    setFilterModelo('')
+    setFilterAño('')
+    filtersRef.current = { filterPieza: '', filterMarca: '', filterModelo: '', filterAño: '' }
+    setListPage(0)
+    void loadProducts(0)
+  }
 
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null)
 
@@ -407,7 +451,8 @@ const Inventario = () => {
     }
     setLoading(false)
     handleCloseDialog()
-    loadProducts()
+    setListPage(0)
+    void loadProducts(0)
   }
 
   const openDetailModal = async (productId) => {
@@ -445,7 +490,7 @@ const Inventario = () => {
       descripcionCompleta: d.description || '',
       precio: d.price != null ? String(d.price) : '',
       piezasDisponibles: String(stockUnitsFromApi(d) ?? 0),
-      estatus: d.isActive === true ? 'DISPONIBLE' : 'VENDIDO',
+      estatus: d.isActive === true && !(d.soldAt ?? d.sold_at) ? 'DISPONIBLE' : 'VENDIDO',
       imageFiles: [],
     })
     const serverImgs = Array.isArray(d.images)
@@ -762,7 +807,7 @@ const Inventario = () => {
             />
             <Button
               variant="contained"
-              onClick={() => loadProducts()}
+              onClick={handleSearchProducts}
               disabled={listLoading}
               sx={{ textTransform: 'none', backgroundColor: '#7b1fa2', '&:hover': { backgroundColor: '#6a1b9a' } }}
             >
@@ -770,14 +815,7 @@ const Inventario = () => {
             </Button>
             <Button
               variant="outlined"
-              onClick={() => {
-                setFilterPieza('')
-                setFilterMarca('')
-                setFilterModelo('')
-                setFilterAño('')
-                filtersRef.current = { filterPieza: '', filterMarca: '', filterModelo: '', filterAño: '' }
-                loadProducts()
-              }}
+              onClick={handleClearFilters}
               disabled={listLoading}
               sx={{ textTransform: 'none', borderColor: '#757575', color: 'text.secondary' }}
             >
@@ -786,7 +824,11 @@ const Inventario = () => {
             <ToggleButtonGroup
               value={inventoryListFilter}
               exclusive
-              onChange={(_, v) => v && setInventoryListFilter(v)}
+              onChange={(_, v) => {
+                if (!v) return
+                setListPage(0)
+                setInventoryListFilter(v)
+              }}
               size="small"
               sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.25 } }}
             >
@@ -1024,6 +1066,24 @@ const Inventario = () => {
               )}
             </Box>
           )}
+          <TablePagination
+            component="div"
+            count={listTotal}
+            page={listPage}
+            onPageChange={handleListPageChange}
+            rowsPerPage={listLimit}
+            onRowsPerPageChange={handleListRowsPerPageChange}
+            rowsPerPageOptions={LIST_ROWS_PER_PAGE_OPTIONS}
+            labelRowsPerPage="Filas:"
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}-${to} de ${count !== -1 ? count : `más de ${to}`}`
+            }
+            sx={{
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              '.MuiTablePagination-toolbar': { flexWrap: 'wrap', gap: 1 },
+            }}
+          />
         </Paper>
 
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: '12px', overflow: 'hidden' } }}>
